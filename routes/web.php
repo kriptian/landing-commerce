@@ -40,6 +40,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Agrupamos las rutas de admin bajo el prefijo /admin y con nombre admin.
     Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('categories', CategoryController::class);
+
+        // --- AÑADÍ ESTA NUEVA RUTA PARA CREAR SUBCATEGORÍAS ---
+        Route::post('categories/{parentCategory}/subcategories', [CategoryController::class, 'storeSubcategory'])->name('categories.storeSubcategory');
+
         // Aquí le decimos explícitamente que use el controlador de Admin
         Route::resource('products', AdminProductController::class);
         // AÑADE ESTA LÍNEA

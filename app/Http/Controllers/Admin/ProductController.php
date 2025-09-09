@@ -28,7 +28,7 @@ class ProductController extends Controller
     public function create()
     {
         return Inertia::render('Products/Create', [
-            'categories' => Category::all(),
+            'categories' => Category::whereNull('parent_id')->with('children')->get(),
         ]);
     }
 
@@ -40,6 +40,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
+            'quantity' => 'required|integer|min:0',
             'category_id' => 'required|exists:categories,id',
             'short_description' => 'nullable|string|max:500',
             'long_description' => 'nullable|string',
@@ -70,12 +71,11 @@ class ProductController extends Controller
      */
     public function edit(Product $product)
     {
-        // Le cargamos la relación de imágenes para que la vista las reciba
-        $product->load('images');
-
+        $product->load('images', 'category.parent'); // Cargamos el producto con sus relaciones
         return Inertia::render('Products/Edit', [
             'product' => $product,
-            'categories' => Category::all(),
+            // Hacemos lo mismo aquí
+            'categories' => Category::whereNull('parent_id')->with('children')->get(),
         ]);
     }
 
@@ -87,6 +87,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
+            'quantity' => 'required|integer|min:0',
             'category_id' => 'required|exists:categories,id',
             'short_description' => 'nullable|string|max:500',
             'long_description' => 'nullable|string',

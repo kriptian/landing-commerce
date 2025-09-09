@@ -9,11 +9,31 @@ class Category extends Model
 {
     use HasFactory;
 
-    // Con esta línea le damos permiso al campo 'name'
-    protected $fillable = ['name'];
+    /**
+     * Los campos que se pueden llenar masivamente.
+     */
+    protected $fillable = [
+        'name',
+        'parent_id', // <-- AÑADIMOS ESTO A LA LISTA
+    ];
 
-    public function store()
+    /**
+     * Relación para obtener la categoría padre.
+     * Una categoría PERTENECE A (belongsTo) un padre.
+     */
+    public function parent()
     {
-        return $this->belongsTo(Store::class);
+        // Apunta al mismo modelo Category
+        return $this->belongsTo(Category::class, 'parent_id');
+    }
+
+    /**
+     * Relación para obtener las categorías hijas (subcategorías).
+     * Una categoría TIENE MUCHOS (hasMany) hijos.
+     */
+    public function children()
+    {
+        // Apunta al mismo modelo Category
+        return $this->hasMany(Category::class, 'parent_id');
     }
 }
