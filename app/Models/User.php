@@ -7,10 +7,11 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Store;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -25,6 +26,7 @@ class User extends Authenticatable
         'phone',
         'area',
         'is_admin',
+        'store_id', // <-- 1. AÑADIMOS ESTO
     ];
 
     /**
@@ -52,10 +54,11 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the store associated with the user.
+     * Obtiene la tienda a la que pertenece el usuario.
      */
     public function store()
     {
-        return $this->hasOne(Store::class);
+        // 2. CAMBIAMOS LA RELACIÓN A belongsTo
+        return $this->belongsTo(Store::class);
     }
 }

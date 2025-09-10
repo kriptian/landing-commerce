@@ -30,12 +30,12 @@ import { Head, Link } from '@inertiajs/vue3';
                         <Link :href="route('admin.categories.index')" class="font-bold text-blue-600 hover:underline">Ir a Categorías &rarr;</Link>
                     </div>
                     
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
+                    <div v-if="$page.props.auth.can.includes('gestionar usuarios')" class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
                         <h3 class="text-lg font-semibold mb-4">Gestionar Usuarios</h3>
                         <p class="text-gray-600 mb-4">Administrá los usuarios y sus roles en el sistema.</p>
-                        
                         <Link :href="route('admin.users.index')" class="font-bold text-blue-600 hover:underline">Ir a Usuarios &rarr;</Link>
                     </div>
+
                 </div>
             </div>
         </div>

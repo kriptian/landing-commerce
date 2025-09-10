@@ -2,9 +2,9 @@
 
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\CategoryController;
-// Se elimina LandingPageController si ya no se usa para esta ruta
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\Public\ProductController as PublicProductController; // Importante que esté este
+use App\Http\Controllers\Public\ProductController as PublicProductController;
+use App\Http\Controllers\Admin\RoleController; // <-- 1. AÑADIMOS EL NUEVO CONTROLADOR
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -19,8 +19,6 @@ Route::get('/', function () {
 
 Route::get('/catalogo', [PublicProductController::class, 'index'])->name('catalogo.index');
 
-// ----------- AQUÍ ESTÁ EL ÚNICO CAMBIO -----------
-// Apuntamos al controlador y método correctos
 Route::get('/producto/{product}', [PublicProductController::class, 'show'])->name('catalogo.show');
 
 /*
@@ -40,14 +38,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Agrupamos las rutas de admin bajo el prefijo /admin y con nombre admin.
     Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('categories', CategoryController::class);
-
-        // --- AÑADÍ ESTA NUEVA RUTA PARA CREAR SUBCATEGORÍAS ---
         Route::post('categories/{parentCategory}/subcategories', [CategoryController::class, 'storeSubcategory'])->name('categories.storeSubcategory');
 
-        // Aquí le decimos explícitamente que use el controlador de Admin
         Route::resource('products', AdminProductController::class);
-        // AÑADE ESTA LÍNEA
         Route::resource('users', \App\Http\Controllers\Admin\UserController::class);
+        
+        // --- 2. AÑADIMOS LA NUEVA RUTA PARA ROLES ---
+        Route::resource('roles', RoleController::class);
     });
 });
 

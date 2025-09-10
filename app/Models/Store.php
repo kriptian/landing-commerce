@@ -32,4 +32,12 @@ class Store extends Model
     {
         return $this->hasMany(Category::class);
     }
+
+    /**
+     * Una tienda TIENE MUCHOS usuarios.
+     */
+    public function users()
+    {
+        return $this->hasMany(User::class);
+    }
 }
