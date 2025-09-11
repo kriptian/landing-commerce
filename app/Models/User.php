@@ -26,7 +26,7 @@ class User extends Authenticatable
         'phone',
         'area',
         'is_admin',
-        'store_id', // <-- 1. AÑADIMOS ESTO
+        'store_id', // <-- ESTA ERA LA LÍNEA QUE FALTABA
     ];
 
     /**
@@ -58,7 +58,6 @@ class User extends Authenticatable
      */
     public function store()
     {
-        // 2. CAMBIAMOS LA RELACIÓN A belongsTo
         return $this->belongsTo(Store::class);
     }
 }

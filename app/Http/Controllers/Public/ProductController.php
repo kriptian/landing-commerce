@@ -1,34 +1,42 @@
 <?php
 
-namespace App\Http\Controllers\Public; 
+namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\Store; // <-- Añadimos el import de Store
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class ProductController extends Controller
 {
     /**
-     * Muestra el catálogo de productos (página principal pública).
+     * Muestra el catálogo de productos de UNA tienda específica.
      */
-    public function index()
+    public function index(Store $store)
     {
         return Inertia::render('Public/ProductList', [
-            'products' => Product::with(['category', 'images'])->latest()->get(),
+            // Buscamos solo los productos que pertenecen a esa tienda
+            'products' => $store->products()->with('images')->latest()->get(),
+            'store' => $store, // Pasamos la info de la tienda a la vista
         ]);
     }
 
     /**
-     * ESTA ES LA NUEVA FUNCIÓN QUE DEBES AGREGAR
-     * Muestra un solo producto en detalle.
+     * Muestra un producto específico de UNA tienda.
      */
-    public function show(Product $product)
+    public function show(Store $store, Product $product)
     {
-        // Le cargamos las relaciones que la vista necesita (imágenes, categoría, etc.)
-        $product->load('images', 'category');
+        // Medida de seguridad: nos aseguramos que el producto sí pertenezca a la tienda de la URL
+        if ($product->store_id !== $store->id) {
+            abort(404);
+        }
 
+        $product->load('images', 'category');
+        
         return inertia('Public/ProductPage', [
             'product' => $product,
+            'store' => $store, // Pasamos la info de la tienda a la vista
         ]);
     }
 }

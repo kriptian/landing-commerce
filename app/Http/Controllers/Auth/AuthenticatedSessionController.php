@@ -47,6 +47,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerateToken();
 
-        return redirect('/');
+        // return redirect('/'); si lo hago así me muestra el listado de todas las tiendas que son mis clientes, por eso lo dejo asi
+        return redirect('/login');
     }
 }

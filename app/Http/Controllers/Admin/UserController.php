@@ -19,23 +19,19 @@ class UserController extends Controller
 
     public function index(Request $request)
     {
-        // Buscamos los usuarios de la tienda
-        $users = $request->user()->store->users()->with('roles')->get();
-
-        // Buscamos también todos los roles
-        $roles = Role::with('permissions')->get();
-
-        // Pasamos ambas colecciones a la vista
+        $store = $request->user()->store;
+        
         return Inertia::render('Users/Index', [
-            'users' => $users,
-            'roles' => $roles, // <-- Le mandamos también los roles
+            'users' => $store->users()->with('roles')->get(),
+            'roles' => $store->roles()->with('permissions')->get(),
         ]);
     }
 
     public function create()
     {
         return Inertia::render('Users/Create', [
-            'roles' => Role::all()->pluck('name')
+            // AJUSTE: Buscamos solo los roles de la tienda actual
+            'roles' => auth()->user()->store->roles()->pluck('name'),
         ]);
     }
 
@@ -59,25 +55,19 @@ class UserController extends Controller
         return redirect()->route('admin.users.index');
     }
 
-    /**
-     * Muestra el formulario para editar un usuario.
-     */
     public function edit(User $user)
     {
-        // Nos aseguramos de que solo se puedan editar usuarios de la misma tienda
         if ($user->store_id !== auth()->user()->store_id) {
             abort(403);
         }
 
         return Inertia::render('Users/Edit', [
-            'user' => $user->load('roles'), // Cargamos el rol actual del usuario
-            'roles' => Role::all()->pluck('name'),
+            'user' => $user->load('roles'),
+            // AJUSTE: Hacemos lo mismo aquí
+            'roles' => auth()->user()->store->roles()->pluck('name'),
         ]);
     }
 
-    /**
-     * Actualiza un usuario.
-     */
     public function update(Request $request, User $user)
     {
         if ($user->store_id !== auth()->user()->store_id) {
@@ -96,23 +86,18 @@ class UserController extends Controller
             'email' => $validated['email'],
         ];
 
-        // Solo actualizamos la contraseña si el campo no viene vacío
         if (!empty($validated['password'])) {
             $userData['password'] = Hash::make($validated['password']);
         }
 
         $user->update($userData);
-        $user->syncRoles($validated['role']); // Sincroniza el rol (quita los viejos y pone el nuevo)
+        $user->syncRoles($validated['role']);
 
         return redirect()->route('admin.users.index');
     }
 
-    /**
-     * Elimina un usuario.
-     */
     public function destroy(User $user)
     {
-        // Regla de seguridad: No podés eliminarte a vos mismo
         if ($user->id === auth()->id()) {
             return back()->withErrors(['delete' => 'No puedes eliminar tu propio usuario.']);
         }

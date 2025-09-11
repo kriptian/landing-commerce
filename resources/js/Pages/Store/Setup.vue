@@ -1,0 +1,71 @@
+<script setup>
+import { Head, useForm } from '@inertiajs/vue3';
+
+const props = defineProps({
+    store: Object,
+});
+
+const form = useForm({
+    name: props.store.name,
+    logo: null,
+    phone: props.store.phone,
+    address: props.store.address,
+    facebook_url: props.store.facebook_url,
+    instagram_url: props.store.instagram_url,
+});
+
+const submit = () => {
+    form.post(route('store.save'));
+};
+</script>
+
+<template>
+    <Head title="Configura tu Tienda" />
+
+    <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100">
+        <div>
+            <h1 class="text-3xl font-bold">¡Casi listo!</h1>
+            <p class="text-center text-gray-600">Configura los datos de tu tienda</p>
+        </div>
+
+        <div class="w-full sm:max-w-xl mt-6 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
+            <form @submit.prevent="submit">
+                <div class="mb-4">
+                    <label for="name" class="block font-medium text-sm text-gray-700">Nombre de la Tienda</label>
+                    <input id="name" v-model="form.name" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
+                </div>
+
+                <div class="mb-4">
+                    <label for="logo" class="block font-medium text-sm text-gray-700">Logo de la Tienda</label>
+                    <input id="logo" @input="form.logo = $event.target.files[0]" type="file" class="block mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                </div>
+
+                <div class="mb-4">
+                    <label for="phone" class="block font-medium text-sm text-gray-700">Teléfono</label>
+                    <input id="phone" v-model="form.phone" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                </div>
+
+                <div class="mb-4">
+                    <label for="address" class="block font-medium text-sm text-gray-700">Dirección</label>
+                    <input id="address" v-model="form.address" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                </div>
+
+                <div class="mb-4">
+                    <label for="facebook_url" class="block font-medium text-sm text-gray-700">URL de Facebook (Completa)</label>
+                    <input id="facebook_url" v-model="form.facebook_url" type="url" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                </div>
+
+                <div class="mb-4">
+                    <label for="instagram_url" class="block font-medium text-sm text-gray-700">URL de Instagram (Completa)</label>
+                    <input id="instagram_url" v-model="form.instagram_url" type="url" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                </div>
+
+                <div class="flex items-center justify-end mt-4">
+                    <button type="submit" :disabled="form.processing" class="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
+                        Guardar y Finalizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</template>

@@ -12,9 +12,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Borra los usuarios, tiendas, etc. existentes para empezar de cero
-        // y luego ejecuta los seeders en orden.
+        // Le decimos que ejecute nuestros seeders en este orden
         $this->call([
+            RolesAndPermissionsSeeder::class, // <-- AÑADIMOS ESTE DE PRIMERO
             StoreSeeder::class,
             CategorySeeder::class,
             ProductSeeder::class,

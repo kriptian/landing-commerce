@@ -8,12 +8,14 @@ use Inertia\Inertia;
 
 class CategoryController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $categories = Category::whereNull('parent_id')
-                              ->with('children') // Carga las subcategorías de cada categoría principal
-                              ->get();
-        
+        // Hacemos el mismo filtro explícito aquí
+        $categories = $request->user()->store->categories()
+                                ->whereNull('parent_id')
+                                ->with('children')
+                                ->get();
+
         return Inertia::render('Categories/Index', [
             'categories' => $categories,
         ]);
