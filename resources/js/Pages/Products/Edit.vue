@@ -5,55 +5,111 @@ import { ref, computed, watch } from 'vue';
 
 const props = defineProps({
     product: Object,
-    categories: Array, // Recibimos las categorías principales con sus hijos
+    categories: Array, 
 });
 
-// --- INICIO: Lógica para los menús dependientes ---
-
-// Determinamos la categoría padre y la subcategoría actual del producto
+// --- Lógica de menús dependientes (Sigue igual) ---
 const initialParent = props.product.category.parent_id 
     ? props.product.category.parent 
     : props.product.category;
 const initialSubcategory = props.product.category.parent_id 
     ? props.product.category 
     : null;
-
 const selectedParentId = ref(initialParent ? initialParent.id : null);
-
 const subcategories = computed(() => {
     if (!selectedParentId.value) return [];
     const parent = props.categories.find(c => c.id === selectedParentId.value);
     return parent ? parent.children : [];
 });
-
 watch(selectedParentId, (newVal, oldVal) => {
-    // Solo reseteamos la subcategoría si el padre realmente cambia
     if (newVal !== oldVal) {
         form.category_id = null;
     }
 });
-// --- FIN: Lógica para los menús dependientes ---
+// --- FIN Lógica ---
+
+
+// --- Lógica de Variantes (Sigue igual) ---
+const convertJsonToText = (optionsJson) => {
+    return Object.entries(optionsJson).map(([key, value]) => `${key}:${value}`).join(', ');
+};
+
+const initialVariants = props.product.variants.map(variant => {
+    return {
+        id: variant.id, 
+        options_text: convertJsonToText(variant.options),
+        price: variant.price ?? '', 
+        stock: variant.stock,
+    };
+});
+// --- FIN Lógica Variantes ---
+
 
 const form = useForm({
-    _method: 'PUT',
+    _method: 'PUT', 
     name: props.product.name,
     price: props.product.price,
-    quantity: props.product.quantity,
-    // El category_id se inicializa con el ID de la subcategoría (o el de la principal si no hay sub)
+    quantity: props.product.quantity, // Este se actualizará solo
     category_id: props.product.category_id,
     short_description: props.product.short_description,
     long_description: props.product.long_description,
     specifications: props.product.specifications ? JSON.parse(props.product.specifications).join(', ') : '',
     new_gallery_files: [],
     images_to_delete: [],
+    variants: initialVariants, 
+    variants_to_delete: [], 
 });
 
+// --- Lógica de Imágenes (Sigue igual) ---
 const currentImages = ref([...props.product.images]);
-
 const markImageForDeletion = (image) => {
     form.images_to_delete.push(image.id);
     currentImages.value = currentImages.value.filter(img => img.id !== image.id);
 };
+
+// --- Lógica de Añadir/Quitar Variantes (Sigue igual) ---
+const addVariant = () => {
+    form.variants.push({ 
+        id: null, 
+        options_text: '', 
+        price: '', 
+        stock: 0 
+    });
+};
+
+const removeVariant = (index) => {
+    const variant = form.variants[index];
+    if (variant.id) {
+        form.variants_to_delete.push(variant.id);
+    }
+    form.variants.splice(index, 1);
+};
+// --- FIN Lógica Variantes ---
+
+// --- Lógica de Stock Total (Sigue igual) ---
+const totalQuantity = computed(() => {
+    // Si hay variantes, el stock es la suma de las variantes
+    if (form.variants.length > 0) {
+        let total = 0;
+        form.variants.forEach(variant => {
+            total += Number(variant.stock) || 0;
+        });
+        return total;
+    }
+    // Si NO hay variantes, el stock es el que está en el campo general
+    return Number(form.quantity) || 0; 
+});
+
+// Vigilamos la suma total.
+watch(totalQuantity, (newTotal) => {
+    // Si hay variantes, actualizamos el form.quantity
+    if (form.variants.length > 0) {
+        form.quantity = newTotal;
+    }
+    // Si no hay variantes, no hacemos nada, dejamos que el 'form.quantity'
+    // mantenga su valor original (que sí se puede editar manualmente)
+});
+// --- FIN Lógica Stock ---
 
 const submit = () => {
     form.post(route('admin.products.update', props.product.id));
@@ -74,18 +130,29 @@ const submit = () => {
                     <div class="p-6 text-gray-900">
                         <form @submit.prevent="submit">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                
                                 <div>
                                     <div class="mb-4">
                                         <label for="name" class="block font-medium text-sm text-gray-700">Nombre</label>
                                         <input id="name" v-model="form.name" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
                                     </div>
                                     <div class="mb-4">
-                                        <label for="price" class="block font-medium text-sm text-gray-700">Precio</label>
+                                        <label for="price" class="block font-medium text-sm text-gray-700">Precio (Principal)</label>
                                         <input id="price" v-model="form.price" type="number" step="0.01" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
                                     </div>
+
                                     <div class="mb-4">
-                                        <label for="quantity" class="block font-medium text-sm text-gray-700">Cantidad en Inventario</label>
-                                        <input id="quantity" v-model="form.quantity" type="number" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
+                                        <label for="quantity" class="block font-medium text-sm text-gray-700">Cantidad en Inventario (Total)</label>
+                                        <input 
+                                            id="quantity" 
+                                            v-model="form.quantity" 
+                                            type="number" 
+                                            class="block mt-1 w-full rounded-md shadow-sm border-gray-300" 
+                                            :class="{ 'bg-gray-100': form.variants.length > 0 }"
+                                            :disabled="form.variants.length > 0" 
+                                            required>
+                                        <p v-if="form.variants.length > 0" class="text-xs text-gray-500 mt-1">El total se calcula automáticamente sumando el stock de las variantes.</p>
+                                        <p v-else class="text-xs text-gray-500 mt-1">Este es el stock general. Se deshabilitará si añades variantes.</p>
                                     </div>
                                     <div class="mb-4">
                                         <label for="parent_category" class="block font-medium text-sm text-gray-700">Categoría Principal</label>
@@ -123,7 +190,56 @@ const submit = () => {
                                 </div>
                             </div>
                             
-                             <div class="mt-6 border-t pt-6">
+                            <div class="md:col-span-2 mt-6 border-t pt-6">
+                                <h3 class="text-lg font-medium text-gray-900">Variantes del Producto</h3>
+                                <p class="text-sm text-gray-600 mb-4">
+                                    Editá, añadí o eliminá las combinaciones de variantes.
+                                </p>
+
+                                <div class="hidden md:grid grid-cols-4 gap-4 mb-2 text-sm font-medium text-gray-600">
+                                    <div class="col-span-2">Opciones (ej: Color:Rojo, Talla:M)</div>
+                                    <div>Precio (Opcional)</div>
+                                    <div>Stock</div>
+                                </div>
+
+                                <div v-for="(variant, index) in form.variants" :key="index" class="grid grid-cols-4 gap-4 items-center mb-2">
+                                    <div class="col-span-4 md:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Opciones</label>
+                                        <input 
+                                            type="text" 
+                                            v-model="variant.options_text" 
+                                            placeholder="Color:Rojo, Talla:M"
+                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Precio (Opcional)</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            v-model="variant.price" 
+                                            placeholder="Dejar vacío usa precio principal"
+                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Stock</label>
+                                        <input 
+                                            type="number" 
+                                            v-model="variant.stock" 
+                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                    </div>
+
+                                    <button @click="removeVariant(index)" type="button" class="text-red-600 hover:text-red-800 text-sm self-end pb-2">
+                                        Quitar
+                                    </button>
+                                </div>
+
+                                <button @click="addVariant" type="button" class="mt-4 text-sm font-medium text-blue-600 hover:text-blue-800">
+                                    + Añadir Variante
+                                </button>
+                            </div>
+                            <div class="mt-6 border-t pt-6">
                                <div class="mb-4 col-span-2">
                                     <label class="block font-medium text-sm text-gray-700">Imágenes Actuales</label>
                                     <div v-if="currentImages.length > 0" class="mt-2 grid grid-cols-3 md:grid-cols-5 gap-4">

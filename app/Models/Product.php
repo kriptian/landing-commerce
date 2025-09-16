@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use App\Models\Store;
 
 class Product extends Model
 {
@@ -64,5 +65,23 @@ class Product extends Model
     public function images()
     {
         return $this->hasMany(ProductImage::class);
+    }
+
+    /**
+     * Un producto tiene muchas opciones.
+     */
+    public function options()
+    {
+        return $this->hasMany(\App\Models\ProductOption::class);
+    }
+
+    // ... adentro de la clase Product
+
+    /**
+     * Un producto tiene muchas variantes.
+     */
+    public function variants()
+    {
+        return $this->hasMany(\App\Models\ProductVariant::class);
     }
 }

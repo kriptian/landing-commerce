@@ -11,17 +11,30 @@ use App\Models\Store;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Http\Controllers\CartController; // <-- Esta línea ya la tenías, ¡perfecto!
 
 /*
 |--------------------------------------------------------------------------
 | Rutas Públicas
 |--------------------------------------------------------------------------
 */
+
 Route::get('/', function () {
+    return redirect()->route('login');
+});
+
+// --- AJUSTE #2: Creamos una nueva ruta para la vitrina de tiendas ---
+Route::get('/tiendas', function () {
     return Inertia::render('Public/StoreIndex', [
         'stores' => Store::all(),
     ]);
-})->name('home');
+})->name('home'); // El nombre 'home' ahora es de la vitrina
+
+// Route::get('/', function () {
+//     return Inertia::render('Public/StoreIndex', [
+//         'stores' => Store::all(),
+//     ]);
+// })->name('home');
 
 // --- AQUÍ ESTÁN LOS AJUSTES ---
 Route::get('/tienda/{store:slug}', [PublicProductController::class, 'index'])->name('catalogo.index');
@@ -39,6 +52,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'store' => $request->user()->store,
         ]);
     })->name('dashboard');
+
+    // ==== AQUÍ VA LA NUEVA RUTA DEL CARRITO ====
+    Route::post('/cart', [CartController::class, 'store'])->name('cart.store');
+    Route::get('/tienda/{store:slug}/cart', [CartController::class, 'index'])->name('cart.index');
+    Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
+
+
+    // ============================================
 
     // Rutas para configurar la tienda después del registro
     Route::get('/store/setup', [StoreSetupController::class, 'create'])->name('store.setup');

@@ -17,7 +17,7 @@ class ProductController extends Controller
     {
         return Inertia::render('Public/ProductList', [
             // Buscamos solo los productos que pertenecen a esa tienda
-            'products' => $store->products()->with('images')->latest()->get(),
+            'products' => $store->products()->with('images', 'store')->latest()->get(),
             'store' => $store, // Pasamos la info de la tienda a la vista
         ]);
     }
@@ -32,7 +32,7 @@ class ProductController extends Controller
             abort(404);
         }
 
-        $product->load('images', 'category');
+        $product->load('images', 'category', 'variants', 'store');
         
         return inertia('Public/ProductPage', [
             'product' => $product,

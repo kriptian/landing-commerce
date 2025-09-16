@@ -1,15 +1,16 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { ref } from 'vue'; // Importamos 'ref' para manejar el estado de las pestañas
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
-// Recibimos ambas listas del controlador
 const props = defineProps({
     users: Array,
     roles: Array,
 });
 
-// Una variable para saber qué pestaña está activa. Por defecto, 'usuarios'.
+// Para saber quién es el usuario logueado actualmente
+const loggedInUser = usePage().props.auth.user;
+
 const activeTab = ref('users');
 </script>
 
@@ -67,40 +68,15 @@ const activeTab = ref('users');
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <Link :href="route('admin.users.edit', user.id)" class="text-indigo-600 hover:text-indigo-900">Editar</Link>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div v-if="activeTab === 'roles'">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre del Rol</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Permisos</th>
-                                        <th class="relative px-6 py-3"><span class="sr-only">Acciones</span></th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="role in roles" :key="role.id">
-                                        <td class="px-6 py-4 whitespace-nowrap font-bold">{{ role.name }}</td>
-                                        <td class="px-6 py-4">
-                                            <div class="flex flex-wrap gap-1">
-                                                <span v-for="permission in role.permissions" :key="permission.id" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                                                    {{ permission.name }}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            
                                             <Link
-                                                v-if="role.name !== 'Administrador'"
+                                                v-if="user.id !== loggedInUser.id"
                                                 as="button"
                                                 method="delete"
-                                                :href="route('admin.roles.destroy', role.id)"
-                                                class="text-red-600 hover:text-red-900"
+                                                :href="route('admin.users.destroy', user.id)"
+                                                class="text-red-600 hover:text-red-900 ml-4"
                                                 preserve-scroll
-                                                onclick="return confirm('¿Estás seguro de que quieres eliminar este rol?')"
+                                                onclick="return confirm('¿Estás seguro de que quieres eliminar este usuario?')"
                                             >
                                                 Eliminar
                                             </Link>
@@ -109,6 +85,9 @@ const activeTab = ref('users');
                                 </tbody>
                             </table>
                         </div>
+
+                        <div v-if="activeTab === 'roles'">
+                            </div>
                     </div>
                 </div>
             </div>

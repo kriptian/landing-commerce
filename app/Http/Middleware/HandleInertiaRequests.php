@@ -36,6 +36,11 @@ class HandleInertiaRequests extends Middleware
                 // ¡Añadimos esta lógica!
                 'can' => $request->user() ? $request->user()->getPermissionsViaRoles()->pluck('name') : [],
             ],
+            'cart' => [
+                'count' => $request->user() ? $request->user()->cart()->sum('quantity') : 0,
+            ],
+            
+
         ]);
     }
 }

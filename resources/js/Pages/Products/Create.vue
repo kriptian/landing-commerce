@@ -1,44 +1,71 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue'; // <-- Se necesitan estos para la magia
+import { ref, computed, watch } from 'vue'; 
 
 const props = defineProps({
-    categories: Array, // Recibimos las categorías principales con sus hijos
+    categories: Array, 
 });
 
-// --- INICIO: Lógica para los menús dependientes ---
-const selectedParentId = ref(null); // Aquí guardamos el ID de la categoría principal que elijan
-
-// Esta es una propiedad "calculada". Nos da la lista de subcategorías
-// basándose en la categoría principal que se haya seleccionado.
+// --- Lógica de menús dependientes (Sigue igual) ---
+const selectedParentId = ref(null); 
 const subcategories = computed(() => {
     if (!selectedParentId.value) return [];
     const parent = props.categories.find(c => c.id === selectedParentId.value);
     return parent ? parent.children : [];
 });
-
-// Esto es un "vigilante". Si el usuario cambia de categoría principal,
-// resetea la selección de la subcategoría.
 watch(selectedParentId, () => {
     form.category_id = null;
 });
-// --- FIN: Lógica para los menús dependientes ---
+// --- FIN Lógica ---
 
 const form = useForm({
     name: '',
     price: '',
-    quantity: 0,
-    category_id: null, // IMPORTANTE: Ahora este campo guardará el ID de la SUBCATEGORÍA
+    quantity: 0, // Este ahora sí se va a calcular solo
+    category_id: null, 
     short_description: '',
     long_description: '',
     specifications: '',
     gallery_files: [],
+    variants: [], 
 });
+
+// --- LÓGICA DE VARIANTES (Sigue igual) ---
+const addVariant = () => {
+    form.variants.push({ 
+        options_text: '', 
+        price: '', 
+        stock: 0 
+    });
+};
+const removeVariant = (index) => {
+    form.variants.splice(index, 1);
+};
+// --- FIN LÓGICA VARIANTES ---
+
+
+// ===== AQUÍ ESTÁ EL ARREGLO (PUNTO 1) =====
+// Esta propiedad calculada ahora lee 'form.variants' (el correcto)
+const totalQuantity = computed(() => {
+    let total = 0;
+    form.variants.forEach(variant => {
+        total += Number(variant.stock) || 0;
+    });
+    return total;
+});
+
+// El vigilante sigue igual, pero ahora escucha al 'computed' correcto
+watch(totalQuantity, (newTotal) => {
+    form.quantity = newTotal;
+});
+// ==========================================
+
 
 const submit = () => {
     form.post(route('admin.products.store'));
 };
+
 </script>
 
 <template>
@@ -61,14 +88,21 @@ const submit = () => {
                                     <input id="name" v-model="form.name" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
                                 </div>
                                 <div class="mb-4">
-                                    <label for="price" class="block font-medium text-sm text-gray-700">Precio</label>
+                                    <label for="price" class="block font-medium text-sm text-gray-700">Precio (Principal)</label>
                                     <input id="price" v-model="form.price" type="number" step="0.01" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
                                 </div>
-                                <div class="mb-4">
-                                    <label for="quantity" class="block font-medium text-sm text-gray-700">Cantidad en Inventario</label>
-                                    <input id="quantity" v-model="form.quantity" type="number" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
-                                </div>
                                 
+                                <div class="mb-4">
+                                    <label for="quantity" class="block font-medium text-sm text-gray-700">Cantidad en Inventario (Total)</label>
+                                    <input 
+                                        id="quantity" 
+                                        v-model="form.quantity" 
+                                        type="number" 
+                                        class="block mt-1 w-full rounded-md shadow-sm border-gray-300 bg-gray-100" 
+                                        disabled  
+                                    />
+                                    <p class="text-xs text-gray-500 mt-1">El total se calcula automáticamente. Si no hay variantes, el stock general es 0.</p>
+                                </div>
                                 <div class="mb-4">
                                     <label for="parent_category" class="block font-medium text-sm text-gray-700">Categoría Principal</label>
                                     <select id="parent_category" v-model="selectedParentId" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
@@ -106,6 +140,50 @@ const submit = () => {
                                     <label for="gallery_files" class="block font-medium text-sm text-gray-700">Imágenes de la Galería</label>
                                     <input @input="form.gallery_files = $event.target.files" type="file" multiple class="block mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                                 </div>
+                            </div>
+                            
+                            <div class="md:col-span-2 mt-6 border-t pt-6">
+                                <h3 class="text-lg font-medium text-gray-900">Variantes del Producto</h3>
+                                <p class="text-sm text-gray-600 mb-4">
+                                    Añadí cada combinación como una variante separada. El stock de arriba será la suma de todas las variantes.
+                                </p>
+                                <div class="hidden md:grid grid-cols-4 gap-4 mb-2 text-sm font-medium text-gray-600">
+                                    <div class="col-span-2">Opciones (ej: Color:Rojo, Talla:M)</div>
+                                    <div>Precio (Opcional)</div>
+                                    <div>Stock</div>
+                                </div>
+                                <div v-for="(variant, index) in form.variants" :key="index" class="grid grid-cols-4 gap-4 items-center mb-2">
+                                    <div class="col-span-4 md:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Opciones</label>
+                                        <input 
+                                            type="text" 
+                                            v-model="variant.options_text" 
+                                            placeholder="Color:Rojo, Talla:M"
+                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Precio (Opcional)</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            v-model="variant.price" 
+                                            placeholder="Dejar vacío usa precio principal"
+                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Stock</label>
+                                        <input 
+                                            type="number" 
+                                            v-model="variant.stock" 
+                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                    </div>
+                                    <button @click="removeVariant(index)" type="button" class="text-red-600 hover:text-red-800 text-sm self-end pb-2">
+                                        Quitar
+                                    </button>
+                                </div>
+                                <button @click="addVariant" type="button" class="mt-4 text-sm font-medium text-blue-600 hover:text-blue-800">
+                                    + Añadir Variante
+                                </button>
                             </div>
                             
                             <div class="md:col-span-2 flex items-center justify-end mt-6 border-t pt-6">

@@ -96,13 +96,14 @@ class UserController extends Controller
         return redirect()->route('admin.users.index');
     }
 
-    public function destroy(User $user)
+    public function destroy(User $user, Request $request)
     {
-        if ($user->id === auth()->id()) {
+        // Regla de seguridad: No podés eliminarte a vos mismo
+        if ($user->id === $request->user()->id) {
             return back()->withErrors(['delete' => 'No puedes eliminar tu propio usuario.']);
         }
-
-        if ($user->store_id !== auth()->user()->store_id) {
+        // Regla de seguridad: Solo podés borrar usuarios de tu propia tienda
+        if ($user->store_id !== $request->user()->store_id) {
             abort(403);
         }
 

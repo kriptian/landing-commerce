@@ -39,17 +39,19 @@ const destroy = (id) => {
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cantidad</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoría</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
                                 <tr v-if="products.length === 0">
-                                    <td colspan="4" class="px-6 py-4 text-center text-gray-500">No hay productos creados.</td>
+                                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">No hay productos creados.</td>
                                 </tr>
                                 <tr v-for="product in products" :key="product.id">
                                     <td class="px-6 py-4 whitespace-nowrap">{{ product.name }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">$ {{ product.price }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">{{ product.quantity }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">{{ product.category ? product.category.name : 'Sin Categoría' }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
 
