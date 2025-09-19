@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use Illuminate\Support\Facades\Auth;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -37,7 +38,7 @@ class HandleInertiaRequests extends Middleware
                 'can' => $request->user() ? $request->user()->getPermissionsViaRoles()->pluck('name') : [],
             ],
             'cart' => [
-                'count' => $request->user() ? $request->user()->cart()->sum('quantity') : 0,
+                'count' => Auth::check() ? Auth::user()->cart()->sum('quantity') : 0,
             ],
             
 
