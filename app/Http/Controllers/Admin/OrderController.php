@@ -69,44 +69,57 @@ class OrderController extends Controller
     /**
      * Confirma una orden y descuenta el inventario.
      */
+    /**
+     * Confirma una orden y descuenta el inventario.
+     */
     public function confirm(\App\Models\Order $order)
     {
-        // Seguridad: que la orden sea de la tienda del usuario
+        // Seguridad (sigue igual)
         if ($order->store_id !== auth()->user()->store_id) {
             abort(403);
         }
 
-        // Usamos una transacción para que, si algo falla, no se descuente nada.
-        DB::transaction(function () use ($order) {
+        try {
+            // Usamos una transacción para que, si algo falla, no se descuente nada.
+            DB::transaction(function () use ($order) {
+                
+                $order->load('items.variant', 'items.product');
 
-            // Recargamos la orden con sus items y variantes para estar seguros
-            $order->load('items.variant', 'items.product');
+                foreach ($order->items as $item) {
+                    if ($item->variant) {
+                        // Si el item es una variante, descontamos el stock de la variante
+                        $variant = $item->variant;
+                        if ($variant->stock < $item->quantity) {
+                            // ===== ESTE ES EL CAMBIO =====
+                            // En vez de explotar, lanzamos un error que podemos atrapar
+                            throw new \Exception("No hay suficiente stock para la variante: {$item->variant->options['Opción']}.");
+                        }
+                        $variant->decrement('stock', $item->quantity);
 
-            foreach ($order->items as $item) {
-                if ($item->variant) {
-                    // Si el item es una variante, descontamos el stock de la variante
-                    $variant = $item->variant;
-                    if ($variant->stock < $item->quantity) {
-                        // Si no hay stock suficiente, cancelamos toda la operación
-                        throw new \Exception("No hay suficiente stock para el producto {$item->product_name} ({$item->variant->options['Opción']}).");
+                    } else if ($item->product) { // Chequeamos que el producto exista
+                        // Si es un producto simple, descontamos el stock del producto principal
+                        $product = $item->product;
+                        if ($product->quantity < $item->quantity) {
+                            throw new \Exception("No hay suficiente stock para el producto {$item->product_name}.");
+                        }
+                        $product->decrement('quantity', $item->quantity);
                     }
-                    $variant->decrement('stock', $item->quantity);
-                } else {
-                    // Si es un producto simple, descontamos el stock del producto principal
-                    $product = $item->product;
-                    if ($product->quantity < $item->quantity) {
-                        throw new \Exception("No hay suficiente stock para el producto {$item->product_name}.");
-                    }
-                    $product->decrement('quantity', $item->quantity);
                 }
-            }
 
-            // (Opcional) Podemos cambiar el estado a 'completado' o 'entregado' si queremos
-            // $order->status = 'entregado';
-            // $order->save();
-        });
+                // (Opcional) Podemos cambiar el estado a 'confirmado' o 'entregado'
+                // $order->status = 'entregado';
+                // $order->save();
+            });
+
+        } catch (\Exception $e) {
+            // ===== ESTE ES EL CAMBIO =====
+            // Si la transacción falla por CUALQUIER razón (como la falta de stock),
+            // atrapamos el error y volvemos con un mensaje claro.
+            return back()->withErrors(['confirmation' => $e->getMessage()]);
+        }
+
 
         // Si todo sale bien, regresamos a la página anterior con un mensaje de éxito.
-        return back()->with('success', '¡Venta confirmada e inventario actualizado!');
+        return back(); // La notificación de éxito ya la maneja el frontend en el 'onSuccess'
     }
 }

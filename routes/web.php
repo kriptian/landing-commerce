@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
-use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Public\ProductController as PublicProductController;
 use App\Http\Controllers\Admin\RoleController;

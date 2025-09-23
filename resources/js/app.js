@@ -5,6 +5,8 @@ import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
+import Toast from 'vue-toastification';
+import 'vue-toastification/dist/index.css';
 
 // --- 1. IMPORTAMOS NUESTRO COMPONENTE DE GALERÍA ---
 import ProductGallery from './Components/Product/ProductGallery.vue';
@@ -21,7 +23,8 @@ createInertiaApp({
     setup({ el, App, props, plugin }) {
         const app = createApp({ render: () => h(App, props) })
             .use(plugin)
-            .use(ZiggyVue);
+            .use(ZiggyVue)
+            .use(Toast);
 
         // --- 2. AQUÍ REGISTRAMOS EL COMPONENTE ---
         app.component('ProductGallery', ProductGallery);

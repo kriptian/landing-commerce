@@ -1,19 +1,49 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { ref } from 'vue'; // <-- Importamos ref
+// --- 1. IMPORTAMOS LO QUE NECESITAMOS ---
+import Modal from '@/Components/Modal.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import DangerButton from '@/Components/DangerButton.vue';
+import { useToast } from 'vue-toastification';
+// ------------------------------------------
 
 defineProps({
     categories: Array,
 });
 
-const destroy = (id) => {
-    if (confirm('¿Estás seguro de que querés eliminar esta categoría?')) {
-        // Usamos el nombre de ruta correcto
-        router.delete(route('admin.categories.destroy', id), {
-            preserveScroll: true, 
-        });
-    }
+const toast = useToast(); // Inicializamos el toast
+
+// --- 2. LÓGICA NUEVA PARA MANEJAR EL MODAL ---
+const confirmingCategoryDeletion = ref(false);
+const categoryToDelete = ref(null);
+
+const confirmCategoryDeletion = (id) => {
+    categoryToDelete.value = id;
+    confirmingCategoryDeletion.value = true;
 };
+
+const closeModal = () => {
+    confirmingCategoryDeletion.value = false;
+    categoryToDelete.value = null;
+};
+
+// Renombramos la función 'destroy' a 'deleteCategory'
+const deleteCategory = () => {
+    router.delete(route('admin.categories.destroy', categoryToDelete.value), {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeModal();
+            toast.success('¡Categoría eliminada con éxito!');
+        },
+        onError: () => {
+            closeModal();
+            toast.error('Hubo un error al eliminar la categoría.');
+        }
+    });
+};
+// ---------------------------------------------
 </script>
 
 <template>
@@ -56,7 +86,7 @@ const destroy = (id) => {
 
                                         <Link :href="route('admin.categories.edit', category.id)" class="text-indigo-600 hover:text-indigo-900">Editar</Link>
 
-                                        <button @click="destroy(category.id)" class="ml-4 text-red-600 hover:text-red-900">
+                                        <button @click="confirmCategoryDeletion(category.id)" class="ml-4 text-red-600 hover:text-red-900">
                                             Eliminar
                                         </button>
 
@@ -70,4 +100,27 @@ const destroy = (id) => {
             </div>
         </div>
     </AuthenticatedLayout>
+    
+    <Modal :show="confirmingCategoryDeletion" @close="closeModal">
+        <div class="p-6">
+            <h2 class="text-lg font-medium text-gray-900">
+                ¿Estás seguro de que querés eliminar esta categoría?
+            </h2>
+
+            <p class="mt-1 text-sm text-gray-600">
+                Esta acción es irreversible. Se borrará la categoría y todas sus subcategorías.
+            </p>
+
+            <div class="mt-6 flex justify-end">
+                <SecondaryButton @click="closeModal"> Cancelar </SecondaryButton>
+
+                <DangerButton
+                    class="ms-3"
+                    @click="deleteCategory"
+                >
+                    Sí, Eliminar Categoría
+                </DangerButton>
+            </div>
+        </div>
+    </Modal>
 </template>

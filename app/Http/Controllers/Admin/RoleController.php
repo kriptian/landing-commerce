@@ -35,13 +35,12 @@ class RoleController extends Controller
 
         $store = $request->user()->store;
         
-        // AJUSTE: Creamos el rol directamente asociado a la tienda.
-        // Laravel se encarga de poner el store_id.
         $role = $store->roles()->create(['name' => $validated['name']]);
         
         $role->syncPermissions($validated['permissions']);
 
-        return redirect()->route('admin.users.index')->with('message', 'Rol creado exitosamente.');
+        // CAMBIO: Redirigimos al índice de usuarios, donde está la pestaña de roles.
+        return redirect()->route('admin.users.index');
     }
 
     public function edit(Role $role)
@@ -71,7 +70,8 @@ class RoleController extends Controller
         $role->update(['name' => $validated['name']]);
         $role->syncPermissions($validated['permissions']);
 
-        return redirect()->route('admin.users.index')->with('message', 'Rol actualizado exitosamente.');
+        // CAMBIO: Redirigimos al índice de usuarios, donde está la pestaña de roles.
+        return redirect()->route('admin.users.index');
     }
 
     public function destroy(Role $role)
@@ -86,6 +86,7 @@ class RoleController extends Controller
         
         $role->delete();
 
-        return redirect()->route('admin.users.index')->with('message', 'Rol eliminado exitosamente.');
+        // CAMBIO: Redirigimos al índice de usuarios, donde está la pestaña de roles.
+        return redirect()->route('admin.users.index');
     }
 }

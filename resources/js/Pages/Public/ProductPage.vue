@@ -2,13 +2,14 @@
 import ProductGallery from '@/Components/Product/ProductGallery.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
+import { useToast } from 'vue-toastification';
 
 // Inertia nos pasa el producto completo (ahora CON sus variantes)
 const props = defineProps({
     product: Object,
 });
 
-// --- ESTA ES LA MAGIA NUEVA ---
+const toast = useToast();
 
 // 1. Guardamos el ID de la variante que el cliente escoja
 const selectedVariantId = ref(null);
@@ -31,7 +32,7 @@ const displayStock = computed(() => {
     if (selectedVariant.value) {
         return selectedVariant.value.stock; // Muestra el stock de la variante
     }
-    // Si no hay variantes (o no se ha escogido), muestra el stock general
+    // Si no hay variantes (o no se ha escogido), el stock es el general
     return props.product.variants.length > 0 ? 0 : props.product.quantity; 
 });
 
@@ -67,28 +68,27 @@ watch(selectedQuantity, (newQty) => {
     }
 });
 
-// 4. El "Agregar al Carrito" ahora manda el ID de la variante
+// 4. El "Agregar al Carrito" ahora manda el ID de la variante y usa TOASTS
 const addToCart = () => {
-    if (!selectedVariantId.value) {
-        alert('Por favor, selecciona una opción.');
+    // Solo validamos si el producto TIENE variantes
+    if (props.product.variants.length > 0 && !selectedVariantId.value) {
+        toast.error('Por favor, selecciona una opción.');
         return;
     }
 
     router.post(route('cart.store'), {
         product_id: props.product.id,
-        product_variant_id: selectedVariantId.value, // <-- LA CLAVE
+        // Si no hay variantes, product_variant_id será null. El backend ya maneja esto.
+        product_variant_id: selectedVariantId.value,
         quantity: selectedQuantity.value,
     }, {
         preserveScroll: true, 
         onSuccess: () => {
-            alert('¡Producto añadido al carrito!'); 
+            toast.success('¡Producto añadido al carrito!'); 
         },
         onError: (errors) => {
-            if (errors.quantity) {
-                alert(errors.quantity);
-            } else {
-                alert('Hubo un error al añadir el producto.');
-            }
+            const errorMessage = Object.values(errors).join('\n');
+            toast.error(errorMessage || 'Hubo un error al añadir el producto.');
         }
     });
 };
@@ -157,24 +157,26 @@ const specifications = computed(() => {
                         </div>
                     </div>
                 </div>
+                
                 <div class="pt-4">
                     <div class="flex items-center space-x-4">
                         <label class="font-semibold">Cantidad:</label>
                         <div class="flex items-center border rounded-md">
-                            <button @click="decreaseQuantity" :disabled="!selectedVariant" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
+                            <button @click="decreaseQuantity" :disabled="!selectedVariant && product.variants.length > 0" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
                             <input type="number" v-model.number="selectedQuantity" class="w-16 text-center border-y-0 border-x" />
-                            <button @click="increaseQuantity" :disabled="!selectedVariant" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-r-md disabled:opacity-50">+</button>
+                            <button @click="increaseQuantity" :disabled="!selectedVariant && product.variants.length > 0" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-r-md disabled:opacity-50">+</button>
                         </div>
-                        <p v-if="selectedVariant" class="text-sm text-gray-600">({{ displayStock }} en stock)</p>
+                        <p v-if="selectedVariant || product.variants.length == 0" class="text-sm text-gray-600">({{ displayStock }} en stock)</p>
                     </div>
 
                     <button 
                         @click="addToCart"
-                        :disabled="!selectedVariant || displayStock === 0 || selectedQuantity > displayStock"
+                        :disabled="(product.variants.length > 0 && !selectedVariant) || displayStock === 0 || selectedQuantity > displayStock"
                         class="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:bg-blue-700">
-                        {{ !selectedVariant ? 'Selecciona una opción' : (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') }}
+                        {{ product.variants.length > 0 && !selectedVariant ? 'Selecciona una opción' : (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') }}
                     </button>
                 </div>
+                
                 <div class="border-t pt-4">
                     <h3 class="text-xl font-semibold mb-3">Especificaciones Técnicas</h3>
                     <ul class="list-disc list-inside text-gray-600 space-y-1">
@@ -191,7 +193,7 @@ const specifications = computed(() => {
             </div>
         </section>
 
-        </main>
+    </main>
 
     <footer class="bg-white mt-16 border-t">
         <div class="container mx-auto px-6 py-4 text-center text-gray-500">

@@ -2,11 +2,14 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
+import { useToast } from 'vue-toastification'; // <-- 1. IMPORTAMOS EL TOAST
 
 const props = defineProps({
     product: Object,
     categories: Array, 
 });
+
+const toast = useToast(); // <-- 2. INICIALIZAMOS EL TOAST
 
 // --- Lógica de menús dependientes (Sigue igual) ---
 const initialParent = props.product.category.parent_id 
@@ -49,7 +52,7 @@ const form = useForm({
     _method: 'PUT', 
     name: props.product.name,
     price: props.product.price,
-    quantity: props.product.quantity, // Este se actualizará solo
+    quantity: props.product.quantity,
     category_id: props.product.category_id,
     short_description: props.product.short_description,
     long_description: props.product.long_description,
@@ -88,7 +91,6 @@ const removeVariant = (index) => {
 
 // --- Lógica de Stock Total (Sigue igual) ---
 const totalQuantity = computed(() => {
-    // Si hay variantes, el stock es la suma de las variantes
     if (form.variants.length > 0) {
         let total = 0;
         form.variants.forEach(variant => {
@@ -96,23 +98,23 @@ const totalQuantity = computed(() => {
         });
         return total;
     }
-    // Si NO hay variantes, el stock es el que está en el campo general
     return Number(form.quantity) || 0; 
 });
 
-// Vigilamos la suma total.
 watch(totalQuantity, (newTotal) => {
-    // Si hay variantes, actualizamos el form.quantity
     if (form.variants.length > 0) {
         form.quantity = newTotal;
     }
-    // Si no hay variantes, no hacemos nada, dejamos que el 'form.quantity'
-    // mantenga su valor original (que sí se puede editar manualmente)
 });
 // --- FIN Lógica Stock ---
 
 const submit = () => {
-    form.post(route('admin.products.update', props.product.id));
+    form.post(route('admin.products.update', props.product.id), {
+        // --- 3. AGREGAMOS LA NOTIFICACIÓN DE ÉXITO ---
+        onSuccess: () => {
+            toast.success('¡Producto actualizado con éxito!');
+        }
+    });
 };
 </script>
 

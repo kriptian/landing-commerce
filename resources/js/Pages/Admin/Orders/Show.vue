@@ -1,7 +1,14 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm, router } from '@inertiajs/vue3'; // <-- Importamos router
-import { computed } from 'vue';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { computed, ref } from 'vue'; // <-- Importamos ref
+import { useToast } from 'vue-toastification';
+// --- Importamos los componentes del Modal ---
+import Modal from '@/Components/Modal.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import DangerButton from '@/Components/DangerButton.vue'; // DangerButton es el rojo
+
+const toast = useToast();
 
 const props = defineProps({
     order: Object,
@@ -26,7 +33,7 @@ const statusInfo = computed(() => {
 // --- FIN Lógica de Formateo ---
 
 
-// --- Lógica para Actualizar Estado (sigue igual) ---
+// --- Lógica para Actualizar Estado (¡Ahora con notificación!) ---
 const statusForm = useForm({
     status: props.order.status,
 });
@@ -34,25 +41,38 @@ const statusForm = useForm({
 const updateStatus = () => {
     statusForm.put(route('admin.orders.update', props.order.id), {
         preserveScroll: true,
+        onSuccess: () => {
+            toast.success('¡Estado de la orden actualizado!');
+        }
     });
 };
 // --- FIN Lógica de Estado ---
 
 
-// ===== ESTA ES LA LÓGICA NUEVA PARA CONFIRMAR LA VENTA =====
+// ===== LÓGICA NUEVA PARA CONFIRMAR VENTA CON MODAL =====
+const confirmingSale = ref(false);
+
+const openSaleModal = () => {
+    confirmingSale.value = true;
+};
+
+const closeSaleModal = () => {
+    confirmingSale.value = false;
+};
+
 const confirmOrder = () => {
-    if (confirm('¿Estás seguro? Esta acción descontará el inventario y no se puede deshacer.')) {
-        router.post(route('admin.orders.confirm', props.order.id), {}, {
-            preserveScroll: true,
-            onSuccess: () => {
-                alert('¡Venta confirmada e inventario actualizado!');
-            },
-            onError: (errors) => {
-                const errorMessage = Object.values(errors).join('\n');
-                alert(`Error al confirmar la venta:\n${errorMessage}`);
-            }
-        });
-    }
+    router.post(route('admin.orders.confirm', props.order.id), {}, {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success('¡Venta confirmada e inventario actualizado!');
+            closeSaleModal();
+        },
+        onError: (errors) => {
+            const errorMessage = Object.values(errors).join('\n');
+            toast.error(`Error al confirmar la venta:\n${errorMessage}`);
+            closeSaleModal();
+        }
+    });
 };
 // ==========================================================
 
@@ -158,14 +178,14 @@ const confirmOrder = () => {
                                     </button>
                                 </div>
                             </form>
-                        </div>
+                            </div>
                     </div>
 
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                          <div class="p-6">
                             <h3 class="text-lg font-semibold mb-4">Acciones Finales</h3>
                             <button 
-                                @click="confirmOrder"
+                                @click="openSaleModal"
                                 class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700">
                                 Confirmar Venta y Descontar Inventario
                             </button>
@@ -176,4 +196,27 @@ const confirmOrder = () => {
             </div>
         </div>
     </AuthenticatedLayout>
+
+    <Modal :show="confirmingSale" @close="closeSaleModal">
+        <div class="p-6">
+            <h2 class="text-lg font-medium text-gray-900">
+                ¿Confirmar venta y descontar inventario?
+            </h2>
+
+            <p class="mt-1 text-sm text-gray-600">
+                Esta acción es irreversible. El stock de los productos en esta orden será reducido.
+            </p>
+
+            <div class="mt-6 flex justify-end">
+                <SecondaryButton @click="closeSaleModal"> Cancelar </SecondaryButton>
+
+                <DangerButton
+                    class="ms-3"
+                    @click="confirmOrder"
+                >
+                    Sí, Confirmar Venta
+                </DangerButton>
+            </div>
+        </div>
+    </Modal>
 </template>

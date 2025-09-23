@@ -36,4 +36,10 @@ class Category extends Model
         // Apunta al mismo modelo Category
         return $this->hasMany(Category::class, 'parent_id');
     }
+
+    // Adentro de la clase Category en app/Models/Category.php
+    public function products()
+    {
+        return $this->hasMany(\App\Models\Product::class);
+    }
 }

@@ -1,19 +1,21 @@
 <?php
 
-namespace App\Http\Controllers;
+// 1. LO MOVIMOS AL NAMESPACE CORRECTO
+namespace App\Http\Controllers\Admin; 
 
+use App\Http\Controllers\Controller;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule; // <-- Importamos la regla para el 'unique' avanzado
 use Inertia\Inertia;
 
 class CategoryController extends Controller
 {
     public function index(Request $request)
     {
-        // Hacemos el mismo filtro explícito aquí
         $categories = $request->user()->store->categories()
                                 ->whereNull('parent_id')
-                                ->with('children')
+                                ->with('children') // Cargamos las subcategorías de una vez
                                 ->get();
 
         return Inertia::render('Categories/Index', [
@@ -28,16 +30,22 @@ class CategoryController extends Controller
 
     public function store(Request $request)
     {
+        $storeId = $request->user()->store_id;
+
+        // 2. ARREGLAMOS LA VALIDACIÓN 'UNIQUE'
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name',
+            'name' => [
+                'required', 'string', 'max:255',
+                Rule::unique('categories')->where('store_id', $storeId)->whereNull('parent_id')
+            ],
             'subcategories' => 'nullable|array',
-            'subcategories.*.name' => 'required_with:subcategories|string|max:255|unique:categories,name',
+            'subcategories.*.name' => [
+                'required_with:subcategories', 'string', 'max:255',
+                Rule::unique('categories', 'name')->where('store_id', $storeId)
+            ],
         ]);
 
         $store = $request->user()->store;
-        if (!$store) {
-            return back()->withErrors(['store' => 'No se encontró una tienda para este usuario.']);
-        }
 
         $parentCategory = $store->categories()->create([
             'name' => $validated['name'],
@@ -46,7 +54,7 @@ class CategoryController extends Controller
 
         if (!empty($validated['subcategories'])) {
             foreach ($validated['subcategories'] as $subcategory) {
-                if (!empty($subcategory['name'])) { // Doble chequeo por si llega un campo vacío
+                if (!empty($subcategory['name'])) {
                     $store->categories()->create([
                         'name' => $subcategory['name'],
                         'parent_id' => $parentCategory->id,
@@ -60,7 +68,11 @@ class CategoryController extends Controller
 
     public function edit(Category $category)
     {
-        // Siempre cargamos las relaciones para que la vista tenga toda la información
+        // Seguridad: que no pueda editar categorías de otra tienda
+        if ($category->store_id !== auth()->user()->store_id) {
+            abort(403);
+        }
+        
         $category->load('children', 'parent');
         
         return Inertia::render('Categories/Edit', [
@@ -70,8 +82,13 @@ class CategoryController extends Controller
     
     public function storeSubcategory(Request $request, Category $parentCategory)
     {
+        $storeId = $request->user()->store_id;
+        
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name',
+            'name' => [
+                'required', 'string', 'max:255',
+                Rule::unique('categories')->where('store_id', $storeId)->where('parent_id', $parentCategory->id)
+            ],
         ]);
 
         $store = $request->user()->store;
@@ -84,19 +101,27 @@ class CategoryController extends Controller
             'parent_id' => $parentCategory->id,
         ]);
 
-        return back(); // Redirige a la misma página de edición
+        return back();
     }
 
     public function update(Request $request, Category $category)
     {
+        // Seguridad
+        if ($category->store_id !== auth()->user()->store_id) {
+            abort(403);
+        }
+        
+        $storeId = $request->user()->store_id;
+
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name,'.$category->id,
+            'name' => [
+                'required', 'string', 'max:255',
+                Rule::unique('categories')->ignore($category->id)->where('store_id', $storeId)
+            ],
         ]);
 
         $category->update($validated);
         
-        // Redirigimos a la página de edición de su padre si es una subcategoría,
-        // o al índice si es una categoría principal.
         if ($category->parent_id) {
             return redirect()->route('admin.categories.edit', $category->parent_id);
         }
@@ -106,8 +131,14 @@ class CategoryController extends Controller
 
     public function destroy(Category $category)
     {
+        // Seguridad
         if ($category->store_id !== auth()->user()->store->id) {
             abort(403, 'Acción no autorizada.');
+        }
+
+        // 3. AÑADIMOS LA VALIDACIÓN DE PRODUCTOS
+        if ($category->products()->count() > 0) {
+            return back()->withErrors(['delete' => 'No se puede eliminar una categoría que tiene productos asociados.']);
         }
 
         if ($category->children()->count() > 0) {
@@ -117,12 +148,10 @@ class CategoryController extends Controller
         $parentId = $category->parent_id;
         $category->delete();
         
-        // Si era una subcategoría, volvemos a la página de edición de su padre.
         if ($parentId) {
             return redirect()->route('admin.categories.edit', $parentId);
         }
 
-        // Si era una categoría principal, volvemos al índice.
         return redirect()->route('admin.categories.index');
     }
 }

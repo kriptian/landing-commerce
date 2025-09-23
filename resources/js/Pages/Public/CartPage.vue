@@ -1,7 +1,14 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
-import { router } from '@inertiajs/vue3'; // <-- 1. IMPORTAMOS EL ROUTER
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, ref } from 'vue'; // <-- Importamos ref
+import { useToast } from 'vue-toastification';
+// --- 1. IMPORTAMOS LOS COMPONENTES NUEVOS ---
+import Modal from '@/Components/Modal.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import DangerButton from '@/Components/DangerButton.vue';
+// ---------------------------------------------
+
+const toast = useToast();
 
 // Recibimos los items del carrito que nos mandó el CartController
 const props = defineProps({
@@ -9,23 +16,43 @@ const props = defineProps({
     storeSlug: String,
 });
 
-// Calculamos el precio total sumando (precio * cantidad) de cada item
+// Calculamos el precio total (ya estaba corregido)
 const totalPrice = computed(() => {
     return props.cartItems.reduce((total, item) => {
-        return total + (item.product.price * item.quantity);
+        const price = item.variant?.price ?? item.product.price;
+        return total + (price * item.quantity);
     }, 0);
 });
 
-// --- 2. CREAMOS LA FUNCIÓN PARA ELIMINAR ---
-const removeItem = (id) => {
-    // Ponemos una confirmación por si las moscas
-    if (confirm('¿Estás seguro de que querés eliminar este producto del carrito?')) {
-        // Usamos el router para llamar a la ruta 'destroy' que creamos
-        router.delete(route('cart.destroy', id), {
-            preserveScroll: true // Para que la página no brinque al recargar
-        });
-    }
+
+// --- 2. LÓGICA NUEVA PARA EL MODAL DE CONFIRMACIÓN ---
+const confirmingItemDeletion = ref(false);
+const itemToDelete = ref(null);
+
+const confirmItemDeletion = (id) => {
+    itemToDelete.value = id;
+    confirmingItemDeletion.value = true;
 };
+
+const closeModal = () => {
+    confirmingItemDeletion.value = false;
+    itemToDelete.value = null;
+};
+
+const deleteItem = () => {
+    router.delete(route('cart.destroy', itemToDelete.value), {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success('Producto eliminado del carrito.');
+            closeModal();
+        },
+        onError: () => {
+            toast.error('Hubo un error al eliminar el producto.');
+            closeModal();
+        }
+    });
+};
+// ----------------------------------------------------
 </script>
 
 <template>
@@ -48,7 +75,7 @@ const removeItem = (id) => {
 
         <div v-if="cartItems.length === 0" class="bg-white shadow rounded-lg p-6 text-center">
             <p class="text-gray-600">Tu carrito está vacío.</p>
-            <Link :href="route('catalogo.index', { store: storeSlug })" class="mt-4 inline-block bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
+            <Link :href="storeSlug ? route('catalogo.index', { store: storeSlug }) : route('home')" class="mt-4 inline-block bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
                 Ir a la tienda
             </Link>
         </div>
@@ -70,13 +97,18 @@ const removeItem = (id) => {
                             <img :src="item.product.main_image_url" alt="product image" class="w-16 h-16 object-cover rounded">
                             <div>
                                 <p class="font-semibold">{{ item.product.name }}</p>
+                                <div v-if="item.variant" class="text-sm text-gray-500">
+                                    <span v-for="(value, key) in item.variant.options" :key="key" class="mr-2">
+                                        <strong>{{ key }}:</strong> {{ value }}
+                                    </span>
+                                </div>
                             </div>
                         </td>
                         <td class="p-4 text-gray-700">{{ item.quantity }}</td>
-                        <td class="p-4 text-gray-700">$ {{ Number(item.product.price).toFixed(2) }}</td>
-                        <td class="p-4 text-gray-700">$ {{ (item.product.price * item.quantity).toFixed(2) }}</td>
+                        <td class="p-4 text-gray-700">$ {{ Number(item.variant?.price ?? item.product.price).toFixed(2) }}</td>
+                        <td class="p-4 text-gray-700">$ {{ ((item.variant?.price ?? item.product.price) * item.quantity).toFixed(2) }}</td>
                         <td class="p-4">
-                            <button @click="removeItem(item.id)" class="text-red-600 hover:underline">
+                            <button @click="confirmItemDeletion(item.id)" class="text-red-600 hover:underline">
                                 Eliminar
                             </button>
                         </td>
@@ -89,11 +121,34 @@ const removeItem = (id) => {
                     <p class="text-xl font-bold text-gray-900">
                         Total: $ {{ totalPrice.toFixed(2) }}
                     </p>
-                    <Link :href="route('checkout.index', { store: storeSlug })" class="mt-4 w-full ... text-center">
+                    <Link :href="route('checkout.index', { store: storeSlug })" class="inline-block mt-4 w-full bg-green-600 text-white font-bold py-2 px-4 rounded text-center hover:bg-green-700">
                         Proceder al Pago
                     </Link>
                 </div>
             </div>
         </div>
     </main>
+
+    <Modal :show="confirmingItemDeletion" @close="closeModal">
+        <div class="p-6">
+            <h2 class="text-lg font-medium text-gray-900">
+                ¿Estás seguro de que querés eliminar este producto?
+            </h2>
+
+            <p class="mt-1 text-sm text-gray-600">
+                Una vez eliminado, tendrás que volver a añadirlo desde el catálogo.
+            </p>
+
+            <div class="mt-6 flex justify-end">
+                <SecondaryButton @click="closeModal"> Cancelar </SecondaryButton>
+
+                <DangerButton
+                    class="ms-3"
+                    @click="deleteItem"
+                >
+                    Eliminar Producto
+                </DangerButton>
+            </div>
+        </div>
+    </Modal>
 </template>

@@ -2,10 +2,13 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue'; 
+import { useToast } from 'vue-toastification'; // <-- 1. IMPORTAMOS EL TOAST
 
 const props = defineProps({
     categories: Array, 
 });
+
+const toast = useToast(); // <-- 2. INICIALIZAMOS EL TOAST
 
 // --- Lógica de menús dependientes (Sigue igual) ---
 const selectedParentId = ref(null); 
@@ -22,7 +25,7 @@ watch(selectedParentId, () => {
 const form = useForm({
     name: '',
     price: '',
-    quantity: 0, // Este ahora sí se va a calcular solo
+    quantity: 0,
     category_id: null, 
     short_description: '',
     long_description: '',
@@ -31,7 +34,7 @@ const form = useForm({
     variants: [], 
 });
 
-// --- LÓGICA DE VARIANTES (Sigue igual) ---
+// --- Lógica de Variantes (Sigue igual) ---
 const addVariant = () => {
     form.variants.push({ 
         options_text: '', 
@@ -42,11 +45,10 @@ const addVariant = () => {
 const removeVariant = (index) => {
     form.variants.splice(index, 1);
 };
-// --- FIN LÓGICA VARIANTES ---
+// --- FIN Lógica Variantes ---
 
 
-// ===== AQUÍ ESTÁ EL ARREGLO (PUNTO 1) =====
-// Esta propiedad calculada ahora lee 'form.variants' (el correcto)
+// --- Lógica de Stock Total (Sigue igual) ---
 const totalQuantity = computed(() => {
     let total = 0;
     form.variants.forEach(variant => {
@@ -54,16 +56,20 @@ const totalQuantity = computed(() => {
     });
     return total;
 });
-
-// El vigilante sigue igual, pero ahora escucha al 'computed' correcto
 watch(totalQuantity, (newTotal) => {
     form.quantity = newTotal;
 });
-// ==========================================
+// --- FIN Lógica Stock ---
 
 
 const submit = () => {
-    form.post(route('admin.products.store'));
+    form.post(route('admin.products.store'), {
+        // --- 3. AGREGAMOS LA NOTIFICACIÓN DE ÉXITO ---
+        onSuccess: () => {
+            toast.success('¡Producto creado con éxito!');
+        }
+        // No necesitamos 'onFinish' porque la redirección ya limpia el formulario.
+    });
 };
 
 </script>
@@ -91,7 +97,6 @@ const submit = () => {
                                     <label for="price" class="block font-medium text-sm text-gray-700">Precio (Principal)</label>
                                     <input id="price" v-model="form.price" type="number" step="0.01" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
                                 </div>
-                                
                                 <div class="mb-4">
                                     <label for="quantity" class="block font-medium text-sm text-gray-700">Cantidad en Inventario (Total)</label>
                                     <input 

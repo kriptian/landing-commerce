@@ -2,21 +2,29 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { defineProps } from 'vue';
+import { useToast } from 'vue-toastification'; // <-- 1. IMPORTAMOS EL TOAST
 
 const props = defineProps({
-    roles: Array, // Recibimos la lista de roles del controlador
+    roles: Array,
 });
+
+const toast = useToast(); // <-- 2. INICIALIZAMOS EL TOAST
 
 const form = useForm({
     name: '',
     email: '',
     password: '',
     password_confirmation: '',
-    role: props.roles.length > 0 ? props.roles[0] : '', // Seleccionamos el primer rol por defecto
+    role: props.roles.length > 0 ? props.roles[0] : '',
 });
 
 const submit = () => {
     form.post(route('admin.users.store'), {
+        // --- 3. AGREGAMOS LA NOTIFICACIÓN DE ÉXITO ---
+        onSuccess: () => {
+            toast.success('¡Usuario creado con éxito!');
+        },
+        // Mantenemos tu lógica de 'onFinish' para limpiar los campos
         onFinish: () => form.reset('password', 'password_confirmation'),
     });
 };

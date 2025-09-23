@@ -1,13 +1,17 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
+import { useToast } from 'vue-toastification'; // <-- 1. IMPORTAMOS EL TOAST
 
 const props = defineProps({
     user: Object, // El usuario que vamos a editar
     roles: Array, // La lista de roles disponibles
 });
 
+const toast = useToast(); // <-- 2. INICIALIZAMOS EL TOAST
+
 const form = useForm({
+    _method: 'PUT', // Acordate que esto es para actualizar
     name: props.user.name,
     email: props.user.email,
     password: '',
@@ -16,7 +20,14 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.put(route('admin.users.update', props.user.id));
+    form.put(route('admin.users.update', props.user.id), {
+        // --- 3. AGREGAMOS LA NOTIFICACIÓN DE ÉXITO ---
+        onSuccess: () => {
+            toast.success('¡Usuario actualizado con éxito!');
+            // Limpiamos los campos de contraseña después de guardar
+            form.reset('password', 'password_confirmation');
+        }
+    });
 };
 </script>
 

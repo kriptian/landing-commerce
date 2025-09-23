@@ -1,17 +1,43 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { ref } from 'vue'; // <-- Importamos ref
+// --- 1. IMPORTAMOS LOS COMPONENTES DEL MODAL ---
+import Modal from '@/Components/Modal.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import DangerButton from '@/Components/DangerButton.vue';
+import { useToast } from 'vue-toastification';
+// ---------------------------------------------
 
 defineProps({
     products: Array,
 });
 
-// Función para eliminar un producto
-const destroy = (id) => {
-    if (confirm('¿Estás seguro de que querés eliminar este producto?')) {
-        router.delete(route('admin.products.destroy', id));
-    }
+// --- 2. LÓGICA NUEVA PARA MANEJAR EL MODAL ---
+const confirmingProductDeletion = ref(false);
+const productToDelete = ref(null);
+const toast = useToast();
+const confirmProductDeletion = (id) => {
+    productToDelete.value = id;
+    confirmingProductDeletion.value = true;
 };
+
+const closeModal = () => {
+    confirmingProductDeletion.value = false;
+    productToDelete.value = null;
+};
+
+// Renombramos la función 'destroy' a 'deleteProduct'
+const deleteProduct = () => {
+    router.delete(route('admin.products.destroy', productToDelete.value), {
+        onSuccess: () => {
+            closeModal();
+            toast.success('¡Producto eliminado con éxito!'); // <-- LA LÍNEA NUEVA
+        }
+    });
+};
+// ---------------------------------------------
+
 </script>
 
 <template>
@@ -50,14 +76,14 @@ const destroy = (id) => {
                                 </tr>
                                 <tr v-for="product in products" :key="product.id">
                                     <td class="px-6 py-4 whitespace-nowrap">{{ product.name }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap">$ {{ product.price }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">$ {{ Number(product.price).toLocaleString('es-CO') }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">{{ product.quantity }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">{{ product.category ? product.category.name : 'Sin Categoría' }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
 
                                         <Link :href="route('admin.products.edit', product.id)" class="text-indigo-600 hover:text-indigo-900">Editar</Link>
 
-                                        <button @click="destroy(product.id)" class="ml-4 text-red-600 hover:text-red-900">
+                                        <button @click="confirmProductDeletion(product.id)" class="ml-4 text-red-600 hover:text-red-900">
                                             Eliminar
                                         </button>
 
@@ -71,4 +97,27 @@ const destroy = (id) => {
             </div>
         </div>
     </AuthenticatedLayout>
+    
+    <Modal :show="confirmingProductDeletion" @close="closeModal">
+        <div class="p-6">
+            <h2 class="text-lg font-medium text-gray-900">
+                ¿Estás seguro de que querés eliminar este producto?
+            </h2>
+
+            <p class="mt-1 text-sm text-gray-600">
+                Esta acción es irreversible. Se borrará el producto con todas sus variantes e imágenes.
+            </p>
+
+            <div class="mt-6 flex justify-end">
+                <SecondaryButton @click="closeModal"> Cancelar </SecondaryButton>
+
+                <DangerButton
+                    class="ms-3"
+                    @click="deleteProduct"
+                >
+                    Sí, Eliminar Producto
+                </DangerButton>
+            </div>
+        </div>
+    </Modal>
 </template>
