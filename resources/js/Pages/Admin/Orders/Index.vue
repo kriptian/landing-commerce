@@ -1,10 +1,11 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import Pagination from '@/Components/Pagination.vue'; // <-- Un componente para la paginación
+import Pagination from '@/Components/Pagination.vue';
 
 defineProps({
     orders: Object, // Laravel nos manda un objeto de paginación
+    filters: Object, // <-- LA PROP NUEVA
 });
 
 // Función para formatear la fecha y que se vea más amigable
@@ -28,6 +29,72 @@ const formatDate = (datetime) => {
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
+                        
+                        <div class="mb-4">
+                            <div class="flex flex-wrap gap-2">
+                                <Link 
+                                    :href="route('admin.orders.index')" 
+                                    class="px-3 py-2 text-sm font-medium rounded-md"
+                                    :class="{
+                                        'bg-blue-600 text-white': !filters.status,
+                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status
+                                    }"
+                                >
+                                    Todos
+                                </Link>
+                                <Link 
+                                    :href="route('admin.orders.index', { status: 'recibido' })"
+                                    class="px-3 py-2 text-sm font-medium rounded-md"
+                                    :class="{
+                                        'bg-yellow-500 text-white': filters.status === 'recibido',
+                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status !== 'recibido'
+                                    }"
+                                >
+                                    Recibidos
+                                </Link>
+                                <Link 
+                                    :href="route('admin.orders.index', { status: 'en_preparacion' })"
+                                    class="px-3 py-2 text-sm font-medium rounded-md"
+                                    :class="{
+                                        'bg-blue-500 text-white': filters.status === 'en_preparacion',
+                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status !== 'en_preparacion'
+                                    }"
+                                >
+                                    En Preparación
+                                </Link>
+                                <Link 
+                                    :href="route('admin.orders.index', { status: 'despachado' })"
+                                    class="px-3 py-2 text-sm font-medium rounded-md"
+                                    :class="{
+                                        'bg-purple-500 text-white': filters.status === 'despachado',
+                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status !== 'despachado'
+                                    }"
+                                >
+                                    Despachados
+                                </Link>
+                                <Link 
+                                    :href="route('admin.orders.index', { status: 'entregado' })"
+                                    class="px-3 py-2 text-sm font-medium rounded-md"
+                                    :class="{
+                                        'bg-green-500 text-white': filters.status === 'entregado',
+                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status !== 'entregado'
+                                    }"
+                                >
+                                    Entregados
+                                </Link>
+                                <Link 
+                                    :href="route('admin.orders.index', { status: 'cancelado' })"
+                                    class="px-3 py-2 text-sm font-medium rounded-md"
+                                    :class="{
+                                        'bg-red-500 text-white': filters.status === 'cancelado',
+                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status !== 'cancelado'
+                                    }"
+                                >
+                                    Cancelados
+                                </Link>
+                            </div>
+                        </div>
+
 
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
@@ -56,7 +123,9 @@ const formatDate = (datetime) => {
                                                   :class="{
                                                       'bg-yellow-100 text-yellow-800': order.status === 'recibido',
                                                       'bg-blue-100 text-blue-800': order.status === 'en_preparacion',
+                                                      'bg-purple-100 text-purple-800': order.status === 'despachado',
                                                       'bg-green-100 text-green-800': order.status === 'entregado',
+                                                      'bg-red-100 text-red-800': order.status === 'cancelado',
                                                   }">
                                                 {{ order.status }}
                                             </span>
@@ -67,7 +136,7 @@ const formatDate = (datetime) => {
                                     </tr>
                                     <tr v-if="orders.data.length === 0">
                                         <td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
-                                            Todavía no has recibido ninguna orden.
+                                            No se encontraron órdenes con este filtro.
                                         </td>
                                     </tr>
                                 </tbody>

@@ -15,15 +15,28 @@ class OrderController extends Controller
      */
     public function index(Request $request)
     {
-        // 1. Buscamos las órdenes que pertenecen ÚNICAMENTE a la tienda del usuario logueado.
-        $orders = $request->user()->store->orders()
-                        ->withCount('items') // Contamos cuántos items tiene cada orden
-                        ->latest() // Las más nuevas primero
-                        ->paginate(15); // Para no cargar todo de una
+        // (Opcional pero recomendado) Validamos que si nos mandan un estado, sea uno válido.
+        $request->validate([
+            'status' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['recibido', 'en_preparacion', 'despachado', 'entregado', 'cancelado'])]
+        ]);
 
-        // 2. Mandamos las órdenes a una nueva vista de Vue que crearemos
+        // Empezamos la consulta, pero todavía no la ejecutamos
+        $query = $request->user()->store->orders()->withCount('items');
+
+        // Si en la URL viene un parámetro 'status' (ej: /admin/orders?status=recibido)...
+        if ($request->filled('status')) {
+            // ...lo agregamos a la consulta.
+            $query->where('status', $request->status);
+        }
+
+        // Ahora sí ejecutamos la consulta y paginamos.
+        // withQueryString() hace que los links de la paginación mantengan el filtro.
+        $orders = $query->latest()->paginate(15)->withQueryString();
+
         return Inertia::render('Admin/Orders/Index', [
             'orders' => $orders,
+            // Mandamos los filtros actuales a la vista para que sepa qué botón resaltar
+            'filters' => $request->only(['status']),
         ]);
     }
     /**

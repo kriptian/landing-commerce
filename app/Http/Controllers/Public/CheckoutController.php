@@ -13,9 +13,9 @@ class CheckoutController extends Controller
     {
         // Buscamos los items del carrito para mostrarlos en el resumen
         $cartItems = $request->user()->cart()
-                        ->whereRelation('product', 'store_id', $store->id)
-                        ->with('product', 'variant') 
-                        ->get();
+                            ->whereRelation('product', 'store_id', $store->id)
+                            ->with('product', 'variant') 
+                            ->get();
 
         // Si el carrito está vacío, no tiene sentido estar aquí, lo mandamos al catálogo
         if ($cartItems->isEmpty()) {
@@ -30,7 +30,9 @@ class CheckoutController extends Controller
 
     public function store(Request $request, Store $store)
     {
-        mb_internal_encoding("UTF-8");
+        // Esta línea para los emojis la dejamos por si las moscas
+        mb_internal_encoding("UTF-8"); 
+        
         // 1. Validamos los datos del formulario
         $validated = $request->validate([
             'customer_name' => 'required|string|max:255',
@@ -41,9 +43,9 @@ class CheckoutController extends Controller
 
         // 2. Volvemos a traer los items del carrito (por seguridad)
         $cartItems = $request->user()->cart()
-                        ->whereRelation('product', 'store_id', $store->id)
-                        ->with('product', 'variant')
-                        ->get();
+                            ->whereRelation('product', 'store_id', $store->id)
+                            ->with('product', 'variant')
+                            ->get();
 
         if ($cartItems->isEmpty()) {
             return redirect()->route('catalogo.index', ['store' => $store->slug])->withErrors('Tu carrito está vacío.');
@@ -66,7 +68,7 @@ class CheckoutController extends Controller
         ]);
 
         // 5. Preparamos el mensaje para WhatsApp
-        $whatsappMessage = "¡Hola! 👋 Quiero realizar el siguiente pedido:\n\n";
+        $whatsappMessage = "¡Hola! Quiero realizar el siguiente pedido:\n\n";
         $whatsappMessage .= "*Orden #{$order->id}*\n\n";
 
         // 6. Creamos los items de la orden y los añadimos al mensaje
@@ -104,12 +106,22 @@ class CheckoutController extends Controller
         // 7. Vaciamos el carrito del usuario
         $request->user()->cart()->whereIn('id', $cartItems->pluck('id'))->delete();
 
-        // 8. Preparamos la URL de WhatsApp
-        // OJO: Cambia "573001234567" por el número de WhatsApp de la tienda
-        $storePhoneNumber = $store->phone ?? '573208204198'; // <-- CAMBIAR ESTO
+
+        // ===== ESTE ES EL BLOQUE QUE CAMBIAMOS =====
+        // 8. Preparamos la URL de WhatsApp (¡Ahora es dinámico y seguro!)
+        if (empty($store->phone)) {
+            // Si la tienda no tiene teléfono, no podemos mandar el WhatsApp.
+            // Devolvemos al usuario con un error claro.
+            // OJO: Este error lo verías en el formulario si lo mostramos, por ahora lo dejamos así.
+            return back()->withErrors(['phone' => 'Lo sentimos, esta tienda no tiene un número de WhatsApp configurado para recibir pedidos.']);
+        }
+
+        // Limpiamos el número para asegurarnos de que solo contenga dígitos (quita '+', espacios, etc.)
+        $storePhoneNumber = preg_replace('/[^0-9]/', '', $store->phone);
         $whatsappUrl = 'https://wa.me/' . $storePhoneNumber . '?text=' . rawurlencode($whatsappMessage);
 
-        // 9. Redirigimos al usuario a WhatsApp y a una página de éxito
+        // 9. Redirigimos al usuario a WhatsApp
         return Inertia::location($whatsappUrl);
+        // ===========================================
     }
 }

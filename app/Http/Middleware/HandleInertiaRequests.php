@@ -31,17 +31,21 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         return array_merge(parent::share($request), [
-            // ... otras cosas que ya tengas aquí ...
             'auth' => [
                 'user' => $request->user(),
-                // ¡Añadimos esta lógica!
                 'can' => $request->user() ? $request->user()->getPermissionsViaRoles()->pluck('name') : [],
             ],
             'cart' => [
                 'count' => Auth::check() ? Auth::user()->cart()->sum('quantity') : 0,
             ],
             
-
+            // ===== AQUÍ VA LA MAGIA NUEVA =====
+            'adminNotifications' => [
+                'newOrdersCount' => Auth::check() && $request->user()->store 
+                    ? $request->user()->store->orders()->where('status', 'recibido')->count() 
+                    : 0,
+            ],
+            // ===================================
         ]);
     }
 }

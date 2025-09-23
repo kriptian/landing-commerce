@@ -16,11 +16,9 @@ const showingNavigationDropdown = ref(false);
             <nav
                 class="border-b border-gray-100 bg-white"
             >
-                <!-- Primary Navigation Menu -->
                 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div class="flex h-16 justify-between">
                         <div class="flex">
-                            <!-- Logo -->
                             <div class="flex shrink-0 items-center">
                                 <Link :href="route('dashboard')">
                                     <ApplicationLogo
@@ -29,22 +27,24 @@ const showingNavigationDropdown = ref(false);
                                 </Link>
                             </div>
 
-                            <!-- Navigation Links -->
                             <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                                 <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
                                     Dashboard
                                 </NavLink>
                                 
-                                <!-- ===== AQUÍ VA EL NUEVO LINK ===== -->
                                 <NavLink :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
-                                    Órdenes
+                                    <div class="relative flex items-center">
+                                        <span>Órdenes</span>
+                                        <span v-if="$page.props.adminNotifications.newOrdersCount > 0" 
+                                              class="ms-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                                            {{ $page.props.adminNotifications.newOrdersCount }}
+                                        </span>
+                                    </div>
                                 </NavLink>
-                                <!-- ================================== -->
-                            </div>
+                                </div>
                         </div>
 
                         <div class="hidden sm:ms-6 sm:flex sm:items-center">
-                            <!-- Settings Dropdown -->
                             <div class="relative ms-3">
                                 <Dropdown align="right" width="48">
                                     <template #trigger>
@@ -89,7 +89,6 @@ const showingNavigationDropdown = ref(false);
                             </div>
                         </div>
 
-                        <!-- Hamburger -->
                         <div class="-me-2 flex items-center sm:hidden">
                             <button
                                 @click="
@@ -132,7 +131,6 @@ const showingNavigationDropdown = ref(false);
                     </div>
                 </div>
 
-                <!-- Responsive Navigation Menu -->
                 <div
                     :class="{
                         block: showingNavigationDropdown,
@@ -148,15 +146,17 @@ const showingNavigationDropdown = ref(false);
                             Dashboard
                         </ResponsiveNavLink>
 
-                        <!-- ===== AQUÍ VA EL NUEVO LINK (VERSIÓN CELULAR) ===== -->
                         <ResponsiveNavLink :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
-                            Órdenes
+                            <div class="relative flex items-center">
+                                <span>Órdenes</span>
+                                <span v-if="$page.props.adminNotifications.newOrdersCount > 0" 
+                                      class="ms-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                                    {{ $page.props.adminNotifications.newOrdersCount }}
+                                </span>
+                            </div>
                         </ResponsiveNavLink>
-                        <!-- ================================================== -->
+                        </div>
 
-                    </div>
-
-                    <!-- Responsive Settings Options -->
                     <div
                         class="border-t border-gray-200 pb-1 pt-4"
                     >
@@ -187,7 +187,6 @@ const showingNavigationDropdown = ref(false);
                 </div>
             </nav>
 
-            <!-- Page Heading -->
             <header
                 class="bg-white shadow"
                 v-if="$slots.header"
@@ -197,7 +196,6 @@ const showingNavigationDropdown = ref(false);
                 </div>
             </header>
 
-            <!-- Page Content -->
             <main>
                 <slot />
             </main>
