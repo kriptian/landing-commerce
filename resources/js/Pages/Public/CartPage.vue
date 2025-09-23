@@ -89,9 +89,9 @@ const removeItem = (id) => {
                     <p class="text-xl font-bold text-gray-900">
                         Total: $ {{ totalPrice.toFixed(2) }}
                     </p>
-                    <button class="mt-4 w-full bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-center hover:bg-green-700">
+                    <Link :href="route('checkout.index', { store: storeSlug })" class="mt-4 w-full ... text-center">
                         Proceder al Pago
-                    </button>
+                    </Link>
                 </div>
             </div>
         </div>

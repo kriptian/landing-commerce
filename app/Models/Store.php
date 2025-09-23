@@ -60,4 +60,12 @@ class Store extends Model
     {
         return $this->hasMany(\App\Models\Role::class);
     }
+
+    /**
+     * Una tienda tiene muchas órdenes.
+     */
+    public function orders()
+    {
+        return $this->hasMany(\App\Models\Order::class);
+    }
 }

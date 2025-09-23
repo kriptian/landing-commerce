@@ -34,9 +34,14 @@ const showingNavigationDropdown = ref(false);
                                 <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
                                     Dashboard
                                 </NavLink>
-
-                                </div>
+                                
+                                <!-- ===== AQUÍ VA EL NUEVO LINK ===== -->
+                                <NavLink :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
+                                    Órdenes
+                                </NavLink>
+                                <!-- ================================== -->
                             </div>
+                        </div>
 
                         <div class="hidden sm:ms-6 sm:flex sm:items-center">
                             <!-- Settings Dropdown -->
@@ -142,6 +147,13 @@ const showingNavigationDropdown = ref(false);
                         >
                             Dashboard
                         </ResponsiveNavLink>
+
+                        <!-- ===== AQUÍ VA EL NUEVO LINK (VERSIÓN CELULAR) ===== -->
+                        <ResponsiveNavLink :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
+                            Órdenes
+                        </ResponsiveNavLink>
+                        <!-- ================================================== -->
+
                     </div>
 
                     <!-- Responsive Settings Options -->

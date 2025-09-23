@@ -11,7 +11,8 @@ use App\Models\Store;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use App\Http\Controllers\CartController; // <-- Esta línea ya la tenías, ¡perfecto!
+use App\Http\Controllers\CartController; 
+use App\Http\Controllers\Public\CheckoutController; 
 
 /*
 |--------------------------------------------------------------------------
@@ -76,7 +77,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('products', AdminProductController::class);
         Route::resource('users', \App\Http\Controllers\Admin\UserController::class);
         Route::resource('roles', RoleController::class);
+        Route::resource('orders', \App\Http\Controllers\Admin\OrderController::class);
+        Route::post('orders/{order}/confirm', [\App\Http\Controllers\Admin\OrderController::class, 'confirm'])->name('orders.confirm');
     });
+    Route::get('/tienda/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
+    Route::post('/tienda/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 });
 
 require __DIR__.'/auth.php';
