@@ -9,37 +9,41 @@ class Category extends Model
 {
     use HasFactory;
 
-    /**
-     * Los campos que se pueden llenar masivamente.
-     */
     protected $fillable = [
         'name',
-        'parent_id', // <-- AÑADIMOS ESTO A LA LISTA
+        'store_id', // Es bueno tenerlo aquí también
+        'parent_id',
     ];
 
     /**
      * Relación para obtener la categoría padre.
-     * Una categoría PERTENECE A (belongsTo) un padre.
      */
     public function parent()
     {
-        // Apunta al mismo modelo Category
         return $this->belongsTo(Category::class, 'parent_id');
     }
 
     /**
      * Relación para obtener las categorías hijas (subcategorías).
-     * Una categoría TIENE MUCHOS (hasMany) hijos.
      */
     public function children()
     {
-        // Apunta al mismo modelo Category
         return $this->hasMany(Category::class, 'parent_id');
     }
 
-    // Adentro de la clase Category en app/Models/Category.php
+    /**
+     * Relación para obtener los productos de una categoría.
+     */
     public function products()
     {
-        return $this->hasMany(\App\Models\Product::class);
+        return $this->hasMany(Product::class, 'category_id');
+    }
+
+    /**
+     * Relación para saber a qué tienda pertenece la categoría.
+     */
+    public function store()
+    {
+        return $this->belongsTo(Store::class);
     }
 }

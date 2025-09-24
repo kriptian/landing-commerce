@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Product;
-use App\Models\Store; // <-- Añadimos el import de Store
+use App\Models\Store;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -13,12 +14,42 @@ class ProductController extends Controller
     /**
      * Muestra el catálogo de productos de UNA tienda específica.
      */
-    public function index(Store $store)
+    public function index(Request $request, Store $store)
     {
+        // 1. Para los botones, traemos solo las categorías PRINCIPALES de la tienda
+        $categories = $store->categories()
+                            ->whereNull('parent_id')
+                            ->get();
+
+        // Empezamos la consulta de productos
+        $productsQuery = $store->products()->with('images');
+
+        // --- LÓGICA DE FILTRADO CORREGIDA Y FINAL ---
+        
+        if ($request->filled('category')) {
+            // Buscamos la categoría DENTRO de la tienda actual
+            $selectedCategory = $store->categories()->with('children')->find($request->category);
+
+            if ($selectedCategory) {
+                // Sacamos los IDs de todas sus subcategorías Y AÑADIMOS EL ID DEL PADRE
+                $categoryIds = $selectedCategory->children->pluck('id')->push($selectedCategory->id);
+                
+                // Buscamos productos que estén en CUALQUIERA de esas categorías
+                $productsQuery->whereIn('category_id', $categoryIds);
+            }
+        }
+
+        if ($request->filled('search')) {
+            $productsQuery->where('name', 'like', '%' . $request->search . '%');
+        }
+        
+        // --- FIN DE LA LÓGICA ---
+
         return Inertia::render('Public/ProductList', [
-            // Buscamos solo los productos que pertenecen a esa tienda
-            'products' => $store->products()->with('images', 'store')->latest()->get(),
-            'store' => $store, // Pasamos la info de la tienda a la vista
+            'products' => $productsQuery->latest()->paginate(10)->withQueryString(),
+            'store' => $store,
+            'categories' => $categories, // Mandamos solo las categorías principales para los botones
+            'filters' => $request->only(['category', 'search']),
         ]);
     }
 
@@ -27,7 +58,6 @@ class ProductController extends Controller
      */
     public function show(Store $store, Product $product)
     {
-        // Medida de seguridad: nos aseguramos que el producto sí pertenezca a la tienda de la URL
         if ($product->store_id !== $store->id) {
             abort(404);
         }
@@ -36,7 +66,7 @@ class ProductController extends Controller
         
         return inertia('Public/ProductPage', [
             'product' => $product,
-            'store' => $store, // Pasamos la info de la tienda a la vista
+            'store' => $store,
         ]);
     }
 }

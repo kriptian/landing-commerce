@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\Store; // <-- Asegurate de tener este import
+use App\Models\Store;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 use Inertia\Response;
+use Illuminate\Support\Str;
 
 class RegisteredUserController extends Controller
 {
@@ -30,40 +31,42 @@ class RegisteredUserController extends Controller
      * @throws \Illuminate\Validation\ValidationException
      */
     public function store(Request $request): RedirectResponse
-{
-    $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-        'password' => ['required', 'confirmed', Rules\Password::defaults()],
-    ]);
+    {
+        // ===== ESTA ES LA VALIDACIÓN QUE CAMBIA =====
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            // Le añadimos la regla 'unique' para el nombre de la tienda
+            'store_name' => ['required', 'string', 'max:255', 'unique:'.Store::class.',name'],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ]);
+        // ===========================================
 
-    // 1. Creamos el usuario
-    $user = User::create([
-        'name' => $request->name,
-        'email' => $request->email,
-        'password' => Hash::make($request->password),
-    ]);
+        // 1. Creamos el usuario
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+        ]);
 
-    // 2. Le creamos su tienda
-    $store = Store::create([
-        'name' => 'La Tienda de ' . $user->name,
-        'user_id' => $user->id,
-    ]);
+        // 2. Creamos la tienda usando el 'store_name' que vino del formulario
+        $store = Store::create([
+            'name' => $request->store_name, // <-- Usamos el nombre del formulario
+            'user_id' => $user->id,
+        ]);
+        
+        // 3. Le asignamos el ID de la tienda al usuario y guardamos
+        $user->store_id = $store->id;
+        $user->save();
+        
+        // Le asignamos el rol por defecto
+        $user->assignRole('Administrador');
 
-    // 3. Le asignamos el ID de la tienda al usuario y guardamos
-    $user->store_id = $store->id;
-    $user->save();
+        event(new Registered($user));
 
-    // 4. ¡LA PRUEBA DEFINITIVA!
-    // Detenemos todo y le pedimos que nos muestre cómo quedó el usuario
-    // recién guardado en la base de datos.
-    // dd('Así quedó guardado el usuario en la BD:', $user->fresh()->toArray());
+        Auth::login($user);
 
-
-    // El código de abajo no se ejecutará por ahora
-    $user->assignRole('Administrador');
-    event(new Registered($user));
-    Auth::login($user);
-    return redirect()->route('store.setup');
-}
+        // Lo mandamos a la página para que termine de configurar su tienda
+        return redirect()->route('store.setup');
+    }
 }

@@ -5,9 +5,13 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 
 const showingNavigationDropdown = ref(false);
+
+// Obtenemos la tienda del usuario. Puede que no exista si es un usuario sin tienda.
+const store = usePage().props.auth.user.store;
+
 </script>
 
 <template>
@@ -19,12 +23,12 @@ const showingNavigationDropdown = ref(false);
                 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div class="flex h-16 justify-between">
                         <div class="flex">
-                            <div class="flex shrink-0 items-center">
+                            <div class="flex shrink-0 items-center space-x-3">
                                 <Link :href="route('dashboard')">
-                                    <ApplicationLogo
-                                        class="block h-9 w-auto fill-current text-gray-800"
-                                    />
+                                    <img v-if="store && store.logo_url" :src="store.logo_url" class="block h-9 w-9 rounded-full object-cover">
+                                    <ApplicationLogo v-else class="block h-9 w-auto fill-current text-gray-800" />
                                 </Link>
+                                <span v-if="store" class="font-semibold text-gray-800">{{ store.name }}</span>
                             </div>
 
                             <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">

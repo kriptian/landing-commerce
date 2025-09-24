@@ -25,10 +25,10 @@ class CartController extends Controller
                         ->with('product', 'variant') 
                         ->get();
 
-        return Inertia::render('Public/CartPage', [
-            'cartItems' => $cartItems,
-            'storeSlug' => $store->slug
-        ]);
+                        return Inertia::render('Public/CartPage', [
+                            'cartItems' => $cartItems,
+                            'store' => $store,
+                        ]);
     }
 
     /**

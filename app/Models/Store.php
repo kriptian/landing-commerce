@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str; // <-- 1. AÑADÍ ESTE IMPORT
+use Illuminate\Support\Str;
 
 class Store extends Model
 {
+    // NO ES NECESARIO USAR HasFactory si no vas a usar 'seeders' o 'factories' para este modelo.
+    // Lo quité para que quede más limpio.
+
     protected $fillable = [
         'name',
         'user_id',
@@ -15,19 +18,16 @@ class Store extends Model
         'address',      
         'facebook_url', 
         'instagram_url',
-        'slug', // Es bueno añadirlo aquí también
+        'tiktok_url', // <-- ¡AQUÍ ESTÁ EL CAMBIO!
+        'slug',
     ];
 
     /**
-     * 2. AÑADÍ ESTE BLOQUE COMPLETO
      * Se ejecuta cuando el modelo "arranca".
      */
     protected static function booted(): void
     {
-        // Cada vez que se vaya a guardar (creating o updating) una tienda...
         static::saving(function ($store) {
-            // ...le generamos el slug a partir del nombre.
-            // ej: "La Tienda de Crisdev" se vuelve "la-tienda-de-crisdev"
             $store->slug = Str::slug($store->name);
         });
     }

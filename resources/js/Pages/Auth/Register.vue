@@ -8,6 +8,9 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 
 const form = useForm({
     name: '',
+    // ===== CAMPO NUEVO =====
+    store_name: '', // Campo para el nombre de la tienda
+    // =======================
     email: '',
     password: '',
     password_confirmation: '',
@@ -26,7 +29,7 @@ const submit = () => {
 
         <form @submit.prevent="submit">
             <div>
-                <InputLabel for="name" value="Name" />
+                <InputLabel for="name" value="Tu Nombre" />
 
                 <TextInput
                     id="name"
@@ -41,6 +44,20 @@ const submit = () => {
                 <InputError class="mt-2" :message="form.errors.name" />
             </div>
 
+            <div class="mt-4">
+                <InputLabel for="store_name" value="Nombre de tu Tienda" />
+
+                <TextInput
+                    id="store_name"
+                    type="text"
+                    class="mt-1 block w-full"
+                    v-model="form.store_name"
+                    required
+                    autocomplete="organization"
+                />
+
+                <InputError class="mt-2" :message="form.errors.store_name" />
+            </div>
             <div class="mt-4">
                 <InputLabel for="email" value="Email" />
 
@@ -57,7 +74,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <InputLabel for="password" value="Password" />
+                <InputLabel for="password" value="Contraseña" />
 
                 <TextInput
                     id="password"
@@ -74,7 +91,7 @@ const submit = () => {
             <div class="mt-4">
                 <InputLabel
                     for="password_confirmation"
-                    value="Confirm Password"
+                    value="Confirmar Contraseña"
                 />
 
                 <TextInput
@@ -97,7 +114,7 @@ const submit = () => {
                     :href="route('login')"
                     class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                 >
-                    Already registered?
+                    ¿Ya estás registrado?
                 </Link>
 
                 <PrimaryButton
@@ -105,7 +122,7 @@ const submit = () => {
                     :class="{ 'opacity-25': form.processing }"
                     :disabled="form.processing"
                 >
-                    Register
+                    Registrarse
                 </PrimaryButton>
             </div>
         </form>
