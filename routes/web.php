@@ -79,6 +79,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('roles', RoleController::class);
         Route::resource('orders', \App\Http\Controllers\Admin\OrderController::class);
         Route::post('orders/{order}/confirm', [\App\Http\Controllers\Admin\OrderController::class, 'confirm'])->name('orders.confirm');
+        Route::get('reports', [\App\Http\Controllers\Admin\ReportController::class, 'index'])->name('reports.index');
+        Route::get('reports/export', [\App\Http\Controllers\Admin\ReportController::class, 'export'])->name('reports.export');
+
     });
     Route::get('/tienda/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
     Route::post('/tienda/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
