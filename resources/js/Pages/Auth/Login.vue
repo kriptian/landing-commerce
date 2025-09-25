@@ -1,5 +1,4 @@
 <script setup>
-import Checkbox from '@/Components/Checkbox.vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -19,7 +18,6 @@ defineProps({
 const form = useForm({
     email: '',
     password: '',
-    remember: false,
 });
 
 const submit = () => {
@@ -69,20 +67,17 @@ const submit = () => {
                 <InputError class="mt-2" :message="form.errors.password" />
             </div>
 
-            <div class="mt-4 block">
-                <label class="flex items-center">
-                    <Checkbox name="remember" v-model:checked="form.remember" />
-                    <span class="ms-2 text-sm text-gray-600">Remember me</span>
-                </label>
-            </div>
+            
 
             <div class="mt-4 flex items-center justify-end">
-                <Link
-                    :href="route('register')"
+                <a
+                    href="https://wa.me/573208204198?text=Hola%20quiero%20crear%20mi%20propia%20tienda"
+                    target="_blank"
+                    rel="noopener"
                     class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                 >
-                    ¿No tenés cuenta? Registrate
-                </Link>
+                    ¿Necesitás una tienda? Contactá a un asesor
+                </a>
 
                 <PrimaryButton
                     class="ms-4"

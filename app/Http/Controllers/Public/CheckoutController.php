@@ -57,8 +57,11 @@ class CheckoutController extends Controller
             return $total + ($price * $item->quantity);
         }, 0);
 
-        // 4. Creamos la orden en la base de datos
+        // 4. Creamos la orden en la base de datos con un consecutivo por tienda
+        $store->refresh();
+        $nextSequence = ((int) ($store->order_sequence ?? 0)) + 1;
         $order = $store->orders()->create([
+            'sequence_number' => $nextSequence,
             'customer_name' => $validated['customer_name'],
             'customer_phone' => $validated['customer_phone'],
             'customer_email' => $validated['customer_email'],
@@ -66,6 +69,9 @@ class CheckoutController extends Controller
             'total_price' => $totalPrice,
             'status' => 'recibido', // El primer estado
         ]);
+
+        // Incrementamos el contador en la tienda
+        $store->forceFill(['order_sequence' => $nextSequence])->save();
 
         // 5. Preparamos el mensaje para WhatsApp (emojis con codepoints para evitar problemas de codificación)
         // Usamos viñetas simples para máxima compatibilidad entre plataformas
@@ -75,7 +81,7 @@ class CheckoutController extends Controller
         $E_PIN     = "\u{2022}"; // •
 
         $whatsappMessage = "¡Hola! Quiero realizar el siguiente pedido:\n\n";
-        $whatsappMessage .= "*Orden #{$order->id}*\n\n";
+        $whatsappMessage .= "*Orden #{$order->sequence_number}*\n\n";
 
         // 6. Creamos los items de la orden y los añadimos al mensaje
         foreach ($cartItems as $item) {

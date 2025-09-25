@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
         // Le decimos que ejecute nuestros seeders en este orden
         $this->call([
             RolesAndPermissionsSeeder::class, // <-- AÑADIMOS ESTE DE PRIMERO
+            SuperAdminSeeder::class,
             StoreSeeder::class,
             CategorySeeder::class,
             ProductSeeder::class,

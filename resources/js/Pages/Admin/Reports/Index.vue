@@ -251,12 +251,15 @@ const formatCurrency = (value) => {
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Productos</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cantidades</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">P. Unitario</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
                                         <tr v-for="order in orders.data" :key="order.id">
                                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:underline">
-                                                <Link :href="route('admin.orders.show', order.id)">{{ order.id }}</Link>
+                                                <Link :href="route('admin.orders.show', order.id)">{{ order.sequence_number || order.sequence_number === 0 ? order.sequence_number : order.id }}</Link>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ order.customer_name }}</td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(order.created_at) }}</td>
@@ -273,6 +276,22 @@ const formatCurrency = (value) => {
                                                 </span>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{{ formatCurrency(order.total_price) }}</td>
+                                            <td class="px-6 py-4 whitespace-pre-line text-sm text-gray-600 max-w-xl"> 
+                                                <template v-for="item in order.items" :key="item.id">
+                                                    <div>
+                                                        <span class="font-medium">{{ item.product_name || item.product?.name }}</span>
+                                                        <span v-if="item.variant_options || item.variant?.options">
+                                                            ({{ Object.entries(item.variant_options || item.variant?.options || {}).map(([k,v])=>`${k}: ${v}`).join(', ') }})
+                                                        </span>
+                                                    </div>
+                                                </template>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-pre-line text-sm text-gray-600"> 
+                                                <div v-for="item in order.items" :key="'q'+item.id">{{ item.quantity }}</div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-pre-line text-sm text-gray-600"> 
+                                                <div v-for="item in order.items" :key="'p'+item.id">{{ formatCurrency(item.unit_price) }}</div>
+                                            </td>
                                         </tr>
                                         <tr v-if="orders.data.length === 0">
                                             <td colspan="5" class="px-6 py-4 text-center text-gray-500">

@@ -2,13 +2,12 @@
 
 namespace App\Exports;
 
-use App\Models\Order;
-use Maatwebsite\Excel\Concerns\FromQuery;
+use Illuminate\Support\Collection;
+use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithMapping;
 use Illuminate\Support\Facades\Auth;
 
-class OrdersExport implements FromQuery, WithHeadings, WithMapping
+class OrdersExport implements FromCollection, WithHeadings
 {
     protected $filters;
 
@@ -18,20 +17,44 @@ class OrdersExport implements FromQuery, WithHeadings, WithMapping
         $this->filters = $filters;
     }
 
-    /**
-    * Prepara la consulta a la base de datos
-    */
-    public function query()
+    public function collection(): Collection
     {
-        $query = Auth::user()->store->orders()->with('items');
-
+        $query = Auth::user()->store->orders()->with(['items', 'items.product', 'items.variant']);
         if (!empty($this->filters['start_date']) && !empty($this->filters['end_date'])) {
             $startDate = \Carbon\Carbon::parse($this->filters['start_date'])->startOfDay();
             $endDate = \Carbon\Carbon::parse($this->filters['end_date'])->endOfDay();
             $query->whereBetween('created_at', [$startDate, $endDate]);
         }
+        $orders = $query->orderByDesc('sequence_number')->orderByDesc('id')->get();
 
-        return $query->latest();
+        $rows = collect();
+        foreach ($orders as $order) {
+            foreach ($order->items as $item) {
+                $name = $item->product_name ?? optional($item->product)->name;
+                $options = $item->variant_options ?? optional($item->variant)->options;
+                $optionsText = '';
+                if (is_array($options) || $options instanceof \ArrayAccess) {
+                    $optionsText = collect($options)->map(fn($val, $key) => "$key: $val")->implode(', ');
+                }
+                $fullName = trim($name . ($optionsText ? " (".$optionsText.")" : ''));
+
+                $rows->push([
+                    $order->sequence_number ?? $order->id,
+                    $order->customer_name,
+                    $order->customer_phone,
+                    $order->customer_email,
+                    $order->customer_address,
+                    $order->created_at->format('Y-m-d H:i'),
+                    $order->status,
+                    $order->total_price,
+                    $item->quantity,
+                    $fullName,
+                    $item->quantity,
+                    $item->unit_price,
+                ]);
+            }
+        }
+        return $rows;
     }
 
     /**
@@ -40,15 +63,18 @@ class OrdersExport implements FromQuery, WithHeadings, WithMapping
     public function headings(): array
     {
         return [
-            'ID Orden',
+            'Orden #',
             'Cliente',
             'Teléfono',
             'Email',
             'Dirección',
             'Fecha',
             'Estado',
-            'Total',
+            'Total Orden',
             '# Items',
+            'Producto',
+            'Cantidad',
+            'Precio Unitario',
         ];
     }
 
@@ -57,16 +83,7 @@ class OrdersExport implements FromQuery, WithHeadings, WithMapping
     */
     public function map($order): array
     {
-        return [
-            $order->id,
-            $order->customer_name,
-            $order->customer_phone,
-            $order->customer_email,
-            $order->customer_address,
-            $order->created_at->format('Y-m-d H:i'),
-            $order->status,
-            $order->total_price,
-            $order->items->sum('quantity'),
-        ];
+        // Not used with FromCollection
+        return [];
     }
 }

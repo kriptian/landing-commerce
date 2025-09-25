@@ -36,7 +36,7 @@ class ReportController extends Controller
         $totalOrders = (clone $ordersQuery)->count();
         
         // Traemos la lista de órdenes para la tabla
-        $orders = (clone $ordersQuery)->withCount('items')->latest()->paginate(15)->withQueryString();
+        $orders = (clone $ordersQuery)->with(['items','items.product','items.variant'])->withCount('items')->orderByDesc('sequence_number')->orderByDesc('id')->paginate(15)->withQueryString();
 
         // --- Datos del gráfico: conteo por estado (entregadas / canceladas) por día ---
         $countsByDayStatus = (clone $ordersQuery)

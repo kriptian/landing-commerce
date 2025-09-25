@@ -31,7 +31,7 @@ class OrderController extends Controller
 
         // Ahora sí ejecutamos la consulta y paginamos.
         // withQueryString() hace que los links de la paginación mantengan el filtro.
-        $orders = $query->latest()->paginate(15)->withQueryString();
+        $orders = $query->orderByDesc('sequence_number')->orderByDesc('id')->paginate(15)->withQueryString();
 
         return Inertia::render('Admin/Orders/Index', [
             'orders' => $orders,

@@ -19,6 +19,7 @@ use App\Http\Controllers\StoreSetupController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\RoleController;
@@ -94,7 +95,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/tienda/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
     Route::post('/tienda/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 
-    // Panel de Administración
+    // Panel de Administración (acceso según permisos por tienda)
     Route::prefix('admin')->name('admin.')->group(function () {
         // ===== ESTAS SON LAS RUTAS QUE CORREGIMOS =====
         Route::resource('categories', CategoryController::class);
@@ -107,6 +108,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    });
+
+    // Rutas exclusivas de Súper Admin
+    Route::prefix('super')->name('super.')->middleware(EnsureUserIsAdmin::class)->group(function () {
+        Route::resource('stores', \App\Http\Controllers\SuperAdmin\StoreController::class);
     });
 });
 

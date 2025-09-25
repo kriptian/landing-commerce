@@ -43,8 +43,15 @@ class UserController extends Controller
             'password' => 'required|string|min:8|confirmed',
             'role' => 'required|string|exists:roles,name',
         ]);
-        
-        $user = $request->user()->store->users()->create([
+        // Limitar por cupo de usuarios de la tienda
+        $store = $request->user()->store;
+        $currentUsers = $store->users()->count();
+        $maxUsers = $store->max_users ?? 0;
+        if ($maxUsers > 0 && $currentUsers >= $maxUsers) {
+            return back()->withErrors(['limit' => 'Has alcanzado el límite de usuarios permitidos para tu plan.']);
+        }
+
+        $user = $store->users()->create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
