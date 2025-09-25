@@ -43,6 +43,31 @@ watch(search, (value) => {
         });
     }, 500);
 });
+
+// Loading state (Inertia navigation)
+const isLoading = ref(false);
+router.on('start', () => { isLoading.value = true; });
+router.on('finish', () => { isLoading.value = false; });
+
+// Helper: bajo stock
+const isLowStock = (product) => {
+    try {
+        // Con variantes: si alguna variante tiene stock > 0 y <= umbral (alert o minimum_stock)
+        if (product?.variants?.length > 0) {
+            return product.variants.some((v) => {
+                const stock = Number(v?.stock || 0);
+                const threshold = Number((v?.alert ?? v?.minimum_stock) || 0);
+                return stock > 0 && stock <= threshold;
+            });
+        }
+        // Sin variantes: usamos quantity y minimum_stock del producto
+        const qty = Number(product?.quantity || 0);
+        const min = Number(product?.minimum_stock || 0);
+        return qty > 0 && qty <= min;
+    } catch (e) {
+        return false;
+    }
+};
 </script>
 
 <template>
@@ -65,7 +90,7 @@ watch(search, (value) => {
                      <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.525.02c1.31-.02 2.61-.01 3.91.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.01-1.58-.31-3.15-.82-4.7-.52-1.56-1.23-3.04-2.1-4.42a.1.1 0 00-.2-.04c-.02.13-.03.26-.05.39v7.24a.26.26 0 00.27.27c.82.04 1.63.16 2.42.37.04.83.16 1.66.36 2.47.19.82.49 1.6.86 2.33.36.73.81 1.41 1.32 2.02-.17.1-.34.19-.51.28a4.26 4.26 0 01-1.93.52c-1.37.04-2.73-.06-4.1-.23a9.8 9.8 0 01-3.49-1.26c-.96-.54-1.8-1.23-2.52-2.03-.72-.8-1.3-1.7-1.77-2.69-.47-.99-.8-2.06-1.02-3.13a.15.15 0 01.04-.15.24.24 0 01.2-.09c.64-.02 1.28-.04 1.92-.05.1 0 .19-.01.28-.01.07.01.13.02.2.04.19.04.38.09.57.14a5.2 5.2 0 005.02-5.22v-.02a.23.23 0 00-.23-.23.2.2 0 00-.2-.02c-.83-.06-1.66-.13-2.49-.22-.05-.01-.1-.01-.15-.02-1.12-.13-2.25-.26-3.37-.44a.2.2 0 01-.16-.24.22.22 0 01.23-.18c.41-.06.82-.12 1.23-.18C9.9.01 11.21 0 12.525.02z"/></svg>
                 </a>
                 <div class="border-l h-6 border-gray-300"></div>
-                <Link :href="route('cart.index', { store: store.slug })" class="relative flex items-center px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
+                <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/cart') : route('cart.index', { store: store.slug }))" class="relative flex items-center px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
                     <span>🛒</span>
                     <span class="ml-2 font-semibold">Carrito</span>
                     <span v-if="$page.props.cart.count > 0" class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
@@ -119,14 +144,38 @@ watch(search, (value) => {
             </div>
         </div>
 
-        <div v-if="products.data.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div v-for="product in products.data" :key="product.id" class="product-card border rounded-lg shadow-md overflow-hidden">
-                <img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-64 object-cover">
-                <div class="p-4">
-                    <h3 class="text-xl font-semibold mb-2">{{ product.name }}</h3>
-                    <p class="text-lg text-blue-600 font-bold mb-4">$ {{ Number(product.price).toLocaleString('es-CO') }}</p>
-                    <Link :href="route('catalogo.show', { store: store.slug, product: product.id })" class="w-full bg-gray-800 text-white font-bold py-2 px-4 rounded text-center block hover:bg-gray-700">
+        <div v-if="isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+            <div v-for="i in 6" :key="i" class="animate-pulse border rounded-xl shadow-sm overflow-hidden bg-white">
+                <div class="w-full h-56 sm:h-60 bg-gray-200"></div>
+                <div class="p-4 space-y-3">
+                    <div class="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div class="h-6 bg-gray-200 rounded w-1/3"></div>
+                    <div class="h-10 bg-gray-200 rounded w-full"></div>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="products.data.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+            <div v-for="product in products.data" :key="product.id" class="group border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
+                <div class="relative overflow-hidden">
+                    <img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-56 sm:h-60 object-cover transform group-hover:scale-105 transition duration-300">
+                    <span v-if="((product.variants ? product.variants.length === 0 : true) && Number(product.quantity || 0) === 0)"
+                          class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">
+                        Agotado
+                    </span>
+                    <span v-else-if="isLowStock(product)"
+                          class="absolute top-3 left-3 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">
+                        Bajo stock
+                    </span>
+                </div>
+                <div class="p-4 flex flex-col gap-3">
+                    <h3 class="text-lg font-semibold text-gray-900 line-clamp-2">{{ product.name }}</h3>
+                    <p class="text-xl text-blue-600 font-extrabold">
+                        {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
+                    </p>
+                    <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/producto/' + product.id) : route('catalogo.show', { store: store.slug, product: product.id }))" class="mt-1 inline-flex items-center justify-center gap-2 w-full bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg text-center hover:bg-blue-700">
                         Ver Detalles
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M13.5 4.5a.75.75 0 01.75-.75h6a.75.75 0 01.75.75v6a.75.75 0 01-1.5 0V6.31l-7.22 7.22a.75.75 0 11-1.06-1.06L18.44 5.25h-3.44a.75.75 0 01-.75-.75z"/><path d="M6 3.75A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25h12A2.25 2.25 0 0020.25 18v-5.25a.75.75 0 00-1.5 0V18c0 .414-.336.75-.75.75H6A.75.75 0 015.25 18V6c0-.414.336-.75.75-.75h5.25a.75.75 0 000-1.5H6z"/></svg>
                     </Link>
                 </div>
             </div>
@@ -150,4 +199,8 @@ watch(search, (value) => {
             <p>&copy; 2025 {{ store.name }}</p>
         </div>
     </footer>
+
+    <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/cart') : route('cart.index', { store: store.slug }))" class="fixed bottom-6 right-6 inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-4 py-3 rounded-full shadow-lg hover:bg-blue-700">
+        <span>Ver Carrito</span>
+    </Link>
 </template>

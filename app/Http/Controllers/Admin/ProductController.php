@@ -6,13 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductImage;
-use App\Models\ProductVariant; // <-- Asegurate de importar el modelo de variantes
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class ProductController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('can:ver inventario')->only(['index']);
+        $this->middleware('can:crear productos')->only(['create','store']);
+        $this->middleware('can:editar productos')->only(['edit','update']);
+        $this->middleware('can:eliminar productos')->only(['destroy']);
+    }
     public function index(Request $request)
     {
         $products = $request->user()->store->products()->with('category')->latest()->get();
@@ -29,15 +36,14 @@ class ProductController extends Controller
         ]);
     }
 
-    /**
-     * Esta es la función STORE (v3.0 - La "Avispada")
-     */
     public function store(Request $request)
     {
+        // ===== 1. AÑADIMOS VALIDACIÓN PARA 'minimum_stock' =====
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
             'quantity' => 'required|integer|min:0', 
+            'minimum_stock' => 'required|integer|min:0', // <-- Nuevo
             'category_id' => 'required|exists:categories,id',
             'short_description' => 'nullable|string|max:500',
             'long_description' => 'nullable|string',
@@ -48,7 +54,11 @@ class ProductController extends Controller
             'variants.*.options_text' => 'required_with:variants|string',
             'variants.*.price' => 'nullable|numeric|min:0',
             'variants.*.stock' => 'required_with:variants|integer|min:0',
+            'variants.*.minimum_stock' => 'required_with:variants|integer|min:0', // <-- Nuevo para variantes
+            'variants.*.alert' => 'nullable|integer|min:0',
+            'variants.*.alert' => 'nullable|integer|min:0',
         ]);
+        // =========================================================
 
         if (!empty($validated['specifications'])) {
             $specArray = array_map('trim', explode(',', $validated['specifications']));
@@ -60,6 +70,8 @@ class ProductController extends Controller
 
         if ($hasVariants) {
             $productData['quantity'] = collect($request->variants)->sum('stock');
+            // También sumamos el inventario mínimo
+            $productData['minimum_stock'] = collect($request->variants)->sum('minimum_stock');
         }
         
         $product = $request->user()->store->products()->create($productData);
@@ -67,28 +79,27 @@ class ProductController extends Controller
         if ($hasVariants) {
             foreach ($request->variants as $variantData) {
                 
-                // ===== ESTE ES EL PARSER ARREGLADO =====
                 $optionsArray = [];
                 $pairs = explode(',', $variantData['options_text']);
-                
                 foreach ($pairs as $pair) {
                     $parts = explode(':', $pair, 2); 
                     if (count($parts) == 2) {
-                        // Si viene "Clave:Valor", lo guarda
                         $optionsArray[trim($parts[0])] = trim($parts[1]);
                     } elseif (count($parts) == 1 && !empty(trim($parts[0]))) {
-                        // Si viene solo "Valor", le pone una clave por defecto
                         $optionsArray['Opción'] = trim($parts[0]);
                     }
                 }
-                // ======================================
 
                 if (count($optionsArray) > 0) {
+                    // ===== 2. GUARDAMOS EL 'minimum_stock' DE LA VARIANTE =====
                     $product->variants()->create([
                         'options' => $optionsArray, 
                         'price' => $variantData['price'] ?? null, 
                         'stock' => $variantData['stock'],
+                        'minimum_stock' => $variantData['minimum_stock'], // <-- Nuevo
+                        'alert' => $variantData['alert'] ?? null,
                     ]);
+                    // ========================================================
                 }
             }
         }
@@ -102,9 +113,6 @@ class ProductController extends Controller
         return redirect()->route('admin.products.index');
     }
 
-    /**
-     * Esta es la función EDIT (v2.0) - Carga las variantes correctas
-     */
     public function edit(Product $product)
     {
         if ($product->store_id !== auth()->user()->store_id) {
@@ -119,16 +127,14 @@ class ProductController extends Controller
         ]);
     }
 
-    /**
-     * Esta es la función UPDATE (¡Terminada!)
-     */
     public function update(Request $request, Product $product)
     {
-        // 1. VALIDACIÓN COMPLETA
+        // ===== 3. AÑADIMOS VALIDACIÓN PARA 'minimum_stock' EN UPDATE =====
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
             'quantity' => 'required|integer|min:0', 
+            'minimum_stock' => 'required|integer|min:0', // <-- Nuevo
             'category_id' => 'required|exists:categories,id',
             'short_description' => 'nullable|string|max:500',
             'long_description' => 'nullable|string',
@@ -142,11 +148,12 @@ class ProductController extends Controller
             'variants.*.options_text' => 'required_with:variants|string',
             'variants.*.price' => 'nullable|numeric|min:0',
             'variants.*.stock' => 'required_with:variants|integer|min:0',
+            'variants.*.minimum_stock' => 'required_with:variants|integer|min:0', // <-- Nuevo para variantes
             'variants_to_delete' => 'nullable|array', 
             'variants_to_delete.*' => 'integer|exists:product_variants,id',
         ]);
+        // =================================================================
 
-        // 2. LÓGICA DE IMÁGENES (Sigue igual)
         if (!empty($validated['images_to_delete'])) {
             $imagesToDelete = ProductImage::whereIn('id', $validated['images_to_delete'])->get();
             foreach ($imagesToDelete as $image) {
@@ -161,7 +168,6 @@ class ProductController extends Controller
             }
         }
         
-        // 3. ACTUALIZAR PRODUCTO PRINCIPAL
         $productData = $request->except(['_method', 'new_gallery_files', 'images_to_delete', 'variants', 'variants_to_delete']);
 
         if (!empty($productData['specifications']) && is_string($productData['specifications'])) {
@@ -172,25 +178,20 @@ class ProductController extends Controller
         $hasVariants = $request->has('variants') && count($request->variants) > 0;
         if ($hasVariants) {
             $productData['quantity'] = collect($request->variants)->sum('stock');
+            $productData['minimum_stock'] = collect($request->variants)->sum('minimum_stock');
         }
-        // Si no, usa la quantity que mandó el form (que se habilita si no hay variantes)
         
         $product->update($productData);
 
-        // 4. SINCRONIZAR VARIANTES (Borrar, Actualizar y Crear)
-
-        // A. Borrar las variantes que marcaste para "Quitar"
         if ($request->has('variants_to_delete')) {
             ProductVariant::whereIn('id', $request->variants_to_delete)
-                ->where('product_id', $product->id) // Seguridad
+                ->where('product_id', $product->id)
                 ->delete();
         }
 
-        // B. Actualizar las que existen y Crear las nuevas
         if ($hasVariants) {
             foreach ($request->variants as $variantData) {
                 
-                // Mismo parser "avispado" de la función 'store'
                 $optionsArray = [];
                 $pairs = explode(',', $variantData['options_text']);
                 foreach ($pairs as $pair) {
@@ -203,16 +204,18 @@ class ProductController extends Controller
                 }
 
                 if (count($optionsArray) > 0) {
+                    // ===== 4. GUARDAMOS EL 'minimum_stock' AL ACTUALIZAR =====
                     $product->variants()->updateOrCreate(
-                        [
-                            'id' => $variantData['id'] ?? null // Busca por ID
-                        ],
+                        ['id' => $variantData['id'] ?? null],
                         [ 
                             'options' => $optionsArray,
                             'price'   => $variantData['price'] ?? null,
                             'stock'   => $variantData['stock'],
+                            'minimum_stock' => $variantData['minimum_stock'], // <-- Nuevo
+                            'alert' => $variantData['alert'] ?? null,
                         ]
                     );
+                    // ========================================================
                 }
             }
         }
@@ -220,9 +223,6 @@ class ProductController extends Controller
         return redirect()->route('admin.products.index');
     }
 
-    /**
-     * Esta es la función DESTROY (sigue igual).
-     */
     public function destroy(Product $product)
     {
         foreach($product->images as $image) {

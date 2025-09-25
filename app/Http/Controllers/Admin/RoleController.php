@@ -7,6 +7,7 @@ use App\Models\Role; // <-- Usamos nuestro modelo personalizado
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 use Illuminate\Validation\Rule;
 
 class RoleController extends Controller
@@ -35,9 +36,15 @@ class RoleController extends Controller
 
         $store = $request->user()->store;
         
-        $role = $store->roles()->create(['name' => $validated['name']]);
-        
+        $role = $store->roles()->create([
+            'name' => $validated['name'],
+            'guard_name' => config('auth.defaults.guard', 'web'),
+        ]);
+
         $role->syncPermissions($validated['permissions']);
+
+        // Limpiamos la caché de permisos de Spatie para aplicar cambios de inmediato
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         // CAMBIO: Redirigimos al índice de usuarios, donde está la pestaña de roles.
         return redirect()->route('admin.users.index');
@@ -63,12 +70,22 @@ class RoleController extends Controller
         }
         
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', Rule::unique('roles')->ignore($role->id)],
+            'name' => ['required', 'string', 'max:255',
+                Rule::unique('roles')->where(function ($q) use ($role) {
+                    return $q->where('store_id', auth()->user()->store_id)
+                             ->where('guard_name', $role->guard_name ?: config('auth.defaults.guard', 'web'));
+                })->ignore($role->id)
+            ],
             'permissions' => 'required|array',
         ]);
 
-        $role->update(['name' => $validated['name']]);
+        $role->update([
+            'name' => $validated['name'],
+            'guard_name' => $role->guard_name ?: config('auth.defaults.guard', 'web'),
+        ]);
         $role->syncPermissions($validated['permissions']);
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         // CAMBIO: Redirigimos al índice de usuarios, donde está la pestaña de roles.
         return redirect()->route('admin.users.index');
@@ -85,6 +102,8 @@ class RoleController extends Controller
         }
         
         $role->delete();
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         // CAMBIO: Redirigimos al índice de usuarios, donde está la pestaña de roles.
         return redirect()->route('admin.users.index');

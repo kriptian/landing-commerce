@@ -11,6 +11,10 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('can:ver reportes')->only(['index','export']);
+    }
     public function index(Request $request)
     {
         // Validamos que las fechas que nos lleguen sean correctas
@@ -34,21 +38,24 @@ class ReportController extends Controller
         // Traemos la lista de órdenes para la tabla
         $orders = (clone $ordersQuery)->withCount('items')->latest()->paginate(15)->withQueryString();
 
-        // --- MAGIA NUEVA: PREPARAMOS LOS DATOS PARA EL GRÁFICO ---
-        $salesByDay = (clone $ordersQuery)
-                        ->selectRaw('DATE(created_at) as date, SUM(total_price) as total')
-                        ->groupBy('date')
-                        ->orderBy('date', 'asc')
-                        ->get()
-                        ->pluck('total', 'date');
+        // --- Datos del gráfico: conteo por estado (entregadas / canceladas) por día ---
+        $countsByDayStatus = (clone $ordersQuery)
+            ->selectRaw('DATE(created_at) as date, status, COUNT(*) as total')
+            ->whereIn('status', ['entregado', 'cancelado'])
+            ->groupBy('date', 'status')
+            ->orderBy('date', 'asc')
+            ->get();
 
-        // Llenamos los días sin ventas con '0' para que el gráfico se vea continuo
-        $period = \Carbon\CarbonPeriod::create($startDate, $endDate);
-        $chartData = collect($period)->mapWithKeys(function ($date) use ($salesByDay) {
-            $formattedDate = $date->format('Y-m-d');
-            return [$formattedDate => $salesByDay->get($formattedDate, 0)];
-        });
-        // --- FIN DE LA MAGIA ---
+        // Recolectamos solo días con datos (sin huecos)
+        $grouped = $countsByDayStatus->groupBy('date');
+        $labels = $grouped->keys()->sort()->values()->all();
+        $delivered = [];
+        $cancelled = [];
+        foreach ($labels as $key) {
+            $dayGroup = $grouped->get($key, collect());
+            $delivered[] = (int) ($dayGroup->firstWhere('status', 'entregado')->total ?? 0);
+            $cancelled[] = (int) ($dayGroup->firstWhere('status', 'cancelado')->total ?? 0);
+        }
 
         return Inertia::render('Admin/Reports/Index', [
             'orders' => $orders,
@@ -56,10 +63,11 @@ class ReportController extends Controller
                 'totalSales' => $totalSales,
                 'totalOrders' => $totalOrders,
             ],
-            // Mandamos los datos del gráfico a la vista
+            // Mandamos los datos del gráfico a la vista (conteo por estado)
             'chartData' => [
-                'labels' => $chartData->keys(),
-                'data' => $chartData->values(),
+                'labels' => $labels,
+                'delivered' => $delivered,
+                'cancelled' => $cancelled,
             ],
 
             'filters' => $request->only(['start_date', 'end_date']),

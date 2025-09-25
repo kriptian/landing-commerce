@@ -26,17 +26,111 @@ const applyFilters = () => {
     });
 };
 
+// Rangos rápidos de fechas
+const formatYMD = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+const getToday = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
+const setQuickRange = (range) => {
+    const today = getToday();
+    let start, end;
+    switch (range) {
+        case 'today':
+            start = today;
+            end = today;
+            break;
+        case 'last7':
+            start = new Date(today);
+            start.setDate(start.getDate() - 6);
+            end = today;
+            break;
+        case 'last30':
+            start = new Date(today);
+            start.setDate(start.getDate() - 29);
+            end = today;
+            break;
+        case 'thisMonth':
+            start = new Date(today.getFullYear(), today.getMonth(), 1);
+            end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            break;
+        case 'lastMonth':
+            start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            end = new Date(today.getFullYear(), today.getMonth(), 0);
+            break;
+        default:
+            return;
+    }
+    filterForm.start_date = formatYMD(start);
+    filterForm.end_date = formatYMD(end);
+    applyFilters();
+};
+
+const isRangeSelected = (range) => {
+    const sd = filterForm.start_date;
+    const ed = filterForm.end_date;
+    if (!sd || !ed) return false;
+    const today = getToday();
+    const ymd = (d) => formatYMD(d);
+    const equals = (a, b) => a === b;
+    switch (range) {
+        case 'today':
+            return equals(sd, ymd(today)) && equals(ed, ymd(today));
+        case 'last7': {
+            const start = new Date(today);
+            start.setDate(start.getDate() - 6);
+            return equals(sd, ymd(start)) && equals(ed, ymd(today));
+        }
+        case 'last30': {
+            const start = new Date(today);
+            start.setDate(start.getDate() - 29);
+            return equals(sd, ymd(start)) && equals(ed, ymd(today));
+        }
+        case 'thisMonth': {
+            const start = new Date(today.getFullYear(), today.getMonth(), 1);
+            const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            return equals(sd, ymd(start)) && equals(ed, ymd(end));
+        }
+        case 'lastMonth': {
+            const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            const end = new Date(today.getFullYear(), today.getMonth(), 0);
+            return equals(sd, ymd(start)) && equals(ed, ymd(end));
+        }
+        default:
+            return false;
+    }
+};
+
 const formattedChartData = computed(() => {
     return {
         labels: props.chartData.labels,
         datasets: [
             {
-                label: 'Ventas por Día',
-                backgroundColor: '#3B82F6',
-                borderColor: '#1D4ED8',
+                label: 'Entregadas',
+                backgroundColor: '#10B981',
+                borderColor: '#059669',
                 borderWidth: 1,
                 borderRadius: 4,
-                data: props.chartData.data,
+                data: props.chartData.delivered,
+                barPercentage: 0.6,
+                categoryPercentage: 0.6,
+            },
+            {
+                label: 'Canceladas',
+                backgroundColor: '#EF4444',
+                borderColor: '#DC2626',
+                borderWidth: 1,
+                borderRadius: 4,
+                data: props.chartData.cancelled,
+                barPercentage: 0.6,
+                categoryPercentage: 0.6,
             },
         ],
     };
@@ -103,6 +197,14 @@ const formatCurrency = (value) => {
                                         Limpiar
                                     </Link>
                                 </div>
+                            </div>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                <span class="text-sm text-gray-500 mr-2 self-center">Rangos rápidos:</span>
+                                <button type="button" @click="setQuickRange('today')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('today') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Hoy</button>
+                                <button type="button" @click="setQuickRange('last7')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last7') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 7 días</button>
+                                <button type="button" @click="setQuickRange('last30')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last30') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 30 días</button>
+                                <button type="button" @click="setQuickRange('thisMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('thisMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Este mes</button>
+                                <button type="button" @click="setQuickRange('lastMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('lastMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Mes pasado</button>
                             </div>
                         </form>
                     </div>

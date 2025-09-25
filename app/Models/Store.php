@@ -20,6 +20,7 @@ class Store extends Model
         'instagram_url',
         'tiktok_url', // <-- ¡AQUÍ ESTÁ EL CAMBIO!
         'slug',
+        'custom_domain',
     ];
 
     /**

@@ -11,6 +11,10 @@ use Inertia\Inertia;
 
 class CategoryController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('can:gestionar categorias');
+    }
     public function index(Request $request)
     {
         $categories = $request->user()->store->categories()

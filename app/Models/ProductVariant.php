@@ -17,6 +17,8 @@ class ProductVariant extends Model
         'options',
         'price',
         'stock',
+        'minimum_stock',
+        'alert',
         'sku',
     ];
 

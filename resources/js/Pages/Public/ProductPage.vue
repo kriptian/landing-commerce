@@ -101,7 +101,7 @@ const specifications = computed(() => {
                 <h1 class="text-2xl font-bold text-gray-900">{{ store.name }}</h1>
             </div>
             
-            <Link :href="route('cart.index', { store: store.slug })" class="relative flex items-center px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
+            <Link :href="(store.value.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.value.custom_domain + '/cart') : route('cart.index', { store: store.value.slug }))" class="relative flex items-center px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
                 <span>🛒</span>
                 <span class="ml-2 font-semibold">Carrito</span>
                 <span v-if="$page.props.cart.count > 0" class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
@@ -128,7 +128,7 @@ const specifications = computed(() => {
                 </a>
             </div>
         </div>
-        <section class="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-start">
             <div class="gallery">
                 <ProductGallery 
                     :main-image-url="product.main_image_url"
@@ -136,8 +136,10 @@ const specifications = computed(() => {
                 />
             </div>
             <div class="info flex flex-col space-y-4">
-                <h1 class="text-4xl font-extrabold text-gray-900">{{ product.name }}</h1>
-                <p class="text-3xl font-semibold text-blue-600">$ {{ Number(displayPrice).toFixed(2) }}</p>
+                <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900">{{ product.name }}</h1>
+                <p class="text-2xl md:text-3xl font-extrabold text-blue-600">
+                    {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(displayPrice) }}
+                </p>
                 <p class="text-lg text-gray-600">{{ product.short_description }}</p>
 
                 <div v-if="product.variants.length > 0" class="border-t pt-4">
@@ -190,7 +192,7 @@ const specifications = computed(() => {
             </div>
         </section>
 
-        <section class="long-description mt-16 border-t pt-8">
+        <section class="long-description mt-12 md:mt-16 border-t pt-8">
             <h2 class="text-2xl font-bold mb-4">Descripción Detallada</h2>
             <div class="prose max-w-none text-gray-600">
                 <p>{{ product.long_description }}</p> 
@@ -198,6 +200,10 @@ const specifications = computed(() => {
         </section>
 
     </main>
+
+    <Link :href="(store.value.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.value.custom_domain + '/cart') : route('cart.index', { store: store.value.slug }))" class="fixed bottom-6 right-6 inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-4 py-3 rounded-full shadow-lg hover:bg-blue-700">
+        <span>Ver Carrito</span>
+    </Link>
 
     <footer class="bg-white mt-16 border-t">
         <div class="container mx-auto px-6 py-4 text-center text-gray-500">

@@ -10,6 +10,10 @@ import { Link, usePage } from '@inertiajs/vue3';
 const showingNavigationDropdown = ref(false);
 
 const store = usePage().props.auth.user.store;
+const can = (perm) => {
+  const p = usePage().props.auth?.permissions || [];
+  return Array.isArray(p) && p.includes(perm);
+};
 </script>
 
 <template>
@@ -28,11 +32,11 @@ const store = usePage().props.auth.user.store;
                             </div>
 
                             <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                                <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
+                                <NavLink v-if="can('ver dashboard')" :href="route('dashboard')" :active="route().current('dashboard')">
                                     Dashboard
                                 </NavLink>
                                 
-                                <NavLink :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
+                                <NavLink v-if="can('ver ordenes') || can('gestionar ordenes')" :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
                                     <div class="relative flex items-center">
                                         <span>Órdenes</span>
                                         <span v-if="$page.props.adminNotifications.newOrdersCount > 0" 
@@ -42,10 +46,14 @@ const store = usePage().props.auth.user.store;
                                     </div>
                                 </NavLink>
 
-                                <NavLink :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">
+                                <NavLink v-if="can('ver reportes')" :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">
                                     Reportes
                                 </NavLink>
-                            </div>
+                                
+                                <NavLink v-if="can('ver inventario')" :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">
+                                    Inventario
+                                </NavLink>
+                                </div>
                         </div>
 
                         <div class="hidden sm:ms-6 sm:flex sm:items-center">
@@ -162,6 +170,10 @@ const store = usePage().props.auth.user.store;
 
                         <ResponsiveNavLink :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">
                             Reportes
+                        </ResponsiveNavLink>
+
+                        <ResponsiveNavLink :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">
+                            Inventario
                         </ResponsiveNavLink>
                         </div>
 

@@ -67,7 +67,13 @@ class CheckoutController extends Controller
             'status' => 'recibido', // El primer estado
         ]);
 
-        // 5. Preparamos el mensaje para WhatsApp
+        // 5. Preparamos el mensaje para WhatsApp (emojis con codepoints para evitar problemas de codificación)
+        // Usamos viñetas simples para máxima compatibilidad entre plataformas
+        $E_PACKAGE = "\u{2022}"; // •
+        $E_PERSON  = "\u{2022}"; // •
+        $E_PHONE   = "\u{2022}"; // •
+        $E_PIN     = "\u{2022}"; // •
+
         $whatsappMessage = "¡Hola! Quiero realizar el siguiente pedido:\n\n";
         $whatsappMessage .= "*Orden #{$order->id}*\n\n";
 
@@ -86,21 +92,21 @@ class CheckoutController extends Controller
             ]);
 
             // Lo añadimos al texto de WhatsApp
-            $whatsappMessage .= "📦 *{$item->product->name}*";
+            $whatsappMessage .= $E_PACKAGE . " *{$item->product->name}*";
             if ($item->variant) {
                 $optionsText = collect($item->variant->options)->map(fn($val, $key) => "{$key}: {$val}")->implode(', ');
                 $whatsappMessage .= " ({$optionsText})";
             }
             $whatsappMessage .= "\n";
             $whatsappMessage .= "   - Cantidad: {$item->quantity}\n";
-            $whatsappMessage .= "   - Precio: $" . number_format($price * $item->quantity, 0, ',', '.') . "\n\n";
+            $whatsappMessage .= "   - Precio unitario: $" . number_format($price, 0, ',', '.') . "\n\n";
         }
 
         $whatsappMessage .= "*Total del Pedido:* $" . number_format($totalPrice, 0, ',', '.') . "\n\n";
         $whatsappMessage .= "*Datos de Envío:*\n";
-        $whatsappMessage .= "👤 *Nombre:* {$validated['customer_name']}\n";
-        $whatsappMessage .= "📞 *Teléfono:* {$validated['customer_phone']}\n";
-        $whatsappMessage .= "📍 *Dirección:* {$validated['customer_address']}\n\n";
+        $whatsappMessage .= $E_PERSON . " *Nombre:* {$validated['customer_name']}\n";
+        $whatsappMessage .= $E_PHONE . " *Teléfono:* {$validated['customer_phone']}\n";
+        $whatsappMessage .= $E_PIN . " *Dirección:* {$validated['customer_address']}\n\n";
         $whatsappMessage .= "¡Gracias!";
 
         // 7. Vaciamos el carrito del usuario
@@ -118,7 +124,16 @@ class CheckoutController extends Controller
 
         // Limpiamos el número para asegurarnos de que solo contenga dígitos (quita '+', espacios, etc.)
         $storePhoneNumber = preg_replace('/[^0-9]/', '', $store->phone);
-        $whatsappUrl = 'https://wa.me/' . $storePhoneNumber . '?text=' . rawurlencode($whatsappMessage);
+
+        // Normalizamos y aseguramos UTF-8 para evitar caracteres "raros" en emojis
+        if (class_exists(\Normalizer::class)) {
+            $whatsappMessage = \Normalizer::normalize($whatsappMessage, \Normalizer::FORM_C);
+        }
+        $whatsappMessage = mb_convert_encoding($whatsappMessage, 'UTF-8', 'UTF-8');
+
+        // Construimos la query de forma segura (RFC3986) para compatibilidad con WhatsApp
+        $query = http_build_query(['text' => $whatsappMessage], '', '&', PHP_QUERY_RFC3986);
+        $whatsappUrl = 'https://wa.me/' . $storePhoneNumber . '?' . $query;
 
         // 9. Redirigimos al usuario a WhatsApp
         return Inertia::location($whatsappUrl);

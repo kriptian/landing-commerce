@@ -99,14 +99,16 @@ const submitOrder = () => {
                                 <p class="text-sm text-gray-600">Cantidad: {{ item.quantity }}</p>
                             </div>
                         </div>
-                        <p class="font-semibold">$ {{ ((item.variant?.price ?? item.product.price) * item.quantity).toFixed(2) }}</p>
+                        <p class="font-semibold">
+                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format((item.variant?.price ?? item.product.price) * item.quantity) }}
+                        </p>
                     </div>
                 </div>
                 
                 <div class="border-t mt-6 pt-6">
                     <div class="flex justify-between font-bold text-xl">
                         <span>Total</span>
-                        <span>$ {{ totalPrice.toFixed(2) }}</span>
+                        <span>{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalPrice) }}</span>
                     </div>
                 </div>
             </div>

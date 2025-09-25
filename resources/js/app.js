@@ -29,6 +29,28 @@ createInertiaApp({
         // --- 2. AQUÍ REGISTRAMOS EL COMPONENTE ---
         app.component('ProductGallery', ProductGallery);
 
+        // Interceptor global para 403 y 401
+        if (window.axios) {
+            window.axios.interceptors.response.use(
+                (response) => response,
+                (error) => {
+                    const status = error?.response?.status;
+                    if (status === 403) {
+                        app.config.globalProperties.$toast?.error('Acción denegada');
+                        // Redirige a dashboard si existe, si no, a inicio
+                        try { window.location.href = route('dashboard'); } catch (e) { window.location.href = '/'; }
+                        return Promise.resolve();
+                    }
+                    if (status === 401) {
+                        app.config.globalProperties.$toast?.info('Sesión expirada');
+                        window.location.href = route('login');
+                        return Promise.resolve();
+                    }
+                    return Promise.reject(error);
+                }
+            );
+        }
+
         app.mount(el);
     },
     progress: {

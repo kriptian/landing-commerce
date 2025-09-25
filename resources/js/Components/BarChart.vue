@@ -13,30 +13,29 @@ const props = defineProps({
     }
 });
 
-// Opciones para que el gráfico se vea bien
+// Opciones del gráfico (apilado por estado, sin eje Y visible)
 const chartOptions = ref({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
         legend: {
-            display: false, // No mostramos la leyenda del dataset
+            display: true,
+            position: 'top',
+        },
+        tooltip: {
+            mode: 'index',
+            intersect: false,
         },
     },
     scales: {
+        x: {
+            stacked: false,
+        },
         y: {
+            stacked: false,
             beginAtZero: true,
-            ticks: {
-                // Formateamos los números del eje Y como moneda
-                callback: function(value) {
-                    return new Intl.NumberFormat('es-CO', { 
-                        style: 'currency', 
-                        currency: 'COP', 
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                    }).format(value);
-                }
-            }
-        }
+            display: false,
+        },
     }
 });
 </script>

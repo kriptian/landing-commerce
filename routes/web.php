@@ -1,90 +1,113 @@
 <?php
 
-use App\Http\Controllers\Admin\ProductController as AdminProductController;
-use App\Http\Controllers\Admin\CategoryController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\Public\ProductController as PublicProductController;
-use App\Http\Controllers\Admin\RoleController;
-use App\Http\Controllers\StoreSetupController;
-use App\Http\Controllers\Auth\AuthenticatedSessionController;
-use App\Models\Store;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use App\Http\Controllers\CartController; 
-use App\Http\Controllers\Public\CheckoutController; 
+use App\Models\Store;
+use Illuminate\Http\Request;
+
+// Controladores Públicos
+use App\Http\Controllers\Public\ProductController as PublicProductController;
+use App\Http\Controllers\Public\CheckoutController;
+
+// Controladores de Autenticación y Perfil
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\StoreSetupController;
+
+// ===== AQUÍ ESTÁN LOS CAMBIOS =====
+// Controladores del Panel de Admin
+use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\InventoryController;
+use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\ProductController as AdminProductController;
+use App\Http\Controllers\Admin\ReportController;
+use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\CartController; // Este es global pero se usa en rutas auth
 
 /*
 |--------------------------------------------------------------------------
-| Rutas Públicas
+| Web Routes
 |--------------------------------------------------------------------------
 */
 
-Route::get('/', function () {
+Route::get('/', function (Request $request) {
+    // Intento de resolver tienda por dominio personalizado
+    $host = $request->getHost();
+    $store = \App\Models\Store::where('custom_domain', $host)->first();
+    if ($store) {
+        // Redirige 301 al catálogo público de esa tienda usando el slug
+        return redirect()->route('catalogo.index', ['store' => $store->slug], 301);
+    }
     return redirect()->route('login');
 });
 
-// --- AJUSTE #2: Creamos una nueva ruta para la vitrina de tiendas ---
+// Rutas Públicas de la Tienda
 Route::get('/tiendas', function () {
     return Inertia::render('Public/StoreIndex', [
         'stores' => Store::all(),
     ]);
-})->name('home'); // El nombre 'home' ahora es de la vitrina
+})->name('home');
 
-// Route::get('/', function () {
-//     return Inertia::render('Public/StoreIndex', [
-//         'stores' => Store::all(),
-//     ]);
-// })->name('home');
-
-// --- AQUÍ ESTÁN LOS AJUSTES ---
 Route::get('/tienda/{store:slug}', [PublicProductController::class, 'index'])->name('catalogo.index');
 Route::get('/tienda/{store:slug}/producto/{product}', [PublicProductController::class, 'show'])->name('catalogo.show');
 
-
-/*
-|--------------------------------------------------------------------------
-| Rutas Privadas (Panel de Administración)
-|--------------------------------------------------------------------------
-*/
+// Rutas Privadas (que requieren autenticación)
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', function (Request $request) {
+        $store = $request->user()->store;
+
+        $todayStart = now()->startOfDay();
+        $todayEnd = now()->endOfDay();
+
+        $deliveredToday = $store->orders()
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
+            ->where('status', 'entregado');
+
+        $salesToday = (clone $deliveredToday)->sum('total_price');
+        $ordersToday = (clone $deliveredToday)->count();
+        $avgTicketToday = $ordersToday > 0 ? $salesToday / $ordersToday : 0;
+
         return Inertia::render('Dashboard', [
-            'store' => $request->user()->store,
+            'store' => $store,
+            'metrics' => [
+                'salesToday' => $salesToday,
+                'ordersToday' => $ordersToday,
+                'avgTicketToday' => $avgTicketToday,
+            ],
         ]);
     })->name('dashboard');
 
-    // ==== AQUÍ VA LA NUEVA RUTA DEL CARRITO ====
-    Route::post('/cart', [CartController::class, 'store'])->name('cart.store');
-    Route::get('/tienda/{store:slug}/cart', [CartController::class, 'index'])->name('cart.index');
-    Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
-
-
-    // ============================================
-
-    // Rutas para configurar la tienda después del registro
+    // Configuración de la tienda
     Route::get('/store/setup', [StoreSetupController::class, 'create'])->name('store.setup');
     Route::post('/store/setup', [StoreSetupController::class, 'store'])->name('store.save');
 
+    // Perfil del Usuario
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // Agrupamos las rutas de admin bajo el prefijo /admin y con nombre admin.
+    // Carrito y Checkout
+    Route::post('/cart', [CartController::class, 'store'])->name('cart.store');
+    Route::get('/tienda/{store:slug}/cart', [CartController::class, 'index'])->name('cart.index');
+    Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
+    Route::get('/tienda/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
+    Route::post('/tienda/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+
+    // Panel de Administración
     Route::prefix('admin')->name('admin.')->group(function () {
+        // ===== ESTAS SON LAS RUTAS QUE CORREGIMOS =====
         Route::resource('categories', CategoryController::class);
         Route::post('categories/{parentCategory}/subcategories', [CategoryController::class, 'storeSubcategory'])->name('categories.storeSubcategory');
         Route::resource('products', AdminProductController::class);
-        Route::resource('users', \App\Http\Controllers\Admin\UserController::class);
+        Route::resource('users', UserController::class);
         Route::resource('roles', RoleController::class);
-        Route::resource('orders', \App\Http\Controllers\Admin\OrderController::class);
-        Route::post('orders/{order}/confirm', [\App\Http\Controllers\Admin\OrderController::class, 'confirm'])->name('orders.confirm');
-        Route::get('reports', [\App\Http\Controllers\Admin\ReportController::class, 'index'])->name('reports.index');
-        Route::get('reports/export', [\App\Http\Controllers\Admin\ReportController::class, 'export'])->name('reports.export');
-
+        Route::resource('orders', OrderController::class);
+        Route::post('orders/{order}/confirm', [OrderController::class, 'confirm'])->name('orders.confirm');
+        Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
+        Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
     });
-    Route::get('/tienda/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
-    Route::post('/tienda/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 });
 
 require __DIR__.'/auth.php';

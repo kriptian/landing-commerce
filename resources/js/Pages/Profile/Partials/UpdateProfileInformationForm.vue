@@ -32,6 +32,7 @@ const form = useForm({
     facebook_url: store?.facebook_url || '',
     instagram_url: store?.instagram_url || '',
     tiktok_url: store?.tiktok_url || '',
+    custom_domain: store?.custom_domain || '',
 });
 
 const logoPreview = ref(null);
@@ -148,6 +149,20 @@ const updateProfileInformation = () => {
                         @change="updateLogoPreview"
                     >
                     <InputError :message="form.errors.logo" class="mt-2" />
+                </div>
+
+                <div>
+                    <InputLabel for="custom_domain" value="Dominio propio (opcional)" />
+                    <TextInput
+                        id="custom_domain"
+                        type="text"
+                        class="mt-1 block w-full"
+                        v-model="form.custom_domain"
+                        autocomplete="off"
+                        placeholder="tienda.midominio.com"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">Apunta tu DNS a este servidor. Si lo defines, tu catálogo abrirá ahí.</p>
+                    <InputError class="mt-2" :message="form.errors.custom_domain" />
                 </div>
 
                 <div>

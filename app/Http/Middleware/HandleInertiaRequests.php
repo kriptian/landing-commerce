@@ -33,7 +33,7 @@ class HandleInertiaRequests extends Middleware
         return array_merge(parent::share($request), [
             'auth' => [
                 'user' => $request->user(),
-                'can' => $request->user() ? $request->user()->getPermissionsViaRoles()->pluck('name') : [],
+                'permissions' => $request->user() ? $request->user()->getPermissionsViaRoles()->pluck('name') : [],
             ],
             'cart' => [
                 'count' => Auth::check() ? Auth::user()->cart()->sum('quantity') : 0,

@@ -113,8 +113,12 @@ const deleteItem = () => {
                             </div>
                         </td>
                         <td class="p-4 text-gray-700">{{ item.quantity }}</td>
-                        <td class="p-4 text-gray-700">$ {{ Number(item.variant?.price ?? item.product.price).toFixed(2) }}</td>
-                        <td class="p-4 text-gray-700">$ {{ ((item.variant?.price ?? item.product.price) * item.quantity).toFixed(2) }}</td>
+                        <td class="p-4 text-gray-700">
+                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(item.variant?.price ?? item.product.price) }}
+                        </td>
+                        <td class="p-4 text-gray-700">
+                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format((item.variant?.price ?? item.product.price) * item.quantity) }}
+                        </td>
                         <td class="p-4">
                             <button @click="confirmItemDeletion(item.id)" class="text-red-600 hover:underline">
                                 Eliminar
@@ -127,7 +131,7 @@ const deleteItem = () => {
             <div class="p-6 bg-gray-50 border-t flex justify-end">
                 <div class="text-right">
                     <p class="text-xl font-bold text-gray-900">
-                        Total: $ {{ totalPrice.toFixed(2) }}
+                        Total: {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalPrice) }}
                     </p>
                     <Link :href="route('checkout.index', { store: store.slug })" class="inline-block mt-4 w-full bg-green-600 text-white font-bold py-2 px-4 rounded text-center hover:bg-green-700">
                         Proceder al Pago
