@@ -23,13 +23,38 @@ class ReportController extends Controller
             'end_date' => 'nullable|date|after_or_equal:start_date',
         ]);
 
-        // Definimos el rango de fechas. Por defecto, los últimos 30 días.
-        $startDate = !empty($validated['start_date']) ? \Carbon\Carbon::parse($validated['start_date'])->startOfDay() : now()->subDays(29)->startOfDay();
-        $endDate = !empty($validated['end_date']) ? \Carbon\Carbon::parse($validated['end_date'])->endOfDay() : now()->endOfDay();
+        // Definimos el rango de fechas en la ZONA HORARIA DE LA APP (ej: America/Bogota)
+        // y luego convertimos a UTC para consultar la BD (created_at se guarda en UTC)
+        $appTz = config('app.timezone', 'America/Bogota');
+        $nowLocal = now($appTz);
+        $startLocal = !empty($validated['start_date'])
+            ? Carbon::parse($validated['start_date'], $appTz)->startOfDay()
+            : $nowLocal->copy()->subDays(29)->startOfDay();
+        $endLocal = !empty($validated['end_date'])
+            ? Carbon::parse($validated['end_date'], $appTz)->endOfDay()
+            : $nowLocal->copy()->endOfDay();
 
         // Empezamos la consulta base de órdenes de la tienda
+        // Usamos el rango local convertido a UTC, con fin exclusivo, para evitar incluir el día siguiente
+        $startUtc = $startLocal->copy()->timezone('UTC');
+        $endExclusiveUtc = $endLocal->copy()->addDay()->startOfDay()->timezone('UTC');
         $ordersQuery = $request->user()->store->orders()
-                            ->whereBetween('created_at', [$startDate, $endDate]);
+            ->where(function ($q) use ($startUtc, $endExclusiveUtc, $startLocal, $endLocal, $appTz) {
+                // Caso A: BD guarda en UTC (rango exclusivo del final)
+                $q->where(function ($qq) use ($startUtc, $endExclusiveUtc) {
+                    $qq->where('created_at', '>=', $startUtc)
+                       ->where('created_at', '<', $endExclusiveUtc);
+                })
+                // Caso B: BD guarda en hora local (comparación por DATE local)
+                ->orWhereRaw('DATE(created_at) BETWEEN ? AND ?', [
+                    $startLocal->toDateString(), $endLocal->toDateString()
+                ])
+                // Caso C: MySQL con tablas TZ (UTC -> TZ app)
+                ->orWhereRaw(
+                    "DATE(CONVERT_TZ(created_at, 'UTC', ?)) BETWEEN ? AND ?",
+                    [$appTz, $startLocal->toDateString(), $endLocal->toDateString()]
+                );
+            });
 
         // Calculamos las estadísticas SOBRE la consulta ya filtrada
         $totalSales = (clone $ordersQuery)->sum('total_price');
@@ -38,23 +63,22 @@ class ReportController extends Controller
         // Traemos la lista de órdenes para la tabla
         $orders = (clone $ordersQuery)->with(['items','items.product','items.variant'])->withCount('items')->orderByDesc('sequence_number')->orderByDesc('id')->paginate(15)->withQueryString();
 
-        // --- Datos del gráfico: conteo por estado (entregadas / canceladas) por día ---
-        $countsByDayStatus = (clone $ordersQuery)
-            ->selectRaw('DATE(created_at) as date, status, COUNT(*) as total')
+        // --- Datos del gráfico: agrupamos por día en zona horaria local ---
+        $ordersForChart = (clone $ordersQuery)
             ->whereIn('status', ['entregado', 'cancelado'])
-            ->groupBy('date', 'status')
-            ->orderBy('date', 'asc')
-            ->get();
+            ->get(['id','status','created_at']);
 
-        // Recolectamos solo días con datos (sin huecos)
-        $grouped = $countsByDayStatus->groupBy('date');
-        $labels = $grouped->keys()->sort()->values()->all();
+        $groupedByLocalDate = $ordersForChart->groupBy(function ($order) use ($appTz) {
+            return Carbon::parse($order->created_at)->timezone($appTz)->toDateString();
+        });
+
+        $labels = $groupedByLocalDate->keys()->sort()->values()->all();
         $delivered = [];
         $cancelled = [];
-        foreach ($labels as $key) {
-            $dayGroup = $grouped->get($key, collect());
-            $delivered[] = (int) ($dayGroup->firstWhere('status', 'entregado')->total ?? 0);
-            $cancelled[] = (int) ($dayGroup->firstWhere('status', 'cancelado')->total ?? 0);
+        foreach ($labels as $date) {
+            $dayGroup = $groupedByLocalDate->get($date, collect());
+            $delivered[] = (int) $dayGroup->where('status', 'entregado')->count();
+            $cancelled[] = (int) $dayGroup->where('status', 'cancelado')->count();
         }
 
         return Inertia::render('Admin/Reports/Index', [

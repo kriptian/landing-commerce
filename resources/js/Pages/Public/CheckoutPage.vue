@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import AlertModal from '@/Components/AlertModal.vue';
 
 const props = defineProps({
     cartItems: Array,
@@ -24,6 +25,9 @@ const form = useForm({
 });
 
 // ===== ESTA ES LA FUNCIÓN QUE CAMBIA =====
+const showError = ref(false);
+const errorMessage = ref('');
+
 const submitOrder = () => {
     // Usamos el 'post' de Inertia para enviar los datos del 'form'
     // a la ruta 'checkout.store' que creamos.
@@ -34,9 +38,8 @@ const submitOrder = () => {
             // Podríamos mostrar un mensaje de "Redirigiendo a WhatsApp..." si quisiéramos.
         },
         onError: (errors) => {
-            // Si hay algún error de validación, Inertia lo maneja automáticamente
-            console.error('Error al enviar la orden:', errors);
-            alert('Hubo un error al procesar tu pedido. Por favor, revisa tus datos.');
+            errorMessage.value = 'Hubo un error al procesar tu pedido. Por favor verificá tus datos.';
+            showError.value = true;
         },
     });
 };
@@ -115,4 +118,14 @@ const submitOrder = () => {
 
         </div>
     </main>
+
+    <AlertModal
+        :show="showError"
+        type="error"
+        title="No pudimos procesar tu pedido"
+        :message="errorMessage"
+        primary-text="Entendido"
+        @primary="showError=false"
+        @close="showError=false"
+    />
 </template>

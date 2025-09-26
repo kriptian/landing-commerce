@@ -21,8 +21,11 @@ class ProductController extends Controller
                             ->whereNull('parent_id')
                             ->get();
 
-        // Empezamos la consulta de productos
-        $productsQuery = $store->products()->with('images');
+        // Empezamos la consulta de productos (incluimos variantes para calcular bajo stock en frontend)
+        $productsQuery = $store->products()->with([
+            'images',
+            'variants:id,product_id,stock,minimum_stock,alert'
+        ]);
 
         // --- LÓGICA DE FILTRADO CORREGIDA Y FINAL ---
         

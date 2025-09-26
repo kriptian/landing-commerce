@@ -3,13 +3,16 @@ import ProductGallery from '@/Components/Product/ProductGallery.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import { useToast } from 'vue-toastification';
+import AlertModal from '@/Components/AlertModal.vue';
 
 const props = defineProps({
     product: Object,
 });
 
-const toast = useToast();
+import { ref as vref } from 'vue';
+const showVariantAlert = vref(false);
 const selectedVariantId = ref(null);
+const toast = useToast();
 
 const store = computed(() => props.product.store);
 
@@ -61,7 +64,7 @@ watch(selectedQuantity, (newQty) => {
 
 const addToCart = () => {
     if (props.product.variants.length > 0 && !selectedVariantId.value) {
-        toast.error('Por favor, selecciona una opción.');
+        showVariantAlert.value = true;
         return;
     }
 
@@ -203,6 +206,16 @@ const specifications = computed(() => {
         </section>
 
     </main>
+
+    <AlertModal
+        :show="showVariantAlert"
+        type="error"
+        title="Selecciona una opción"
+        message="Para agregar al carrito, elegí una variante del producto."
+        primary-text="Entendido"
+        @primary="showVariantAlert=false"
+        @close="showVariantAlert=false"
+    />
 
     <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/cart') : route('cart.index', { store: store.slug }))" class="fixed bottom-6 right-6 inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-4 py-3 rounded-full shadow-lg hover:bg-blue-700">
         <span>Ver Carrito</span>

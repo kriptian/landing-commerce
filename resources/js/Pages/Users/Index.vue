@@ -2,10 +2,11 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, usePage, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import { useToast } from 'vue-toastification';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
-import { useToast } from 'vue-toastification';
+import AlertModal from '@/Components/AlertModal.vue';
 
 const props = defineProps({
     users: Array,
@@ -13,8 +14,10 @@ const props = defineProps({
 });
 
 const loggedInUser = usePage().props.auth.user;
-const activeTab = ref('users');
-const toast = useToast();
+const page = usePage();
+const activeTab = ref(page?.props?.ziggy?.query?.tab === 'roles' ? 'roles' : 'users');
+const showSuccess = ref(!!page.props.flash?.success);
+const successMessage = ref(page.props.flash?.success || '');
 
 // --- Lógica para eliminar USUARIOS (la que ya tenías) ---
 const confirmingUserDeletion = ref(false);
@@ -35,20 +38,21 @@ const deleteUser = () => {
         preserveScroll: true,
         onSuccess: () => {
             closeUserModal();
-            toast.success('¡Usuario eliminado con éxito!');
+            successMessage.value = '¡Usuario eliminado con éxito!';
+            showSuccess.value = true;
         },
         onError: () => {
             closeUserModal();
-            toast.error('Hubo un error al eliminar el usuario.');
+            successMessage.value = 'Hubo un error al eliminar el usuario.';
+            showSuccess.value = true;
         }
     });
 };
 // ---------------------------------------------
-
-
 // ===== LÓGICA NUEVA PARA ELIMINAR ROLES =====
 const confirmingRoleDeletion = ref(false);
 const roleToDelete = ref(null);
+const toast = useToast();
 
 const confirmRoleDeletion = (id) => {
     roleToDelete.value = id;
@@ -209,4 +213,14 @@ const deleteRole = () => {
             </div>
         </div>
     </Modal>
+
+    <AlertModal
+        :show="showSuccess"
+        type="info"
+        title="Notificación"
+        :message="successMessage"
+        primary-text="Entendido"
+        @primary="showSuccess=false"
+        @close="showSuccess=false"
+    />
 </template>

@@ -9,6 +9,7 @@ use Inertia\Inertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class RoleController extends Controller
 {
@@ -46,8 +47,8 @@ class RoleController extends Controller
         // Limpiamos la caché de permisos de Spatie para aplicar cambios de inmediato
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // CAMBIO: Redirigimos al índice de usuarios, donde está la pestaña de roles.
-        return redirect()->route('admin.users.index');
+        // Redirigimos al listado (pestaña de Roles) con notificación de éxito
+        return redirect()->route('admin.users.index', ['tab' => 'roles'])->with('success', '¡Rol creado con éxito!');
     }
 
     public function edit(Role $role)
@@ -87,18 +88,21 @@ class RoleController extends Controller
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // CAMBIO: Redirigimos al índice de usuarios, donde está la pestaña de roles.
-        return redirect()->route('admin.users.index');
+        // Redirigimos al editor del propio rol con flash
+        return redirect()->route('admin.roles.edit', $role->id)->with('success', 'Rol actualizado');
     }
 
-    public function destroy(Role $role)
+    public function destroy(Role $role, Request $request)
     {
         if ($role->store_id !== auth()->user()->store_id) {
             abort(403);
         }
 
-        if (in_array($role->name, ['Administrador', 'Vendedor'])) {
-            return back()->withErrors(['delete' => 'No se pueden eliminar los roles base.']);
+        // Única restricción: si hay usuarios con este rol, no permitimos eliminar
+        if (method_exists($role, 'users') && $role->users()->exists()) {
+            throw ValidationException::withMessages([
+                'delete' => 'No se puede eliminar un rol que está asignado a usuarios.'
+            ]);
         }
         
         $role->delete();
@@ -106,6 +110,6 @@ class RoleController extends Controller
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         // CAMBIO: Redirigimos al índice de usuarios, donde está la pestaña de roles.
-        return redirect()->route('admin.users.index');
+        return redirect()->route('admin.users.index')->with('success', 'Rol eliminado');
     }
 }

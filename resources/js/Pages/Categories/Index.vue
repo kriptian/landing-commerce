@@ -6,14 +6,15 @@ import { ref } from 'vue'; // <-- Importamos ref
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
-import { useToast } from 'vue-toastification';
+import AlertModal from '@/Components/AlertModal.vue';
 // ------------------------------------------
 
 defineProps({
     categories: Array,
 });
 
-const toast = useToast(); // Inicializamos el toast
+const showNotice = ref(false);
+const noticeMessage = ref('');
 
 // --- 2. LÓGICA NUEVA PARA MANEJAR EL MODAL ---
 const confirmingCategoryDeletion = ref(false);
@@ -33,14 +34,8 @@ const closeModal = () => {
 const deleteCategory = () => {
     router.delete(route('admin.categories.destroy', categoryToDelete.value), {
         preserveScroll: true,
-        onSuccess: () => {
-            closeModal();
-            toast.success('¡Categoría eliminada con éxito!');
-        },
-        onError: () => {
-            closeModal();
-            toast.error('Hubo un error al eliminar la categoría.');
-        }
+        onSuccess: () => { closeModal(); noticeMessage.value = '¡Categoría eliminada con éxito!'; showNotice.value = true; },
+        onError: () => { closeModal(); noticeMessage.value = 'Hubo un error al eliminar la categoría.'; showNotice.value = true; }
     });
 };
 // ---------------------------------------------
@@ -123,4 +118,14 @@ const deleteCategory = () => {
             </div>
         </div>
     </Modal>
+
+    <AlertModal
+        :show="showNotice"
+        type="info"
+        title="Categorías"
+        :message="noticeMessage"
+        primary-text="Entendido"
+        @primary="showNotice=false"
+        @close="showNotice=false"
+    />
 </template>

@@ -1,12 +1,12 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue'; // <-- Importamos ref
 // --- 1. IMPORTAMOS LOS COMPONENTES DEL MODAL ---
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
-import { useToast } from 'vue-toastification';
+import AlertModal from '@/Components/AlertModal.vue';
 // ---------------------------------------------
 
 defineProps({
@@ -14,9 +14,11 @@ defineProps({
 });
 
 // --- 2. LÓGICA NUEVA PARA MANEJAR EL MODAL ---
+const page = usePage();
 const confirmingProductDeletion = ref(false);
 const productToDelete = ref(null);
-const toast = useToast();
+const showProductNotice = ref(page?.props?.flash?.success ? true : false);
+const productNotice = ref(page?.props?.flash?.success || '');
 const confirmProductDeletion = (id) => {
     productToDelete.value = id;
     confirmingProductDeletion.value = true;
@@ -32,12 +34,12 @@ const deleteProduct = () => {
     router.delete(route('admin.products.destroy', productToDelete.value), {
         onSuccess: () => {
             closeModal();
-            toast.success('¡Producto eliminado con éxito!'); // <-- LA LÍNEA NUEVA
+            productNotice.value = '¡Producto eliminado con éxito!';
+            showProductNotice.value = true;
         }
     });
 };
 // ---------------------------------------------
-
 </script>
 
 <template>
@@ -120,4 +122,14 @@ const deleteProduct = () => {
             </div>
         </div>
     </Modal>
+    
+    <AlertModal
+        :show="showProductNotice"
+        type="success"
+        title="Producto"
+        :message="productNotice"
+        primary-text="Entendido"
+        @primary="showProductNotice=false"
+        @close="showProductNotice=false"
+    />
 </template>

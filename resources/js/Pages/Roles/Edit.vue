@@ -1,14 +1,16 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { useToast } from 'vue-toastification'; // <-- 1. IMPORTAMOS EL TOAST
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import AlertModal from '@/Components/AlertModal.vue';
 
 const props = defineProps({
     role: Object,
     permissions: Array,
 });
 
-const toast = useToast(); // <-- 2. INICIALIZAMOS EL TOAST
+import { ref } from 'vue';
+const page = usePage();
+const showSaved = ref(page?.props?.flash?.success ? true : false);
 
 // ===== AQUÍ ESTÁ EL ARREGLO =====
 // 1. Primero procesamos los permisos y los guardamos en una variable normal
@@ -25,16 +27,21 @@ const form = useForm({
 const submit = () => {
     form.put(route('admin.roles.update', props.role.id), {
         // --- 3. AGREGAMOS LA NOTIFICACIÓN DE ÉXITO ---
-        onSuccess: () => {
-            toast.success('¡Rol actualizado con éxito!');
-        }
+        onSuccess: () => { showSaved.value = true; }
     });
 };
 </script>
 
 <template>
     <Head title="Editar Rol" />
-
+        <AlertModal
+            :show="showSaved"
+            type="success"
+            title="Rol actualizado"
+            primary-text="Entendido"
+            @primary="showSaved=false"
+            @close="showSaved=false"
+        />
     <AuthenticatedLayout>
         <template #header>
             <div class="flex items-center space-x-4">

@@ -21,9 +21,14 @@ class OrdersExport implements FromCollection, WithHeadings
     {
         $query = Auth::user()->store->orders()->with(['items', 'items.product', 'items.variant']);
         if (!empty($this->filters['start_date']) && !empty($this->filters['end_date'])) {
-            $startDate = \Carbon\Carbon::parse($this->filters['start_date'])->startOfDay();
-            $endDate = \Carbon\Carbon::parse($this->filters['end_date'])->endOfDay();
-            $query->whereBetween('created_at', [$startDate, $endDate]);
+            $appTz = config('app.timezone', 'UTC');
+            $startLocal = \Carbon\Carbon::parse($this->filters['start_date'], $appTz)->startOfDay();
+            $endLocal = \Carbon\Carbon::parse($this->filters['end_date'], $appTz)->endOfDay();
+            // Aseguramos comparación por fecha local
+            $query->whereRaw(
+                "DATE(CONVERT_TZ(created_at, 'UTC', ?)) BETWEEN ? AND ?",
+                [$appTz, $startLocal->toDateString(), $endLocal->toDateString()]
+            );
         }
         $orders = $query->orderByDesc('sequence_number')->orderByDesc('id')->get();
 
@@ -44,7 +49,7 @@ class OrdersExport implements FromCollection, WithHeadings
                     $order->customer_phone,
                     $order->customer_email,
                     $order->customer_address,
-                    $order->created_at->format('Y-m-d H:i'),
+                    $order->created_at->timezone(config('app.timezone', 'UTC'))->format('Y-m-d H:i'),
                     $order->status,
                     $order->total_price,
                     $item->quantity,

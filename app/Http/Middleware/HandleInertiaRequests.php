@@ -35,6 +35,10 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
                 'permissions' => $request->user() ? $request->user()->getPermissionsViaRoles()->pluck('name') : [],
             ],
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+            ],
             'cart' => [
                 'count' => Auth::check() ? Auth::user()->cart()->sum('quantity') : 0,
             ],

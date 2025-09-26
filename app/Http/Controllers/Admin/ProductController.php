@@ -110,7 +110,7 @@ class ProductController extends Controller
                 $product->images()->create(['path' => '/storage/' . $path]);
             }
         }
-        return redirect()->route('admin.products.index');
+        return redirect()->route('admin.products.index')->with('success', 'Producto creado');
     }
 
     public function edit(Product $product)
@@ -220,7 +220,7 @@ class ProductController extends Controller
             }
         }
         
-        return redirect()->route('admin.products.index');
+        return redirect()->route('admin.products.index')->with('success', 'Producto actualizado');
     }
 
     public function destroy(Product $product)

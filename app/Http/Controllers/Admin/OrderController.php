@@ -10,6 +10,14 @@ use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
+    public function __construct()
+    {
+        // Permisos estrictos por acción
+        // Solo quienes tengan "ver ordenes" pueden listar y ver detalles
+        $this->middleware('can:ver ordenes')->only(['index', 'show']);
+        // Solo quienes tengan "gestionar ordenes" pueden cambiar estado/confirmar
+        $this->middleware('can:gestionar ordenes')->only(['update', 'confirm']);
+    }
     /**
      * Muestra una lista de todas las órdenes de la tienda.
      */

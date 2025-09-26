@@ -1,15 +1,20 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
-import { useToast } from 'vue-toastification';
+import AlertModal from '@/Components/AlertModal.vue';
+import Modal from '@/Components/Modal.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import DangerButton from '@/Components/DangerButton.vue';
 
 const props = defineProps({
     product: Object,
     categories: Array, 
 });
 
-const toast = useToast();
+const page = usePage();
+const showSaved = ref(page?.props?.flash?.success ? true : false);
+const confirmingSave = ref(false);
 
 // --- Lógica de menús dependientes (sigue igual) ---
 const initialParent = props.product.category.parent_id 
@@ -134,6 +139,7 @@ watch(
         variants.forEach((variant) => {
             const currentStock = Number(variant.stock) || 0;
             const minAllowedStock = Number(variant.minimum_stock) || 0;
+            // En edición: capamos el stock para que no supere el mínimo
             if (currentStock > minAllowedStock) {
                 variant.stock = minAllowedStock;
             }
@@ -143,10 +149,16 @@ watch(
 );
 
 const submit = () => {
+    confirmingSave.value = true;
+};
+
+const closeSaveModal = () => {
+    confirmingSave.value = false;
+};
+
+const confirmSave = () => {
     form.post(route('admin.products.update', props.product.id), {
-        onSuccess: () => {
-            toast.success('¡Producto actualizado con éxito!');
-        }
+        onFinish: () => { confirmingSave.value = false; }
     });
 };
 </script>
@@ -342,4 +354,30 @@ const submit = () => {
             </div>
         </div>
     </AuthenticatedLayout>
+
+    <Modal :show="confirmingSave" @close="closeSaveModal">
+        <div class="p-6">
+            <h2 class="text-lg font-medium text-gray-900">
+                ¿Deseás guardar los cambios del producto?
+            </h2>
+            <p class="mt-1 text-sm text-gray-600">
+                Se actualizará la información y variantes del producto.
+            </p>
+            <div class="mt-6 flex justify-end">
+                <SecondaryButton @click="closeSaveModal">Cancelar</SecondaryButton>
+                <DangerButton class="ms-3" @click="confirmSave" :disabled="form.processing">
+                    Guardar cambios
+                </DangerButton>
+            </div>
+        </div>
+    </Modal>
+
+    <AlertModal
+        :show="showSaved"
+        type="success"
+        title="Producto actualizado"
+        primary-text="Entendido"
+        @primary="showSaved=false"
+        @close="showSaved=false"
+    />
 </template>

@@ -1,6 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
+import Modal from '@/Components/Modal.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import DangerButton from '@/Components/DangerButton.vue';
 
 const props = defineProps({
     category: Object, // Recibimos la categoría con sus hijos o padre ya cargado
@@ -27,12 +30,27 @@ const addNewSubcategory = () => {
     });
 };
 
-const deleteCategory = (categoryId) => {
-    if (confirm('¿Estás seguro de que quieres eliminar esta categoría?')) {
-        router.delete(route('admin.categories.destroy', categoryId), {
-            preserveScroll: true,
-        });
-    }
+// Confirmación elegante para eliminar subcategorías
+import { ref } from 'vue';
+const confirmingDeletion = ref(false);
+const categoryToDelete = ref(null);
+
+const askDeleteCategory = (categoryId) => {
+    categoryToDelete.value = categoryId;
+    confirmingDeletion.value = true;
+};
+
+const closeDeleteModal = () => {
+    confirmingDeletion.value = false;
+    categoryToDelete.value = null;
+};
+
+const deleteCategory = () => {
+    if (!categoryToDelete.value) return;
+    router.delete(route('admin.categories.destroy', categoryToDelete.value), {
+        preserveScroll: true,
+        onFinish: () => closeDeleteModal(),
+    });
 };
 </script>
 
@@ -72,7 +90,7 @@ const deleteCategory = (categoryId) => {
                                 <span>{{ child.name }}</span>
                                 <div>
                                     <Link :href="route('admin.categories.edit', child.id)" class="text-indigo-600 hover:text-indigo-900 mr-4">Editar</Link>
-                                    <button @click="deleteCategory(child.id)" class="text-red-600 hover:text-red-900">Eliminar</button>
+                                    <button @click="askDeleteCategory(child.id)" class="text-red-600 hover:text-red-900">Eliminar</button>
                                 </div>
                             </div>
                         </div>
@@ -92,4 +110,19 @@ const deleteCategory = (categoryId) => {
             </div>
         </div>
     </AuthenticatedLayout>
+
+    <Modal :show="confirmingDeletion" @close="closeDeleteModal">
+        <div class="p-6">
+            <h2 class="text-lg font-medium text-gray-900">
+                ¿Querés eliminar esta subcategoría?
+            </h2>
+            <p class="mt-1 text-sm text-gray-600">
+                Esta acción es irreversible y removerá la subcategoría seleccionada.
+            </p>
+            <div class="mt-6 flex justify-end">
+                <SecondaryButton @click="closeDeleteModal">Cancelar</SecondaryButton>
+                <DangerButton class="ms-3" @click="deleteCategory">Sí, eliminar</DangerButton>
+            </div>
+        </div>
+    </Modal>
 </template>

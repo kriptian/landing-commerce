@@ -6,7 +6,7 @@ import TextInput from '@/Components/TextInput.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { useToast } from 'vue-toastification'; // <-- Importamos Toast
+import AlertModal from '@/Components/AlertModal.vue';
 
 defineProps({
     mustVerifyEmail: {
@@ -19,7 +19,7 @@ defineProps({
 
 const user = usePage().props.auth.user;
 const store = user.store;
-const toast = useToast(); // <-- Inicializamos Toast
+const showSuccess = ref(false);
 
 const form = useForm({
     _method: 'patch',
@@ -63,7 +63,7 @@ const updateProfileInformation = () => {
         onSuccess: () => {
             clearLogoFileInput();
             logoPreview.value = null;
-            toast.success('¡Perfil y Tienda actualizados con éxito!'); // <-- Usamos Toast
+            showSuccess.value = true;
         },
     });
 };
@@ -76,7 +76,15 @@ const updateProfileInformation = () => {
             <h2 class="text-lg font-medium text-gray-900">
                 Información de Perfil y Tienda
             </h2>
-
+    <AlertModal
+        :show="showSuccess"
+        type="success"
+        title="¡Perfil actualizado!"
+        message="Los datos de tu perfil y tienda se guardaron correctamente."
+        primary-text="Entendido"
+        @primary="showSuccess=false"
+        @close="showSuccess=false"
+    />
             <p class="mt-1 text-sm text-gray-600">
                 Actualiza la información de tu cuenta, nombre, logo y redes sociales de tu tienda.
             </p>

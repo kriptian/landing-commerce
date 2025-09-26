@@ -2,13 +2,15 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue'; 
-import { useToast } from 'vue-toastification';
+import AlertModal from '@/Components/AlertModal.vue';
 
 const props = defineProps({
     categories: Array, 
 });
 
-const toast = useToast();
+import { usePage } from '@inertiajs/vue3';
+const page = usePage();
+const showSaved = ref(page?.props?.flash?.success ? true : false);
 
 // --- Lógica de menús dependientes (Sigue igual) ---
 const selectedParentId = ref(null); 
@@ -81,13 +83,14 @@ watch(totalMinimumStock, (newTotal) => {
 });
 // ===================================================
 
-// ===== REGLA: El stock actual de cada variante no puede ser mayor al mínimo =====
+// ===== REGLA: El stock actual de cada variante no puede ser mayor que el mínimo =====
 watch(
     () => form.variants,
     (variants) => {
         variants.forEach((variant) => {
             const currentStock = Number(variant.stock) || 0;
             const minAllowedStock = Number(variant.minimum_stock) || 0;
+            // Capamos el stock actual para que no supere el mínimo
             if (currentStock > minAllowedStock) {
                 variant.stock = minAllowedStock;
             }
@@ -101,7 +104,8 @@ watch(
 const submit = () => {
     form.post(route('admin.products.store'), {
         onSuccess: () => {
-            toast.success('¡Producto creado con éxito!');
+            showSaved.value = true;
+            form.reset();
         }
     });
 };
@@ -276,4 +280,13 @@ const submit = () => {
             </div>
         </div>
     </AuthenticatedLayout>
+
+    <AlertModal
+        :show="showSaved"
+        type="success"
+        title="¡Producto creado con éxito!"
+        primary-text="Entendido"
+        @primary="showSaved=false"
+        @close="showSaved=false"
+    />
 </template>

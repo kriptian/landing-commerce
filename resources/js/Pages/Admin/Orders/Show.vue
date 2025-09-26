@@ -2,13 +2,15 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue'; // <-- Importamos ref
-import { useToast } from 'vue-toastification';
+import AlertModal from '@/Components/AlertModal.vue';
 // --- Importamos los componentes del Modal ---
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue'; // DangerButton es el rojo
 
-const toast = useToast();
+const showInfo = ref(false);
+const infoTitle = ref('');
+const infoMessage = ref('');
 
 const props = defineProps({
     order: Object,
@@ -41,9 +43,7 @@ const statusForm = useForm({
 const updateStatus = () => {
     statusForm.put(route('admin.orders.update', props.order.id), {
         preserveScroll: true,
-        onSuccess: () => {
-            toast.success('¡Estado de la orden actualizado!');
-        }
+        onSuccess: () => { infoTitle.value = 'Estado actualizado'; infoMessage.value='El estado de la orden se guardó correctamente.'; showInfo.value = true; }
     });
 };
 // --- FIN Lógica de Estado ---
@@ -63,15 +63,8 @@ const closeSaleModal = () => {
 const confirmOrder = () => {
     router.post(route('admin.orders.confirm', props.order.id), {}, {
         preserveScroll: true,
-        onSuccess: () => {
-            toast.success('¡Venta confirmada e inventario actualizado!');
-            closeSaleModal();
-        },
-        onError: (errors) => {
-            const errorMessage = Object.values(errors).join('\n');
-            toast.error(`Error al confirmar la venta:\n${errorMessage}`);
-            closeSaleModal();
-        }
+        onSuccess: () => { infoTitle.value='Venta confirmada'; infoMessage.value='Inventario actualizado correctamente.'; showInfo.value=true; closeSaleModal(); },
+        onError: (errors) => { infoTitle.value='Error al confirmar'; infoMessage.value=Object.values(errors).join('\n'); showInfo.value=true; closeSaleModal(); }
     });
 };
 // ==========================================================
@@ -219,4 +212,14 @@ const confirmOrder = () => {
             </div>
         </div>
     </Modal>
+
+    <AlertModal
+        :show="showInfo"
+        type="success"
+        :title="infoTitle"
+        :message="infoMessage"
+        primary-text="Entendido"
+        @primary="showInfo=false"
+        @close="showInfo=false"
+    />
 </template>

@@ -1,14 +1,16 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm } from '@inertiajs/vue3';
-import { useToast } from 'vue-toastification'; // <-- 1. IMPORTAMOS EL TOAST
+import { Head, useForm, usePage } from '@inertiajs/vue3';
+import AlertModal from '@/Components/AlertModal.vue';
 
 const props = defineProps({
     user: Object, // El usuario que vamos a editar
     roles: Array, // La lista de roles disponibles
 });
 
-const toast = useToast(); // <-- 2. INICIALIZAMOS EL TOAST
+import { ref } from 'vue';
+const page = usePage();
+const showSaved = ref(page?.props?.flash?.success ? true : false);
 
 const form = useForm({
     _method: 'PUT', // Acordate que esto es para actualizar
@@ -23,8 +25,7 @@ const submit = () => {
     form.put(route('admin.users.update', props.user.id), {
         // --- 3. AGREGAMOS LA NOTIFICACIÓN DE ÉXITO ---
         onSuccess: () => {
-            toast.success('¡Usuario actualizado con éxito!');
-            // Limpiamos los campos de contraseña después de guardar
+            showSaved.value = true;
             form.reset('password', 'password_confirmation');
         }
     });
@@ -33,7 +34,14 @@ const submit = () => {
 
 <template>
     <Head title="Editar Usuario" />
-
+        <AlertModal
+            :show="showSaved"
+            type="success"
+            title="Usuario actualizado"
+            primary-text="OK"
+            @primary="showSaved=false"
+            @close="showSaved=false"
+        />
     <AuthenticatedLayout>
         <template #header>
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">Editar Usuario: {{ user.name }}</h2>

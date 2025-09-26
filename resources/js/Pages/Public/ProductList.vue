@@ -49,20 +49,22 @@ const isLoading = ref(false);
 router.on('start', () => { isLoading.value = true; });
 router.on('finish', () => { isLoading.value = false; });
 
-// Helper: bajo stock
+// Helper: bajo stock (sólo si existe umbral > 0)
 const isLowStock = (product) => {
     try {
-        // Con variantes: si alguna variante tiene stock > 0 y <= umbral (alert o minimum_stock)
+        // Con variantes: si alguna variante tiene stock > 0 y existe umbral > 0, y stock <= umbral
         if (product?.variants?.length > 0) {
             return product.variants.some((v) => {
                 const stock = Number(v?.stock || 0);
                 const threshold = Number((v?.alert ?? v?.minimum_stock) || 0);
+                if (threshold <= 0) return false;
                 return stock > 0 && stock <= threshold;
             });
         }
         // Sin variantes: usamos quantity y minimum_stock del producto
         const qty = Number(product?.quantity || 0);
         const min = Number(product?.minimum_stock || 0);
+        if (min <= 0) return false;
         return qty > 0 && qty <= min;
     } catch (e) {
         return false;
