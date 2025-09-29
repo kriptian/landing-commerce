@@ -101,6 +101,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('categories', CategoryController::class);
         Route::post('categories/{parentCategory}/subcategories', [CategoryController::class, 'storeSubcategory'])->name('categories.storeSubcategory');
         Route::resource('products', AdminProductController::class);
+        Route::put('products-store/promo', [AdminProductController::class, 'updateStorePromo'])->name('products.store_promo');
         Route::resource('users', UserController::class);
         Route::resource('roles', RoleController::class);
         Route::resource('orders', OrderController::class);

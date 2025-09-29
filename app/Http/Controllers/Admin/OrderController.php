@@ -100,6 +100,12 @@ class OrderController extends Controller
             abort(403);
         }
 
+        // Regla de negocio: solo permitir confirmar y descontar inventario
+        // cuando la orden está en estado 'entregado'.
+        if ($order->status !== 'entregado') {
+            return back()->withErrors(['confirmation' => 'Solo podés confirmar y descontar inventario cuando la orden está en estado ENTREGADO.']);
+        }
+
         try {
             // Usamos una transacción para que, si algo falla, no se descuente nada.
             DB::transaction(function () use ($order) {

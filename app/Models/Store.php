@@ -22,6 +22,8 @@ class Store extends Model
         'tiktok_url', // <-- ¡AQUÍ ESTÁ EL CAMBIO!
         'slug',
         'custom_domain',
+        'promo_active',
+        'promo_discount_percent',
     ];
 
     /**

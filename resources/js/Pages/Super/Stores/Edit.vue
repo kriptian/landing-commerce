@@ -15,6 +15,8 @@ const form = useForm({
     name: props.store.name,
     max_users: props.store.max_users,
     phone: props.store.phone || '',
+    promo_active: props.store.promo_active || false,
+    promo_discount_percent: props.store.promo_discount_percent || 0,
     owner_name: props.store.owner?.name || '',
     owner_email: props.store.owner?.email || '',
     owner_password: '',
@@ -51,6 +53,18 @@ const submit = () => {
                                 <InputLabel for="phone" value="Teléfono (WhatsApp) de la Tienda" />
                                 <TextInput id="phone" class="mt-1 block w-full" v-model="form.phone" placeholder="57xxxxxxxxxx" />
                                 <InputError :message="form.errors.phone" class="mt-2" />
+                            </div>
+                            <div>
+                                <InputLabel for="promo" value="Promoción Global" />
+                                <div class="mt-1 flex items-center gap-4">
+                                    <label class="inline-flex items-center gap-2">
+                                        <input id="promo" type="checkbox" v-model="form.promo_active" class="rounded border-gray-300">
+                                        Activa
+                                    </label>
+                                    <TextInput type="number" min="1" max="90" class="w-24" v-model.number="form.promo_discount_percent" placeholder="%" />
+                                    <span class="text-sm text-gray-500">Se aplicará a todos los productos sin promo propia.</span>
+                                </div>
+                                <InputError :message="form.errors.promo_discount_percent" class="mt-2" />
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>

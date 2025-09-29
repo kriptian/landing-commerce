@@ -14,6 +14,7 @@ const props = defineProps({
 
 const page = usePage();
 const showSaved = ref(page?.props?.flash?.success ? true : false);
+const successMessage = ref(page?.props?.flash?.success || '');
 const confirmingSave = ref(false);
 
 // --- Lógica de menús dependientes (sigue igual) ---

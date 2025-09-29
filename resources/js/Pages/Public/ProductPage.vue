@@ -2,7 +2,6 @@
 import ProductGallery from '@/Components/Product/ProductGallery.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
-import { useToast } from 'vue-toastification';
 import AlertModal from '@/Components/AlertModal.vue';
 
 const props = defineProps({
@@ -12,7 +11,6 @@ const props = defineProps({
 import { ref as vref } from 'vue';
 const showVariantAlert = vref(false);
 const selectedVariantId = ref(null);
-const toast = useToast();
 
 const store = computed(() => props.product.store);
 
@@ -21,11 +19,36 @@ const selectedVariant = computed(() => {
     return props.product.variants.find(v => v.id === selectedVariantId.value);
 });
 
+// Promociones: prioridad a la promo global de la tienda
+const storePromoActive = computed(() => {
+    const percent = Number(store.value?.promo_discount_percent || 0);
+    return Boolean(store.value?.promo_active) && percent > 0;
+});
+const productPromoActive = computed(() => {
+    const percent = Number(props.product?.promo_discount_percent || 0);
+    return Boolean(props.product?.promo_active) && percent > 0;
+});
+const effectivePromoPercent = computed(() => {
+    if (storePromoActive.value) return Number(store.value.promo_discount_percent);
+    if (productPromoActive.value) return Number(props.product.promo_discount_percent);
+    return 0;
+});
+
+const basePrice = computed(() => {
+    const variantPrice = selectedVariant.value?.price;
+    return Number(variantPrice ?? props.product.price);
+});
+
 const displayPrice = computed(() => {
-    if (selectedVariant.value && selectedVariant.value.price) {
-        return selectedVariant.value.price;
+    const percent = effectivePromoPercent.value;
+    if (percent > 0) {
+        return Math.round((basePrice.value * (100 - percent)) / 100);
     }
-    return props.product.price;
+    return basePrice.value;
+});
+
+const originalPrice = computed(() => {
+    return effectivePromoPercent.value > 0 ? basePrice.value : null;
 });
 
 const displayStock = computed(() => {
@@ -74,13 +97,8 @@ const addToCart = () => {
         quantity: selectedQuantity.value,
     }, {
         preserveScroll: true, 
-        onSuccess: () => {
-            toast.success('¡Producto añadido al carrito!'); 
-        },
-        onError: (errors) => {
-            const errorMessage = Object.values(errors).join('\n');
-            toast.error(errorMessage || 'Hubo un error al añadir el producto.');
-        }
+        onSuccess: () => {},
+        onError: () => {}
     });
 };
 
@@ -92,6 +110,19 @@ const specifications = computed(() => {
         return [];
     }
 });
+
+// Utilidad para formatear moneda
+const formatCOP = (value) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(value || 0));
+
+// Precio mostrado por variante (considerando promoción efectiva)
+const getVariantDisplayPrices = (variant) => {
+    const b = Number((variant && variant.price != null) ? variant.price : props.product.price);
+    const p = effectivePromoPercent.value;
+    if (p > 0) {
+        return { current: Math.round((b * (100 - p)) / 100), original: b };
+    }
+    return { current: b, original: null };
+};
 </script>
 
 <template>
@@ -143,9 +174,14 @@ const specifications = computed(() => {
             </div>
             <div class="info flex flex-col space-y-4">
                 <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900">{{ product.name }}</h1>
-                <p class="text-2xl md:text-3xl font-extrabold text-blue-600">
-                    {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(displayPrice) }}
-                </p>
+                <div class="flex items-baseline gap-2">
+                    <p class="text-2xl md:text-3xl font-extrabold text-blue-600">
+                        {{ formatCOP(displayPrice) }}
+                    </p>
+                    <p v-if="originalPrice" class="text-base md:text-lg text-gray-400 line-through">
+                        {{ formatCOP(originalPrice) }}
+                    </p>
+                </div>
                 <p class="text-lg text-gray-600">{{ product.short_description }}</p>
 
                 <div v-if="product.variants.length > 0" class="border-t pt-4">
@@ -160,7 +196,12 @@ const specifications = computed(() => {
                                             <span class="font-normal">{{ key }}:</span> {{ value }}
                                         </span>
                                     </span>
-                                    <span v-if="variant.price" class="ml-2 text-blue-600">($ {{ Number(variant.price).toFixed(2) }})</span>
+                                    <span class="ml-2 text-blue-600">
+                                        ({{ formatCOP(getVariantDisplayPrices(variant).current) }})
+                                    </span>
+                                    <span v-if="getVariantDisplayPrices(variant).original" class="ml-2 text-gray-400 line-through">
+                                        {{ formatCOP(getVariantDisplayPrices(variant).original) }}
+                                    </span>
                                 </div>
                                 <span class="text-sm font-medium" :class="{ 'text-red-600': variant.stock === 0, 'text-gray-600': variant.stock > 0 }">
                                     {{ variant.stock > 0 ? `${variant.stock} disponibles` : 'Agotado' }}

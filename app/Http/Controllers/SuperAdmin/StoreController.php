@@ -76,6 +76,8 @@ class StoreController extends Controller
             'name' => 'required|string|max:255',
             'max_users' => 'required|integer|min:1',
             'phone' => 'required|string|max:20',
+            'promo_active' => 'sometimes|boolean',
+            'promo_discount_percent' => 'sometimes|nullable|integer|min:1|max:90',
             'owner_name' => 'required|string|max:255',
             'owner_email' => 'required|email|max:255|unique:users,email,' . $store->user_id,
             'owner_password' => 'nullable|string|min:8|confirmed',
@@ -86,6 +88,8 @@ class StoreController extends Controller
                 'name' => $validated['name'],
                 'max_users' => $validated['max_users'],
                 'phone' => $validated['phone'],
+                'promo_active' => $validated['promo_active'] ?? $store->promo_active,
+                'promo_discount_percent' => $validated['promo_discount_percent'] ?? $store->promo_discount_percent,
             ]);
 
             $owner = User::find($store->user_id);

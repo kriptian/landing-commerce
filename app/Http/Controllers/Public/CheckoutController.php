@@ -51,10 +51,17 @@ class CheckoutController extends Controller
             return redirect()->route('catalogo.index', ['store' => $store->slug])->withErrors('Tu carrito está vacío.');
         }
 
-        // 3. Calculamos el total en el backend (más seguro que confiar en el frontend)
-        $totalPrice = $cartItems->reduce(function ($total, $item) {
-            $price = $item->variant->price ?? $item->product->price;
-            return $total + ($price * $item->quantity);
+        // 3. Calculamos el total aplicando la misma lógica de promociones (la promo global de tienda tiene prioridad)
+        $totalPrice = $cartItems->reduce(function ($total, $item) use ($store) {
+            $base = $item->variant->price ?? $item->product->price;
+            $percent = 0;
+            if ($store->promo_active && (int) $store->promo_discount_percent > 0) {
+                $percent = (int) $store->promo_discount_percent;
+            } elseif ($item->product->promo_active && (int) $item->product->promo_discount_percent > 0) {
+                $percent = (int) $item->product->promo_discount_percent;
+            }
+            $unit = $percent > 0 ? (int) round($base * (100 - $percent) / 100) : (int) $base;
+            return $total + ($unit * $item->quantity);
         }, 0);
 
         // 4. Creamos la orden en la base de datos con un consecutivo por tienda
@@ -85,7 +92,14 @@ class CheckoutController extends Controller
 
         // 6. Creamos los items de la orden y los añadimos al mensaje
         foreach ($cartItems as $item) {
-            $price = $item->variant->price ?? $item->product->price;
+            $base = $item->variant->price ?? $item->product->price;
+            $percent = 0;
+            if ($store->promo_active && (int) $store->promo_discount_percent > 0) {
+                $percent = (int) $store->promo_discount_percent;
+            } elseif ($item->product->promo_active && (int) $item->product->promo_discount_percent > 0) {
+                $percent = (int) $item->product->promo_discount_percent;
+            }
+            $price = $percent > 0 ? (int) round($base * (100 - $percent) / 100) : (int) $base;
 
             // Guardamos el item en la base de datos
             $order->items()->create([

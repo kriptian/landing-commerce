@@ -20,6 +20,9 @@ class Product extends Model
         'short_description',
         'long_description',
         'specifications',
+        'is_featured',
+        'promo_active',
+        'promo_discount_percent',
         // 'main_image_url', // <-- LO QUITAMOS DE AQUÍ PORQUE NO ES UNA COLUMNA REAL
     ];
 

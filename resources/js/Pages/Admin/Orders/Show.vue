@@ -179,7 +179,8 @@ const confirmOrder = () => {
                             <h3 class="text-lg font-semibold mb-4">Acciones Finales</h3>
                             <button 
                                 @click="openSaleModal"
-                                class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700">
+                                :disabled="order.status !== 'entregado'"
+                                class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
                                 Confirmar Venta y Descontar Inventario
                             </button>
                          </div>

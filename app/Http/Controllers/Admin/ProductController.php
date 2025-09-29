@@ -22,11 +22,38 @@ class ProductController extends Controller
     }
     public function index(Request $request)
     {
-        $products = $request->user()->store->products()->with('category')->latest()->get();
+        $store = $request->user()->store;
+        $query = $store->products()->with('category')->latest();
+
+        if ($request->filled('category')) {
+            $query->where('category_id', $request->integer('category'));
+        }
+        if ($request->filled('search')) {
+            $search = $request->get('search');
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        $products = $query->get();
 
         return Inertia::render('Products/Index', [
             'products' => $products,
+            'categories' => $store->categories()->orderBy('name')->get(['id','name']),
+            'store' => $store->only(['promo_active','promo_discount_percent']),
+            'filters' => $request->only(['category','search']),
         ]);
+    }
+
+    public function updateStorePromo(Request $request)
+    {
+        $data = $request->validate([
+            'promo_active' => 'required|boolean',
+            'promo_discount_percent' => 'nullable|integer|min:1|max:90',
+        ]);
+
+        $store = $request->user()->store;
+        $store->update($data);
+
+        return back();
     }
 
     public function create()
@@ -110,7 +137,10 @@ class ProductController extends Controller
                 $product->images()->create(['path' => '/storage/' . $path]);
             }
         }
-        return redirect()->route('admin.products.index')->with('success', 'Producto creado');
+        // Redirigimos al listado para que se vea el popup allí
+        return redirect()
+            ->route('admin.products.index')
+            ->with('success', '¡Producto creado con éxito!');
     }
 
     public function edit(Product $product)
@@ -129,6 +159,16 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
+        // Atajo: actualización rápida solo de promoción desde el listado
+        if ($request->hasAny(['promo_active', 'promo_discount_percent']) && !$request->has('name')) {
+            $data = $request->validate([
+                'promo_active' => 'sometimes|boolean',
+                'promo_discount_percent' => 'sometimes|nullable|integer|min:1|max:90',
+            ]);
+            $product->update($data);
+            return back();
+        }
+
         // ===== 3. AÑADIMOS VALIDACIÓN PARA 'minimum_stock' EN UPDATE =====
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -151,6 +191,9 @@ class ProductController extends Controller
             'variants.*.minimum_stock' => 'required_with:variants|integer|min:0', // <-- Nuevo para variantes
             'variants_to_delete' => 'nullable|array', 
             'variants_to_delete.*' => 'integer|exists:product_variants,id',
+            // Campos de promoción (opcionales)
+            'promo_active' => 'sometimes|boolean',
+            'promo_discount_percent' => 'sometimes|nullable|integer|min:1|max:90',
         ]);
         // =================================================================
 
@@ -220,7 +263,10 @@ class ProductController extends Controller
             }
         }
         
-        return redirect()->route('admin.products.index')->with('success', 'Producto actualizado');
+        // Redirigimos al listado para mostrar el modal de éxito
+        return redirect()
+            ->route('admin.products.index')
+            ->with('success', '¡Producto actualizado con éxito!');
     }
 
     public function destroy(Product $product)
