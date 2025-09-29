@@ -65,36 +65,36 @@ const selectStatus = (newStatus) => {
     submitFilters();
 };
 
-// Filtrar variantes en la UI según estado activo
+// Filtrar variantes en la UI según estado activo (estricto y consistente con backend)
 const filteredVariants = (variants) => {
     if (!status.value) return variants;
-    if (status.value === 'out_of_stock') {
-        return variants.filter(v => (Number(v.stock) || 0) <= 0);
-    }
-    if (status.value === 'low_stock') {
-        return variants.filter(v => (Number(v.stock) || 0) > 0 && (Number(v.stock) || 0) <= (Number(v.minimum_stock) || 0));
-    }
-    return variants;
+    return variants.filter((v) => {
+        const stock = Number(v.stock) || 0;
+        const threshold = (Number(v.alert) > 0 ? Number(v.alert) : Number(v.minimum_stock) || 0);
+        if (status.value === 'out_of_stock') return stock <= 0;
+        if (status.value === 'low_stock') return stock > 0 && stock < threshold; // ESTRICTO: solo menor al umbral
+        return true;
+    });
 };
 
-// Mostrar productos sin variantes solo si coinciden con el filtro
+// Mostrar productos sin variantes solo si coinciden con el filtro (estricto)
 const matchesProductStatus = (product) => {
     if (!status.value) return true;
     const qty = Number(product.quantity) || 0;
     const min = Number(product.minimum_stock) || 0;
     if (status.value === 'out_of_stock') return qty <= 0;
-    if (status.value === 'low_stock') return qty > 0 && qty <= min;
+    if (status.value === 'low_stock') return qty > 0 && qty < min; // ESTRICTO: solo menor al mínimo
     return true;
 };
 
 // Función para determinar el estado del stock
 const getStockStatus = (item) => {
     const stock = Number(item.stock) || 0;
-    const threshold = Number(item.alert ?? item.minimum_stock) || 0; // usa 'alert' si existe, sino mínimo
+    const threshold = (Number(item.alert) > 0 ? Number(item.alert) : Number(item.minimum_stock) || 0);
     if (stock <= 0) {
         return { text: 'Agotado', class: 'bg-red-100 text-red-800' };
     }
-    if (stock <= threshold) {
+    if (threshold > 0 && stock < threshold) {
         return { text: 'Bajo Stock', class: 'bg-yellow-100 text-yellow-800' };
     }
     return { text: 'En Stock', class: 'bg-green-100 text-green-800' };

@@ -49,13 +49,13 @@ class InventoryController extends Controller
                     // Productos sin variantes: bajo stock = (quantity > 0) y quantity <= minimum_stock
                     $q->whereDoesntHave('variants')
                         ->where('quantity', '>', 0)
-                        ->whereColumn('quantity', '<=', 'minimum_stock');
+                        ->whereColumn('quantity', '<', 'minimum_stock'); // ESTRICTO: menor al mínimo
                 })
-                // O productos con al menos una variante con bajo stock
+                // O productos con al menos una variante con bajo stock.
+                // Regla: si 'alert' es NULL o <= 0, usamos 'minimum_stock' como umbral.
                 ->orWhereHas('variants', function ($q) {
-                    // Comparar contra COALESCE(alert, minimum_stock)
                     $q->where('stock', '>', 0)
-                      ->whereRaw('`stock` <= COALESCE(`alert`, `minimum_stock`)');
+                      ->whereRaw('`stock` < (CASE WHEN `alert` IS NOT NULL AND `alert` > 0 THEN `alert` ELSE `minimum_stock` END)'); // ESTRICTO: menor al umbral
                 });
             });
         }

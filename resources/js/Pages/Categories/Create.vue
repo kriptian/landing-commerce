@@ -1,6 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import AlertModal from '@/Components/AlertModal.vue';
 
 const form = useForm({
     name: '', // El nombre de la categoría principal
@@ -17,9 +19,10 @@ const removeSubcategory = (index) => {
     form.subcategories.splice(index, 1);
 };
 
+const showSaved = ref(false);
 const submit = () => {
     form.post(route('admin.categories.store'), {
-        onSuccess: () => form.reset(),
+        onSuccess: () => { showSaved.value = true; },
     });
 };
 </script>
@@ -76,4 +79,14 @@ const submit = () => {
             </div>
         </div>
     </AuthenticatedLayout>
+
+    <AlertModal
+        :show="showSaved"
+        type="success"
+        title="Categorías"
+        message="¡Categoría creada con éxito!"
+        primary-text="Entendido"
+        @primary="showSaved=false; form.reset()"
+        @close="showSaved=false; form.reset()"
+    />
 </template>

@@ -40,12 +40,17 @@ class CategoryController extends Controller
         $validated = $request->validate([
             'name' => [
                 'required', 'string', 'max:255',
-                Rule::unique('categories')->where('store_id', $storeId)->whereNull('parent_id')
+                Rule::unique('categories')->where(fn ($q) => $q
+                    ->where('store_id', $storeId)
+                    ->whereNull('parent_id')
+                ),
             ],
             'subcategories' => 'nullable|array',
             'subcategories.*.name' => [
                 'required_with:subcategories', 'string', 'max:255',
-                Rule::unique('categories', 'name')->where('store_id', $storeId)
+                Rule::unique('categories', 'name')->where(fn ($q) => $q
+                    ->where('store_id', $storeId)
+                ),
             ],
         ]);
 
@@ -67,7 +72,7 @@ class CategoryController extends Controller
             }
         }
 
-        return redirect()->route('admin.categories.index');
+        return redirect()->route('admin.categories.index')->with('success', '¡Categoría creada con éxito!');
     }
 
     public function edit(Category $category)
@@ -91,7 +96,10 @@ class CategoryController extends Controller
         $validated = $request->validate([
             'name' => [
                 'required', 'string', 'max:255',
-                Rule::unique('categories')->where('store_id', $storeId)->where('parent_id', $parentCategory->id)
+                Rule::unique('categories')->where(fn ($q) => $q
+                    ->where('store_id', $storeId)
+                    ->where('parent_id', $parentCategory->id)
+                ),
             ],
         ]);
 
@@ -120,7 +128,9 @@ class CategoryController extends Controller
         $validated = $request->validate([
             'name' => [
                 'required', 'string', 'max:255',
-                Rule::unique('categories')->ignore($category->id)->where('store_id', $storeId)
+                Rule::unique('categories')->ignore($category->id)->where(fn ($q) => $q
+                    ->where('store_id', $storeId)
+                ),
             ],
         ]);
 
