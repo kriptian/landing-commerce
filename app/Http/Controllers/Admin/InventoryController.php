@@ -44,20 +44,22 @@ class InventoryController extends Controller
                 });
             });
         } elseif ($status === 'low_stock') {
+            // Solo mostrar bajo stock cuando existe ALERTA (>0) y stock <= alerta
             $productsQuery->where(function ($query) {
                 $query->where(function ($q) {
-                    // Productos sin variantes: bajo stock = (quantity > 0) y quantity <= minimum_stock
+                    // Productos sin variantes: requiere columna 'alert' > 0 y quantity <= alert
                     $q->whereDoesntHave('variants')
                         ->where('quantity', '>', 0)
-                        // Usamos el MAYOR entre alert y minimum_stock si el producto tuviera campo alert (consistente con variantes)
-                        ->whereRaw('`quantity` <= GREATEST(COALESCE(`alert`, 0), `minimum_stock`)');
+                        ->whereNotNull('alert')
+                        ->where('alert', '>', 0)
+                        ->whereColumn('quantity', '<=', 'alert');
                 })
-                // O productos con al menos una variante con bajo stock.
-                // Regla: si 'alert' es NULL o <= 0, usamos 'minimum_stock' como umbral.
                 ->orWhereHas('variants', function ($q) {
+                    // Variantes: alerta > 0 y stock <= alerta
                     $q->where('stock', '>', 0)
-                      // Umbral = mayor entre alert y minimum_stock
-                      ->whereRaw('`stock` <= GREATEST(COALESCE(`alert`, 0), `minimum_stock`)');
+                      ->whereNotNull('alert')
+                      ->where('alert', '>', 0)
+                      ->whereColumn('stock', '<=', 'alert');
                 });
             });
         }

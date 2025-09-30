@@ -66,16 +66,16 @@ const isLowStock = (product) => {
         if (product?.variants?.length > 0) {
             return product.variants.some((v) => {
                 const stock = Number(v?.stock || 0);
-                const threshold = Math.max(Number(v?.alert) || 0, Number(v?.minimum_stock) || 0);
-                if (threshold <= 0) return false;
-                return stock > 0 && stock <= threshold;
+                const alert = Number(v?.alert) || 0;
+                if (alert <= 0) return false;
+                return stock > 0 && stock <= alert;
             });
         }
         // Sin variantes: usamos quantity y minimum_stock del producto
         const qty = Number(product?.quantity || 0);
-        const min = Math.max(Number(product?.alert) || 0, Number(product?.minimum_stock) || 0);
-        if (min <= 0) return false;
-        return qty > 0 && qty <= min;
+        const alert = Number(product?.alert) || 0;
+        if (alert <= 0) return false;
+        return qty > 0 && qty <= alert;
     } catch (e) {
         return false;
     }
