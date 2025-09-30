@@ -13,6 +13,11 @@ const showVariantAlert = vref(false);
 const selectedVariantId = ref(null);
 
 const store = computed(() => props.product.store);
+const showSocialFab = ref(false);
+const hasAnySocial = computed(() => {
+    const s = store.value || {};
+    return Boolean((s.facebook_url ?? '').toString().trim() || (s.instagram_url ?? '').toString().trim() || (s.tiktok_url ?? s.tiktok ?? s.tik_tok_url ?? '').toString().trim());
+});
 
 const selectedVariant = computed(() => {
     if (!selectedVariantId.value) return null;
@@ -129,18 +134,29 @@ const getVariantDisplayPrices = (variant) => {
     <Head :title="product.name" />
 
     <header class="bg-white shadow-sm sticky top-0 z-50">
-        <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
-            <div class="flex items-center space-x-4">
+        <nav class="container mx-auto px-6 py-4 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
                 <img v-if="store.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-10 w-10 rounded-full object-cover">
-                <h1 class="text-2xl font-bold text-gray-900">{{ store.name }}</h1>
+                <h1 class="truncate text-lg sm:text-2xl font-bold text-gray-900">{{ store.name }}</h1>
             </div>
-            
-            <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/cart') : route('cart.index', { store: store.slug }))" class="relative flex items-center px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
-                <span>🛒</span>
-                <span v-if="$page.props.cart.count > 0" class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                    {{ $page.props.cart.count }}
-                </span>
-            </Link>
+            <div class="flex items-center space-x-3 shrink-0">
+                <a v-if="store.facebook_url" :href="store.facebook_url" target="_blank" class="hidden sm:inline-block text-gray-500 hover:text-blue-800">
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" clip-rule="evenodd" /></svg>
+                </a>
+                <a v-if="store.instagram_url" :href="store.instagram_url" target="_blank" class="hidden sm:inline-block text-gray-500 hover:text-pink-600">
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.024.06 1.378.06 3.808s-.012 2.784-.06 3.808c-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.024.048-1.378.06-3.808.06s-2.784-.012-3.808-.06c-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.048 1.024-.06 1.378-.06 3.808s.012-2.784.06-3.808c.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 016.08 2.525c.636-.247 1.363-.416 2.427-.465C9.53 2.013 9.884 2 12.315 2zm-1.161 1.545a1.12 1.12 0 10-1.584 1.584 1.12 1.12 0 001.584-1.584zm-3.097 3.569a3.468 3.468 0 106.937 0 3.468 3.468 0 00-6.937 0z" clip-rule="evenodd" /><path d="M12 6.166a5.834 5.834 0 100 11.668 5.834 5.834 0 000-11.668zm0 1.545a4.289 4.289 0 110 8.578 4.289 4.289 0 010-8.578z" /></svg>
+                </a>
+                <a v-if="store.tiktok_url" :href="store.tiktok_url" target="_blank" class="hidden sm:inline-block text-gray-500 hover:text-black">
+                     <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.525.02c1.31-.02 2.61-.01 3.91.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.01-1.58-.31-3.15-.82-4.7-.52-1.56-1.23-3.04-2.1-4.42a.1.1 0 00-.2-.04c-.02.13-.03.26-.05.39v7.24a.26.26 0 00.27.27c.82.04 1.63.16 2.42.37.04.83.16 1.66.36 2.47.19.82.49 1.6.86 2.33.36.73.81 1.41 1.32 2.02-.17.1-.34.19-.51.28a4.26 4.26 0 01-1.93.52c-1.37.04-2.73-.06-4.1-.23a9.8 9.8 0 01-3.49-1.26c-.96-.54-1.8-1.23-2.52-2.03-.72-.8-1.3-1.7-1.77-2.69-.47-.99-.8-2.06-1.02-3.13a.15.15 0 01.04-.15.24.24 0 01.2-.09c.64-.02 1.28-.04 1.92-.05.1 0 .19-.01.28-.01.07.01.13.02.2.04.19.04.38.09.57.14a5.2 5.2 0 005.02-5.22v-.02a.23.23 0 00-.23-.23.2.2 0 00-.2-.02c-.83-.06-1.66-.13-2.49-.22-.05-.01-.1-.01-.15-.02-1.12-.13-2.25-.26-3.37-.44a.2.2 0 01-.16-.24.22.22 0 01.23-.18c.41-.06.82-.12 1.23-.18C9.9.01 11.21 0 12.525.02z"/></svg>
+                </a>
+                <div class="border-l h-6 border-gray-300 hidden sm:block"></div>
+                <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/cart') : route('cart.index', { store: store.slug }))" class="relative flex items-center px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
+                    <span>🛒</span>
+                    <span v-if="$page.props.cart.count > 0" class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                        {{ $page.props.cart.count }}
+                    </span>
+                </Link>
+            </div>
         </nav>
     </header>
     <main class="container mx-auto px-6 py-12">
@@ -149,7 +165,7 @@ const getVariantDisplayPrices = (variant) => {
             <Link :href="route('catalogo.index', { store: store.slug })" class="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-800 text-sm font-semibold rounded-md hover:bg-gray-300">
                 &larr; Volver al Catálogo
             </Link>
-            <div class="flex items-center space-x-4">
+            <div class="hidden md:flex items-center space-x-4">
                 <a v-if="store.facebook_url" :href="store.facebook_url" target="_blank" class="text-gray-500 hover:text-blue-800">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" clip-rule="evenodd" /></svg>
                 </a>
@@ -247,6 +263,27 @@ const getVariantDisplayPrices = (variant) => {
 
     </main>
 
+    <!-- FAB Social en móvil -->
+    <div v-if="hasAnySocial" class="fixed bottom-6 right-6 md:hidden">
+        <div class="relative">
+            <transition name="fade">
+                <div v-if="showSocialFab" class="absolute right-0 bottom-0 flex flex-col items-end gap-3">
+                    <a v-if="store.facebook_url" :href="store.facebook_url" target="_blank" class="w-11 h-11 rounded-full bg-white/70 backdrop-blur ring-1 ring-white/60 flex items-center justify-center shadow-2xl active:scale-95">
+                        <svg class="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" clip-rule="evenodd" /></svg>
+                    </a>
+                    <a v-if="store.instagram_url" :href="store.instagram_url" target="_blank" class="w-11 h-11 rounded-full bg-white/70 backdrop-blur ring-1 ring-white/60 flex items-center justify-center shadow-2xl active:scale-95">
+                        <svg class="w-5 h-5 text-pink-500" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.024.06 1.378.06 3.808s-.012 2.784-.06 3.808c-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.024.048-1.378.06-3.808.06s-2.784-.012-3.808-.06c-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.048-1.024-.06-1.378-.06-3.808s.012-2.784.06-3.808c.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 016.08 2.525c.636-.247 1.363-.416 2.427-.465C9.53 2.013 9.884 2 12.315 2zm-1.161 1.545a1.12 1.12 0 10-1.584 1.584 1.12 1.12 0 001.584-1.584zm-3.097 3.569a3.468 3.468 0 106.937 0 3.468 3.468 0 00-6.937 0z" clip-rule="evenodd" /><path d="M12 6.166a5.834 5.834 0 100 11.668 5.834 5.834 0 000-11.668zm0 1.545a4.289 4.289 0 110 8.578 4.289 4.289 0 010-8.578z" /></svg>
+                    </a>
+                    <a v-if="store.tiktok_url" :href="store.tiktok_url" target="_blank" class="w-11 h-11 rounded-full bg-white/70 backdrop-blur ring-1 ring-white/60 flex items-center justify-center shadow-2xl active:scale-95">
+                        <svg class="w-5 h-5 text-black" viewBox="0 0 24 24" fill="currentColor"><path d="M12.525.02c1.31-.02 2.61-.01 3.91.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.01-1.58-.31-3.15-.82-4.7-.52-1.56-1.23-3.04-2.1-4.42a.1.1 0 00-.2-.04c-.02.13-.03.26-.05.39v7.24a.26.26 0 00.27.27c.82.04 1.63.16 2.42.37.04.83.16 1.66.36 2.47.19.82.49 1.6.86 2.33.36.73.81 1.41 1.32 2.02-.17.1-.34.19-.51.28a4.26 4.26 0 01-1.93.52c-1.37.04-2.73-.06-4.1-.23a9.8 9.8 0 01-3.49-1.26c-.96-.54-1.8-1.23-2.52-2.03-.72-.8-1.3-1.7-1.77-2.69-.47-.99-.8-2.06-1.02-3.13a.15.15 0 01.04-.15.24.24 0 01.2-.09c.64-.02 1.28-.04 1.92-.05.1 0 .19-.01.28-.01.07.01.13.02.2.04.19.04.38.09.57.14a5.2 5.2 0 005.02-5.22v-.02a.23.23 0 00-.23-.23.2.2 0 00-.2-.02c-.83-.06-1.66-.13-2.49-.22-.05-.01-.1-.01-.15-.02-1.12-.13-2.25-.26-3.37-.44a.2.2 0 01-.16-.24.22.22 0 01.23-.18c.41-.06.82-.12 1.23-.18C9.9.01 11.21 0 12.525.02z"/></svg>
+                    </a>
+                </div>
+            </transition>
+            <button @click="showSocialFab = !showSocialFab" class="w-12 h-12 rounded-full bg-white/70 backdrop-blur ring-1 ring-white/60 text-gray-800 flex items-center justify-center shadow-2xl active:scale-95">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 5.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM13.5 19a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z"/></svg>
+            </button>
+        </div>
+    </div>
     <AlertModal
         :show="showVariantAlert"
         type="error"
