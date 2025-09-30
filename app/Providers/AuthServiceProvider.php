@@ -30,6 +30,10 @@ class AuthServiceProvider extends ServiceProvider
             if ($user->is_admin) {
                 return true;
             }
+            // Los administradores de tienda tienen acceso total a las áreas del panel
+            if (method_exists($user, 'hasRole') && $user->hasRole('Administrador')) {
+                return true;
+            }
         });
     }
 }

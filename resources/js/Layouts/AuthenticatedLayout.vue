@@ -12,6 +12,9 @@ const showingNavigationDropdown = ref(false);
 const store = usePage().props.auth.user.store;
 const can = (perm) => {
   const p = usePage().props.auth?.permissions || [];
+  const roles = usePage().props.auth?.roles || [];
+  const isStoreAdmin = Array.isArray(roles) && roles.includes('Administrador');
+  if (isStoreAdmin) return true; // Rol Administrador ve todo (excepto SuperStores que depende de is_admin)
   return Array.isArray(p) && p.includes(perm);
 };
 </script>
