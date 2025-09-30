@@ -9,7 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role as SpatieRole;
+use App\Models\Role;
+use Spatie\Permission\Models\Permission;
 
 class StoreController extends Controller
 {
@@ -56,9 +57,14 @@ class StoreController extends Controller
         $owner->store_id = $store->id;
         $owner->save();
 
-        // Asignar rol Administrador (para que vea el panel completo)
-        $adminRole = SpatieRole::firstOrCreate(['name' => 'Administrador']);
-        $owner->assignRole($adminRole);
+        // Crear/obtener rol Administrador de la tienda y asignarle todos los permisos
+        $adminRole = Role::firstOrCreate([
+            'name' => 'Administrador',
+            'store_id' => $store->id,
+            'guard_name' => config('auth.defaults.guard', 'web'),
+        ]);
+        $adminRole->syncPermissions(Permission::all());
+        $owner->assignRole($adminRole->name);
 
         return redirect()->route('super.stores.index');
     }
