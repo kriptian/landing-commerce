@@ -25,6 +25,7 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\CartController; // Este es global pero se usa en rutas auth
+use Illuminate\Support\Facades\Artisan;
 
 /*
 |--------------------------------------------------------------------------
@@ -118,3 +119,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/auth.php';
+
+Route::get('/crear-link-de-almacenamiento', function () {
+    try {
+        Artisan::call('storage:link');
+        return '¡El link de almacenamiento se creó con éxito!';
+    } catch (\Exception $e) {
+        return 'Error al crear el link: ' . $e->getMessage();
+    }
+});
