@@ -80,6 +80,37 @@ const isLowStock = (product) => {
         return false;
     }
 };
+
+const goToProduct = (product) => {
+    const href = props.store?.custom_domain
+        ? ((typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + props.store.custom_domain + '/producto/' + product.id)
+        : route('catalogo.show', { store: props.store.slug, product: product.id });
+    if (typeof window !== 'undefined') {
+        window.location.href = href;
+    }
+};
+
+const quickAddToCart = (product) => {
+    try {
+        // Si tiene variantes o no hay stock, llevamos al detalle para seleccionar opción
+        const hasVariants = Array.isArray(product?.variants) && product.variants.length > 0;
+        const quantity = Number(product?.quantity || 0);
+        if (hasVariants || quantity <= 0) {
+            goToProduct(product);
+            return;
+        }
+        router.post(route('cart.store'), {
+            product_id: product.id,
+            product_variant_id: null,
+            quantity: 1,
+        }, {
+            preserveScroll: true,
+        });
+    } catch (e) {
+        // En caso de cualquier problema, navegamos al detalle como fallback
+        goToProduct(product);
+    }
+};
 </script>
 
 <template>
@@ -156,9 +187,9 @@ const isLowStock = (product) => {
             </div>
         </div>
 
-        <div v-if="isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+        <div v-if="isLoading" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
             <div v-for="i in 6" :key="i" class="animate-pulse border rounded-xl shadow-sm overflow-hidden bg-white">
-                <div class="w-full h-56 sm:h-60 bg-gray-200"></div>
+                <div class="w-full h-40 sm:h-48 md:h-56 bg-gray-200"></div>
                 <div class="p-4 space-y-3">
                     <div class="h-4 bg-gray-200 rounded w-3/4"></div>
                     <div class="h-6 bg-gray-200 rounded w-1/3"></div>
@@ -167,10 +198,10 @@ const isLowStock = (product) => {
             </div>
         </div>
 
-        <div v-else-if="products.data.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+        <div v-else-if="products.data.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
             <div v-for="product in products.data" :key="product.id" class="group border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
                 <div class="relative">
-                    <img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-56 sm:h-60 object-cover transform group-hover:scale-105 transition duration-300">
+                    <img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-40 sm:h-48 md:h-56 object-cover transform group-hover:scale-105 transition duration-300">
                     <!-- Solo banda diagonal (sin remate de esquina). La promo global de tienda tiene prioridad. -->
                     <div v-if="hasPromo(product)"
                          class="pointer-events-none select-none absolute inset-0 z-10">
@@ -188,9 +219,9 @@ const isLowStock = (product) => {
                     </span>
                 </div>
                 <div class="p-4 flex flex-col gap-3">
-                    <h3 class="text-lg font-semibold text-gray-900 line-clamp-2">{{ product.name }}</h3>
+                    <h3 class="text-base sm:text-lg font-semibold text-gray-900 line-clamp-2">{{ product.name }}</h3>
                     <div class="flex items-baseline gap-2">
-                        <p class="text-xl text-blue-600 font-extrabold">
+                        <p class="text-lg sm:text-xl text-blue-600 font-extrabold">
                             {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
                                 hasPromo(product) ? Math.round(product.price * (100 - promoPercent(product)) / 100) : product.price
                             ) }}
@@ -199,10 +230,18 @@ const isLowStock = (product) => {
                             {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
                         </p>
                     </div>
-                    <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/producto/' + product.id) : route('catalogo.show', { store: store.slug, product: product.id }))" class="mt-1 inline-flex items-center justify-center gap-2 w-full bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg text-center hover:bg-blue-700">
-                        Ver Detalles
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M13.5 4.5a.75.75 0 01.75-.75h6a.75.75 0 01.75.75v6a.75.75 0 01-1.5 0V6.31l-7.22 7.22a.75.75 0 11-1.06-1.06L18.44 5.25h-3.44a.75.75 0 01-.75-.75z"/><path d="M6 3.75A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25h12A2.25 2.25 0 0020.25 18v-5.25a.75.75 0 00-1.5 0V18c0 .414-.336.75-.75.75H6A.75.75 0 015.25 18V6c0-.414.336-.75.75-.75h5.25a.75.75 0 000-1.5H6z"/></svg>
-                    </Link>
+                    <div class="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button
+                            type="button"
+                            @click="quickAddToCart(product)"
+                            class="inline-flex items-center justify-center w-full border border-gray-300 text-gray-700 font-medium py-2.5 px-3 rounded-lg hover:bg-gray-50 transition">
+                            {{ (product.variants && product.variants.length > 0) ? 'Ver opciones' : 'Agregar al carrito' }}
+                        </button>
+                        <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/producto/' + product.id) : route('catalogo.show', { store: store.slug, product: product.id }))" class="inline-flex items-center justify-center gap-2 w-full bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg text-center hover:bg-blue-700">
+                            Ver
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M13.5 4.5a.75.75 0 01.75-.75h6a.75.75 0 01.75.75v6a.75.75 0 01-1.5 0V6.31l-7.22 7.22a.75.75 0 11-1.06-1.06L18.44 5.25h-3.44a.75.75 0 01-.75-.75z"/><path d="M6 3.75A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25h12A2.25 2.25 0 0020.25 18v-5.25a.75.75 0 00-1.5 0V18c0 .414-.336.75-.75.75H6A.75.75 0 015.25 18V6c0-.414.336-.75.75-.75h5.25a.75.75 0 000-1.5H6z"/></svg>
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>
