@@ -81,42 +81,13 @@ const isLowStock = (product) => {
     }
 };
 
-const goToProduct = (product) => {
-    const href = props.store?.custom_domain
-        ? ((typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + props.store.custom_domain + '/producto/' + product.id)
-        : route('catalogo.show', { store: props.store.slug, product: product.id });
-    if (typeof window !== 'undefined') {
-        window.location.href = href;
-    }
-};
-
-const quickAddToCart = (product) => {
-    try {
-        // Si tiene variantes o no hay stock, llevamos al detalle para seleccionar opción
-        const hasVariants = Array.isArray(product?.variants) && product.variants.length > 0;
-        const quantity = Number(product?.quantity || 0);
-        if (hasVariants || quantity <= 0) {
-            goToProduct(product);
-            return;
-        }
-        router.post(route('cart.store'), {
-            product_id: product.id,
-            product_variant_id: null,
-            quantity: 1,
-        }, {
-            preserveScroll: true,
-        });
-    } catch (e) {
-        // En caso de cualquier problema, navegamos al detalle como fallback
-        goToProduct(product);
-    }
-};
+// (El botón de acción en la tarjeta redirige directamente al detalle del producto)
 </script>
 
 <template>
     <Head :title="`Catálogo de ${store.name}`" />
 
-    <header class="bg-white shadow-sm sticky top-0 z-10">
+    <header class="bg-white shadow-sm sticky top-0 z-50">
         <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
             <div class="flex items-center space-x-4">
                 <img v-if="store.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-10 w-10 rounded-full object-cover">
@@ -135,7 +106,6 @@ const quickAddToCart = (product) => {
                 <div class="border-l h-6 border-gray-300"></div>
                 <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/cart') : route('cart.index', { store: store.slug }))" class="relative flex items-center px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
                     <span>🛒</span>
-                    <span class="ml-2 font-semibold">Carrito</span>
                     <span v-if="$page.props.cart.count > 0" class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
                         {{ $page.props.cart.count }}
                     </span>
@@ -230,13 +200,7 @@ const quickAddToCart = (product) => {
                             {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
                         </p>
                     </div>
-                    <div class="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <button
-                            type="button"
-                            @click="quickAddToCart(product)"
-                            class="inline-flex items-center justify-center w-full border border-gray-300 text-gray-700 font-medium py-2.5 px-3 rounded-lg hover:bg-gray-50 transition">
-                            {{ (product.variants && product.variants.length > 0) ? 'Ver opciones' : 'Agregar al carrito' }}
-                        </button>
+                    <div class="mt-1">
                         <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/producto/' + product.id) : route('catalogo.show', { store: store.slug, product: product.id }))" class="inline-flex items-center justify-center gap-2 w-full bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg text-center hover:bg-blue-700">
                             Ver
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M13.5 4.5a.75.75 0 01.75-.75h6a.75.75 0 01.75.75v6a.75.75 0 01-1.5 0V6.31l-7.22 7.22a.75.75 0 11-1.06-1.06L18.44 5.25h-3.44a.75.75 0 01-.75-.75z"/><path d="M6 3.75A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25h12A2.25 2.25 0 0020.25 18v-5.25a.75.75 0 00-1.5 0V18c0 .414-.336.75-.75.75H6A.75.75 0 015.25 18V6c0-.414.336-.75.75-.75h5.25a.75.75 0 000-1.5H6z"/></svg>
@@ -265,7 +229,5 @@ const quickAddToCart = (product) => {
         </div>
     </footer>
 
-    <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/cart') : route('cart.index', { store: store.slug }))" class="fixed bottom-6 right-6 inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-4 py-3 rounded-full shadow-lg hover:bg-blue-700">
-        <span>Ver Carrito</span>
-    </Link>
+    
 </template>

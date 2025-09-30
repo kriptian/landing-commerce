@@ -128,7 +128,7 @@ const getVariantDisplayPrices = (variant) => {
 <template>
     <Head :title="product.name" />
 
-    <header class="bg-white shadow-sm sticky top-0 z-10">
+    <header class="bg-white shadow-sm sticky top-0 z-50">
         <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
             <div class="flex items-center space-x-4">
                 <img v-if="store.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-10 w-10 rounded-full object-cover">
@@ -137,7 +137,6 @@ const getVariantDisplayPrices = (variant) => {
             
             <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/cart') : route('cart.index', { store: store.slug }))" class="relative flex items-center px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
                 <span>🛒</span>
-                <span class="ml-2 font-semibold">Carrito</span>
                 <span v-if="$page.props.cart.count > 0" class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
                     {{ $page.props.cart.count }}
                 </span>
@@ -258,9 +257,7 @@ const getVariantDisplayPrices = (variant) => {
         @close="showVariantAlert=false"
     />
 
-    <Link :href="(store.custom_domain ? ( (typeof window !== 'undefined' ? window.location.protocol : 'https:') + '//' + store.custom_domain + '/cart') : route('cart.index', { store: store.slug }))" class="fixed bottom-6 right-6 inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-4 py-3 rounded-full shadow-lg hover:bg-blue-700">
-        <span>Ver Carrito</span>
-    </Link>
+    
 
     <footer class="bg-white mt-16 border-t">
         <div class="container mx-auto px-6 py-4 text-center text-gray-500">
