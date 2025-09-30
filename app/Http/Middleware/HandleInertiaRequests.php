@@ -41,6 +41,10 @@ class HandleInertiaRequests extends Middleware
                 'roles' => $request->user()
                     ? $request->user()->roles->pluck('name')->values()->toArray()
                     : [],
+                // Flag explícito para súper admin real (por email de entorno)
+                'isSuperAdmin' => $request->user()
+                    ? strcasecmp($request->user()->email, (string) config('app.super_admin_email', env('SUPER_ADMIN_EMAIL')) ) === 0
+                    : false,
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

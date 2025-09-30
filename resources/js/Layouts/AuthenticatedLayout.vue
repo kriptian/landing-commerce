@@ -56,7 +56,7 @@ const can = (perm) => {
                                 <NavLink v-if="can('ver inventario')" :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">
                                     Inventario
                                 </NavLink>
-                                <NavLink v-if="$page.props.auth?.user?.is_admin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">
+                                <NavLink v-if="$page.props.auth?.isSuperAdmin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">
                                     SuperStores
                                 </NavLink>
                                 </div>
@@ -181,7 +181,7 @@ const can = (perm) => {
                         <ResponsiveNavLink :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">
                             Inventario
                         </ResponsiveNavLink>
-                        <ResponsiveNavLink v-if="$page.props.auth?.user?.is_admin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">
+                        <ResponsiveNavLink v-if="$page.props.auth?.isSuperAdmin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">
                             SuperStores
                         </ResponsiveNavLink>
                         </div>

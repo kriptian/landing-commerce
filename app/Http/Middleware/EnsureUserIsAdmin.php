@@ -15,9 +15,10 @@ class EnsureUserIsAdmin
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Si el usuario que hace la petición no está logueado O no es admin,
-        // le negamos el acceso con un error 403.
-        if (! $request->user() || ! $request->user()->is_admin) {
+        $user = $request->user();
+        // Solo el súper admin real puede acceder (por email de entorno)
+        $superEmail = config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
+        if (! $user || strcasecmp($user->email, (string) $superEmail) !== 0) {
             abort(403, 'Acción no autorizada.');
         }
 
