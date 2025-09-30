@@ -55,6 +55,8 @@ class StoreController extends Controller
 
         // Asignar store_id al propietario
         $owner->store_id = $store->id;
+        // Marcamos como verificado para permitir acceso a rutas 'verified'
+        $owner->email_verified_at = now();
         $owner->save();
 
         // Crear/obtener rol Administrador de la tienda y asignarle todos los permisos
@@ -64,7 +66,10 @@ class StoreController extends Controller
             'guard_name' => config('auth.defaults.guard', 'web'),
         ]);
         $adminRole->syncPermissions(Permission::all());
-        $owner->assignRole($adminRole->name);
+        // Limpiamos la caché de permisos para asegurar que el frontend reciba permisos actualizados
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        // Asignamos el rol por instancia para evitar colisiones por nombre entre tiendas
+        $owner->assignRole($adminRole);
 
         return redirect()->route('super.stores.index');
     }
