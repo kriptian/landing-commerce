@@ -89,19 +89,20 @@ const deleteItem = () => {
         </div>
 
         <div v-else class="bg-white shadow rounded-lg overflow-hidden">
-            <table class="w-full">
+            <div class="overflow-x-auto">
+            <table class="min-w-[700px] w-full">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="p-4 text-left font-semibold text-gray-600">Producto</th>
-                        <th class="p-4 text-left font-semibold text-gray-600">Cantidad</th>
-                        <th class="p-4 text-left font-semibold text-gray-600">Precio Unit.</th>
-                        <th class="p-4 text-left font-semibold text-gray-600">Total</th>
-                        <th class="p-4 text-left font-semibold text-gray-600">Acciones</th>
+                        <th class="px-3 py-2 sm:p-4 text-left font-semibold text-gray-600">Producto</th>
+                        <th class="px-3 py-2 sm:p-4 text-left font-semibold text-gray-600">Cantidad</th>
+                        <th class="px-3 py-2 sm:p-4 text-left font-semibold text-gray-600">Precio Unit.</th>
+                        <th class="px-3 py-2 sm:p-4 text-left font-semibold text-gray-600">Total</th>
+                        <th class="px-3 py-2 sm:p-4 text-left font-semibold text-gray-600">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="item in cartItems" :key="item.id" class="border-t">
-                        <td class="p-4 flex items-center space-x-4">
+                        <td class="px-3 py-3 sm:p-4 flex items-center space-x-4">
                             <img :src="item.product.main_image_url" alt="product image" class="w-16 h-16 object-cover rounded">
                             <div>
                                 <p class="font-semibold">{{ item.product.name }}</p>
@@ -112,14 +113,14 @@ const deleteItem = () => {
                                 </div>
                             </div>
                         </td>
-                        <td class="p-4 text-gray-700">{{ item.quantity }}</td>
-                        <td class="p-4 text-gray-700">
+                        <td class="px-3 py-3 sm:p-4 text-gray-700">{{ item.quantity }}</td>
+                        <td class="px-3 py-3 sm:p-4 text-gray-700">
                             {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(item.variant?.price ?? item.product.price) }}
                         </td>
-                        <td class="p-4 text-gray-700">
+                        <td class="px-3 py-3 sm:p-4 text-gray-700">
                             {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format((item.variant?.price ?? item.product.price) * item.quantity) }}
                         </td>
-                        <td class="p-4">
+                        <td class="px-3 py-3 sm:p-4">
                             <button @click="confirmItemDeletion(item.id)" class="text-red-600 hover:underline">
                                 Eliminar
                             </button>
@@ -127,10 +128,11 @@ const deleteItem = () => {
                     </tr>
                 </tbody>
             </table>
+            </div>
 
-            <div class="p-6 bg-gray-50 border-t flex justify-end">
+            <div class="p-4 sm:p-6 bg-gray-50 border-t flex justify-end">
                 <div class="text-right">
-                    <p class="text-xl font-bold text-gray-900">
+                    <p class="text-lg sm:text-xl font-bold text-gray-900">
                         Total: {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalPrice) }}
                     </p>
                     <Link :href="route('checkout.index', { store: store.slug })" class="inline-block mt-4 w-full bg-green-600 text-white font-bold py-2 px-4 rounded text-center hover:bg-green-700">

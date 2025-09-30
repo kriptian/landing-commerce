@@ -114,27 +114,30 @@ const deleteRole = () => {
                             </nav>
                         </div>
 
-                        <div v-if="activeTab === 'users'">
-                            <table class="min-w-full divide-y divide-gray-200">
+                        <div v-if="activeTab === 'users'" class="overflow-x-auto">
+                            <table class="min-w-[720px] w-full divide-y divide-gray-200 table-auto">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
                                         <th class="relative px-6 py-3"><span class="sr-only">Acciones</span></th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     <tr v-for="user in users" :key="user.id">
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ user.name }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ user.email }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
+                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ user.name }}</td>
+                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ user.email }}</td>
+                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                                             <span v-if="user.roles.length > 0" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                                                 {{ user.roles[0].name }}
                                             </span>
                                         </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <Link :href="route('admin.users.edit', user.id)" class="text-indigo-600 hover:text-indigo-900">Editar</Link>
+                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <Link :href="route('admin.users.edit', user.id)" class="text-indigo-600 hover:text-indigo-900 inline-flex items-center gap-1">
+                                                <svg class="w-5 h-5 sm:hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16.862 3.487a2.25 2.25 0 113.182 3.182L9.428 17.284a3.75 3.75 0 01-1.582.992l-2.685.805a.75.75 0 01-.93-.93l.805-2.685a3.75 3.75 0 01.992-1.582L16.862 3.487z"/><path d="M15.75 4.5l3.75 3.75"/></svg>
+                                                <span class="hidden sm:inline">Editar</span>
+                                            </Link>
                                             
                                             <button
                                                 v-if="user.id !== loggedInUser.id"
@@ -149,19 +152,22 @@ const deleteRole = () => {
                             </table>
                         </div>
 
-                        <div v-if="activeTab === 'roles'">
-                            <table class="min-w-full divide-y divide-gray-200">
+                        <div v-if="activeTab === 'roles'" class="overflow-x-auto">
+                            <table class="min-w-[520px] w-full divide-y divide-gray-200 table-auto">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre del Rol</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre del Rol</th>
                                         <th class="relative px-6 py-3"><span class="sr-only">Acciones</span></th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     <tr v-for="role in roles" :key="role.id">
-                                        <td class="px-6 py-4 whitespace-nowrap">{{ role.name }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <Link :href="route('admin.roles.edit', role.id)" class="text-indigo-600 hover:text-indigo-900">Editar</Link>
+                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ role.name }}</td>
+                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <Link :href="route('admin.roles.edit', role.id)" class="text-indigo-600 hover:text-indigo-900 inline-flex items-center gap-1">
+                                                <svg class="w-5 h-5 sm:hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16.862 3.487a2.25 2.25 0 113.182 3.182L9.428 17.284a3.75 3.75 0 01-1.582.992l-2.685.805a.75.75 0 01-.93-.93l.805-2.685a3.75 3.75 0 01.992-1.582L16.862 3.487z"/><path d="M15.75 4.5l3.75 3.75"/></svg>
+                                                <span class="hidden sm:inline">Editar</span>
+                                            </Link>
                                             
                                             <button
                                                 @click="confirmRoleDeletion(role.id)"
