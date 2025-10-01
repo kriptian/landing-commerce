@@ -60,6 +60,10 @@ Route::get('/tienda/{store:slug}/cart', [CartController::class, 'index'])->name(
 Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
 Route::delete('/guest-cart/{key}', [CartController::class, 'destroyGuest'])->name('cart.guest.destroy');
 
+// Checkout público (no requiere autenticación)
+Route::get('/tienda/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
+Route::post('/tienda/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+
 // Rutas Privadas (que requieren autenticación)
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', function (Request $request) {
@@ -95,9 +99,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // Checkout (puede permanecer bajo login)
-    Route::get('/tienda/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
-    Route::post('/tienda/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+    // (Checkout quedó público)
 
     // Panel de Administración (acceso según permisos por tienda)
     Route::prefix('admin')->name('admin.')->group(function () {
