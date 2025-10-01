@@ -71,7 +71,7 @@ const isLowStock = (product) => {
                 return stock > 0 && stock <= alert;
             });
         }
-        // Sin variantes: usamos quantity y minimum_stock del producto
+        // Sin variantes: usamos quantity y alert del producto
         const qty = Number(product?.quantity || 0);
         const alert = Number(product?.alert) || 0;
         if (alert <= 0) return false;
@@ -203,7 +203,7 @@ const fabItems = computed(() => {
                     </span>
                     <span v-else-if="isLowStock(product)"
                           class="absolute top-3 left-3 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">
-                        Bajo stock
+                        ¡Pocas unidades!
                     </span>
                 </div>
                 <div class="p-4 flex flex-col gap-3">

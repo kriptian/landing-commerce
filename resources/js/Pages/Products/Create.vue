@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue'; 
+import { nextTick, ref, computed, watch } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 
 const props = defineProps({
@@ -28,7 +28,8 @@ const form = useForm({
     name: '',
     price: '',
     quantity: 0,
-    minimum_stock: 0, // Solo lectura: se calculará como la suma de mínimos de variantes
+    minimum_stock: 0,
+    alert: null,
     category_id: null, 
     short_description: '',
     long_description: '',
@@ -55,54 +56,37 @@ const removeVariant = (index) => {
 
 // --- Lógica de Stock Total (Sigue igual) ---
 const totalQuantity = computed(() => {
-    if (form.variants.length === 0) return 0;
-    let total = 0;
-    form.variants.forEach(variant => {
-        total += Number(variant.stock) || 0;
-    });
-    return total;
+    if (form.variants.length === 0) return Number(form.quantity) || 0;
+    return form.variants.reduce((t, v) => t + (Number(v.stock) || 0), 0);
 });
 watch(totalQuantity, (newTotal) => {
-    form.quantity = newTotal;
+    if (form.variants.length > 0) form.quantity = newTotal;
 });
 // --- FIN Lógica Stock ---
 
 
 // ===== LÓGICA NUEVA PARA SUMAR EL STOCK MÍNIMO =====
 const totalMinimumStock = computed(() => {
-    let total = 0;
-    form.variants.forEach(variant => {
-        total += Number(variant.minimum_stock) || 0;
-    });
-    return total;
+    if (form.variants.length === 0) return Number(form.minimum_stock) || 0;
+    return form.variants.reduce((t, v) => t + (Number(v.minimum_stock) || 0), 0);
 });
 
-// Mantener el mínimo en stock siempre sincronizado con la suma de variantes
-watch(totalMinimumStock, (newTotal) => {
-    form.minimum_stock = newTotal;
-});
-// ===================================================
-
-// ===== REGLA: El stock actual de cada variante no puede ser mayor que el mínimo =====
-watch(
-    () => form.variants,
-    (variants) => {
-        variants.forEach((variant) => {
-            const currentStock = Number(variant.stock) || 0;
-            const minAllowedStock = Number(variant.minimum_stock) || 0;
-            // Capamos el stock actual para que no supere el mínimo
-            if (currentStock > minAllowedStock) {
-                variant.stock = minAllowedStock;
-            }
-        });
-    },
-    { deep: true }
-);
-// ==============================================================================
+// Quitamos la regla que limitaba stock actual <= stock mínimo
 
 
 const submit = () => {
     form.post(route('admin.products.store'), {
+        preserveScroll: true,
+        onError: async () => {
+            // Llevar el foco/scroll al primer error y dejar claro qué falta
+            await nextTick();
+            const firstErrorField = Object.keys(form.errors)[0];
+            const el = document.getElementById(firstErrorField);
+            if (el && typeof el.scrollIntoView === 'function') {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.focus?.();
+            }
+        },
         onSuccess: () => {
             showSaved.value = true;
             form.reset();
@@ -141,16 +125,19 @@ const submit = () => {
                                     <p class="text-xs text-gray-500 mb-4">
                                         Si creas variantes, estos totales se calcularán solos.
                                     </p>
-                                    <div class="grid grid-cols-2 gap-4">
+                                    <div v-if="form.variants.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div>
                                             <label for="quantity" class="block font-medium text-sm text-gray-700">Inventario (Total)</label>
                                             <input 
                                                 id="quantity" 
                                                 v-model="form.quantity" 
                                                 type="number" 
-                                                class="block mt-1 w-full rounded-md shadow-sm border-gray-300 bg-gray-100" 
-                                                disabled  
+                                                class="block mt-1 w-full rounded-md shadow-sm border-gray-300" 
+                                                :class="{ 'bg-gray-100': form.variants.length > 0 }"
+                                                :disabled="form.variants.length > 0"  
                                             />
+                                            <p v-if="form.errors.quantity" class="mt-1 text-sm text-red-600">{{ form.errors.quantity }}</p>
+                                            <p v-else class="text-xs text-gray-500 mt-1">Stock si no hay variantes.</p>
                                         </div>
                                         <div>
                                             <label for="minimum_stock" class="block font-medium text-sm text-gray-700">Mínimo en Stock</label>
@@ -158,9 +145,24 @@ const submit = () => {
                                                 id="minimum_stock" 
                                                 v-model="form.minimum_stock" 
                                                 type="number" 
-                                                class="block mt-1 w-full rounded-md shadow-sm border-gray-300 bg-gray-100"
-                                                disabled
+                                                class="block mt-1 w-full rounded-md shadow-sm border-gray-300"
+                                                :class="{ 'bg-gray-100': form.variants.length > 0 }"
+                                                :disabled="form.variants.length > 0"
                                             />
+                                            <p v-if="form.errors.minimum_stock" class="mt-1 text-sm text-red-600">{{ form.errors.minimum_stock }}</p>
+                                            <p v-else class="text-xs text-gray-500 mt-1">Alerta de bajo stock (general).</p>
+                                        </div>
+                                        <div>
+                                            <label for="alert" class="block font-medium text-sm text-gray-700">Alerta (Opcional)</label>
+                                            <input 
+                                                id="alert" 
+                                                v-model="form.alert" 
+                                                type="number" 
+                                                class="block mt-1 w-full rounded-md shadow-sm border-gray-300"
+                                                :class="{ 'bg-gray-100': form.variants.length > 0 }"
+                                                :disabled="form.variants.length > 0"
+                                            />
+                                            <p class="text-xs text-gray-500 mt-1">Para producto único. Con variantes, usá las alertas por variante.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -182,6 +184,7 @@ const submit = () => {
                                             {{ subcategory.name }}
                                         </option>
                                     </select>
+                                    <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
                                 </div>
                             </div>
                             
@@ -239,8 +242,8 @@ const submit = () => {
                                         <input 
                                             type="number" 
                                             v-model="variant.stock"
-                                            :max="Number(variant.minimum_stock) || 0"
                                             class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                        <p v-if="form.errors[`variants.${index}.stock`]" class="mt-1 text-sm text-red-600">{{ form.errors[`variants.${index}.stock`] }}</p>
                                     </div>
                                     
                                     <div>
@@ -249,6 +252,7 @@ const submit = () => {
                                             type="number" 
                                             v-model="variant.minimum_stock" 
                                             class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                        <p v-if="form.errors[`variants.${index}.minimum_stock`]" class="mt-1 text-sm text-red-600">{{ form.errors[`variants.${index}.minimum_stock`] }}</p>
                                     </div>
 
                                     <div>
@@ -273,6 +277,7 @@ const submit = () => {
                                 <button type="submit" :disabled="form.processing" class="bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
                                     Guardar Producto
                                 </button>
+                                <span v-if="Object.keys(form.errors).length" class="ml-3 text-sm text-red-600">Por favor corrige los campos marcados.</span>
                             </div>
                         </form>
                     </div>

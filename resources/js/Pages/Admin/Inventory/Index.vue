@@ -19,7 +19,7 @@ const showStatusMenu = ref(false);
 const statuses = [
     { value: '', label: 'Todos' },
     { value: 'out_of_stock', label: 'Agotados' },
-    { value: 'low_stock', label: 'Bajo stock' },
+    { value: 'low_stock', label: '¡Pocas unidades!' },
 ];
 
 const statusLabel = computed(() => {
@@ -90,12 +90,12 @@ const matchesProductStatus = (product) => {
 // Función para determinar el estado del stock
 const getStockStatus = (item) => {
     const stock = Number(item.stock) || 0;
-    const threshold = Number(item.alert) || 0;
+    const threshold = Number(item.alert ?? item.minimum_stock) || 0;
     if (stock <= 0) {
         return { text: 'Agotado', class: 'bg-red-100 text-red-800' };
     }
     if (threshold > 0 && stock <= threshold) {
-        return { text: 'Bajo Stock', class: 'bg-yellow-100 text-yellow-800' };
+        return { text: '¡Pocas unidades!', class: 'bg-yellow-100 text-yellow-800' };
     }
     return { text: 'En Stock', class: 'bg-green-100 text-green-800' };
 };
@@ -180,8 +180,8 @@ const formatVariantOptions = (options) => {
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-500">{{ product.minimum_stock }}</td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                                      :class="getStockStatus({ stock: product.quantity, minimum_stock: product.minimum_stock }).class">
-                                                    {{ getStockStatus({ stock: product.quantity, minimum_stock: product.minimum_stock }).text }}
+                                                      :class="getStockStatus({ stock: product.quantity, alert: product.alert, minimum_stock: product.minimum_stock }).class">
+                                                    {{ getStockStatus({ stock: product.quantity, alert: product.alert, minimum_stock: product.minimum_stock }).text }}
                                                 </span>
                                             </td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-right text-sm font-medium">

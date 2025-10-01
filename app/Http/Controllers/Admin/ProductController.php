@@ -71,6 +71,7 @@ class ProductController extends Controller
             'price' => 'required|numeric|min:0',
             'quantity' => 'required|integer|min:0', 
             'minimum_stock' => 'required|integer|min:0', // <-- Nuevo
+            'alert' => 'nullable|integer|min:0',
             'category_id' => 'required|exists:categories,id',
             'short_description' => 'nullable|string|max:500',
             'long_description' => 'nullable|string',
@@ -99,6 +100,8 @@ class ProductController extends Controller
             $productData['quantity'] = collect($request->variants)->sum('stock');
             // También sumamos el inventario mínimo
             $productData['minimum_stock'] = collect($request->variants)->sum('minimum_stock');
+            // Si hay variantes, la alerta general no aplica
+            $productData['alert'] = null;
         }
         
         $product = $request->user()->store->products()->create($productData);
@@ -175,6 +178,7 @@ class ProductController extends Controller
             'price' => 'required|numeric|min:0',
             'quantity' => 'required|integer|min:0', 
             'minimum_stock' => 'required|integer|min:0', // <-- Nuevo
+            'alert' => 'nullable|integer|min:0',
             'category_id' => 'required|exists:categories,id',
             'short_description' => 'nullable|string|max:500',
             'long_description' => 'nullable|string',
@@ -222,6 +226,7 @@ class ProductController extends Controller
         if ($hasVariants) {
             $productData['quantity'] = collect($request->variants)->sum('stock');
             $productData['minimum_stock'] = collect($request->variants)->sum('minimum_stock');
+            $productData['alert'] = null;
         }
         
         $product->update($productData);
