@@ -73,12 +73,12 @@ class CartController extends Controller
         $product = Product::findOrFail($request->product_id);
         $variant = $request->product_variant_id ? ProductVariant::find($request->product_variant_id) : null;
 
-        // 2. Revisar el stock (ahora revisa la variante si existe)
+        // 2. Revisar el stock (ahora revisa la variante si existe). Si el producto no controla inventario y no tiene variantes, permitir libremente.
         $stockDisponible = 0;
         if ($variant) {
             $stockDisponible = $variant->stock;
         } else {
-            $stockDisponible = $product->quantity;
+            $stockDisponible = ($product->track_inventory === false) ? PHP_INT_MAX : $product->quantity;
         }
 
         if ($request->quantity > $stockDisponible) {

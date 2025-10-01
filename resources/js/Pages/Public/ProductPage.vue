@@ -35,6 +35,8 @@ const selectedVariant = computed(() => {
     return props.product.variants.find(v => v.id === selectedVariantId.value);
 });
 
+const isInventoryTracked = computed(() => props.product.track_inventory !== false);
+
 // Promociones: prioridad a la promo global de la tienda
 const storePromoActive = computed(() => {
     const percent = Number(store.value?.promo_discount_percent || 0);
@@ -71,12 +73,17 @@ const displayStock = computed(() => {
     if (selectedVariant.value) {
         return selectedVariant.value.stock;
     }
+    if (!isInventoryTracked.value) return Number.POSITIVE_INFINITY;
     return props.product.variants.length > 0 ? 0 : props.product.quantity; 
 });
 
 const selectedQuantity = ref(1);
 
 const increaseQuantity = () => {
+    if (!isInventoryTracked.value && props.product.variants.length === 0) {
+        selectedQuantity.value++;
+        return;
+    }
     if (displayStock.value > 0 && selectedQuantity.value < displayStock.value) {
         selectedQuantity.value++;
     }
@@ -201,7 +208,7 @@ const getVariantDisplayPrices = (variant) => {
                                         {{ formatCOP(getVariantDisplayPrices(variant).original) }}
                                     </span>
                                 </div>
-                                <span class="text-sm font-medium" :class="{ 'text-red-600': variant.stock === 0, 'text-gray-600': variant.stock > 0 }">
+                                <span v-if="isInventoryTracked" class="text-sm font-medium" :class="{ 'text-red-600': variant.stock === 0, 'text-gray-600': variant.stock > 0 }">
                                     {{ variant.stock > 0 ? `${variant.stock} disponibles` : 'Agotado' }}
                                 </span>
                             </label>
@@ -210,19 +217,19 @@ const getVariantDisplayPrices = (variant) => {
                 </div>
                 
                 <div class="pt-4">
-                    <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-4">
                         <label class="font-semibold">Cantidad:</label>
                         <div class="flex items-center border rounded-md">
                             <button @click="decreaseQuantity" :disabled="!selectedVariant && product.variants.length > 0" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
                             <input type="number" v-model.number="selectedQuantity" class="w-16 text-center border-y-0 border-x" />
                             <button @click="increaseQuantity" :disabled="!selectedVariant && product.variants.length > 0" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-r-md disabled:opacity-50">+</button>
                         </div>
-                        <p v-if="selectedVariant || product.variants.length == 0" class="text-sm text-gray-600">({{ displayStock }} en stock)</p>
+                <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked" class="text-sm text-gray-600">({{ isFinite(displayStock) ? displayStock : '∞' }} en stock)</p>
                     </div>
 
                     <button 
                         @click="addToCart"
-                        :disabled="(product.variants.length > 0 && !selectedVariant) || displayStock === 0 || selectedQuantity > displayStock"
+                    :disabled="(product.variants.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
                         class="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:bg-blue-700">
                         {{ product.variants.length > 0 && !selectedVariant ? 'Selecciona una opción' : (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') }}
                     </button>

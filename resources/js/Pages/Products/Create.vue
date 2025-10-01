@@ -27,6 +27,7 @@ watch(selectedParentId, () => {
 const form = useForm({
     name: '',
     price: '',
+    track_inventory: true,
     quantity: 0,
     minimum_stock: 0,
     alert: null,
@@ -121,11 +122,15 @@ const submit = () => {
                                 </div>
 
                                 <div class="p-4 border rounded-md bg-gray-50">
+                                    <label class="inline-flex items-center gap-2 mb-3 select-none">
+                                        <input type="checkbox" v-model="form.track_inventory" class="rounded">
+                                        <span class="font-semibold">Controlar inventario</span>
+                                    </label>
                                     <h4 class="font-semibold text-gray-800 mb-2">Inventario General</h4>
                                     <p class="text-xs text-gray-500 mb-4">
                                         Si creas variantes, estos totales se calcularán solos.
                                     </p>
-                                    <div v-if="form.variants.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div v-if="form.track_inventory && form.variants.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div>
                                             <label for="quantity" class="block font-medium text-sm text-gray-700">Inventario (Total)</label>
                                             <input 

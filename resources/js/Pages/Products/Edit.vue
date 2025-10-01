@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -60,6 +60,7 @@ const form = useForm({
     _method: 'PUT', 
     name: props.product.name,
     price: props.product.price,
+    track_inventory: props.product.track_inventory ?? true,
     quantity: props.product.quantity,
     minimum_stock: props.product.minimum_stock, // <-- 2. CAMPO NUEVO EN EL FORM
     alert: props.product.alert ?? null,
@@ -79,6 +80,36 @@ const markImageForDeletion = (image) => {
     form.images_to_delete.push(image.id);
     currentImages.value = currentImages.value.filter(img => img.id !== image.id);
 };
+
+// ===== Galería en modal (para más de 4 imágenes) =====
+const showGalleryModal = ref(false);
+const currentImageIndex = ref(0);
+const isMobile = ref(false);
+function updateIsMobile() { isMobile.value = window.innerWidth < 768; }
+onMounted(() => { updateIsMobile(); window.addEventListener('resize', updateIsMobile); });
+onBeforeUnmount(() => window.removeEventListener('resize', updateIsMobile));
+
+const visibleCount = computed(() => isMobile.value ? 1 : 4);
+const visibleEditImages = computed(() => currentImages.value.slice(0, visibleCount.value));
+const hiddenEditImages = computed(() => currentImages.value.slice(visibleCount.value));
+
+function openGallery(startIndex = 0) {
+    currentImageIndex.value = startIndex;
+    showGalleryModal.value = true;
+}
+function closeGallery() { showGalleryModal.value = false; }
+function prevGallery() {
+    const n = currentImages.value.length; if (n === 0) return;
+    currentImageIndex.value = (currentImageIndex.value - 1 + n) % n;
+}
+function nextGallery() {
+    const n = currentImages.value.length; if (n === 0) return;
+    currentImageIndex.value = (currentImageIndex.value + 1) % n;
+}
+function setGalleryIndex(i) {
+    if (i < 0 || i >= currentImages.value.length) return;
+    currentImageIndex.value = i;
+}
 
 // --- Lógica de Añadir/Quitar Variantes (ajustada) ---
 const addVariant = () => {
@@ -171,7 +202,11 @@ const confirmSave = () => {
                                         <input id="price" v-model="form.price" type="number" step="0.01" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
                                     </div>
 
-                                    <div v-if="form.variants.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                    <label class="inline-flex items-center gap-2 mb-3 select-none">
+                                        <input type="checkbox" v-model="form.track_inventory" class="rounded">
+                                        <span class="font-semibold">Controlar inventario</span>
+                                    </label>
+                                    <div v-if="form.track_inventory && form.variants.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                          <div>
                                              <label for="quantity" class="block font-medium text-sm text-gray-700">Inventario (Total)</label>
                                              <input 
@@ -313,27 +348,51 @@ const confirmSave = () => {
                                 </button>
                             </div>
                             <div class="mt-6 border-t pt-6">
-                               <div class="mb-4 col-span-2">
-                                    <label class="block font-medium text-sm text-gray-700">Imágenes Actuales</label>
-                                    <div v-if="currentImages.length > 0" class="mt-2 grid grid-cols-3 md:grid-cols-5 gap-4">
-                                        <div v-for="image in currentImages" :key="image.id" class="relative group">
-                                            <img :src="image.path" class="rounded-md aspect-square object-cover">
-                                            <button @click.prevent="markImageForDeletion(image)" type="button" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div class="p-4 border rounded-md bg-gray-50 col-span-2">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <label class="block font-medium text-sm text-gray-700">Imágenes actuales</label>
+                                        <span class="text-xs text-gray-500">{{ currentImages.length }} imagen(es)</span>
+                                    </div>
+                                    <div v-if="currentImages.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                                        <div v-for="(image, idx) in visibleEditImages" :key="image.id" class="relative rounded-lg overflow-hidden border bg-white shadow-sm hover:shadow-md transition group cursor-pointer" @click="openGallery(idx)">
+                                            <img :src="image.path" class="w-full h-full aspect-[4/3] object-cover" alt="Imagen del producto">
+                                            <button @click.stop.prevent="markImageForDeletion(image)" type="button" class="absolute top-2 right-2 bg-red-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-md hover:bg-red-700">
                                                 &times;
                                             </button>
+                                        </div>
+                                        <div v-if="hiddenEditImages.length > 0" class="relative rounded-lg overflow-hidden border bg-white shadow-sm hover:shadow-md transition group cursor-pointer flex items-center justify-center text-gray-800 font-bold text-base h-full min-h-[90px]" @click="openGallery(visibleCount)">
+                                            +{{ hiddenEditImages.length }}
                                         </div>
                                     </div>
                                     <p v-else class="text-sm text-gray-500 mt-2">Este producto no tiene imágenes.</p>
                                 </div>
-                                <div class="mb-4 col-span-2">
+                                <div class="mt-4 col-span-2">
                                     <label for="new_gallery_files" class="block font-medium text-sm text-gray-700">Añadir más imágenes</label>
                                     <input 
                                         id="new_gallery_files" 
                                         @input="form.new_gallery_files = $event.target.files" 
                                         type="file" 
                                         multiple 
-                                        class="block mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                        class="block mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                                     >
+                                </div>
+                            </div>
+
+                            <!-- Modal Galería para ver/eliminar -->
+                            <div v-if="showGalleryModal" class="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center p-4" style="pointer-events: auto;" @click.self="closeGallery">
+                                <div class="bg-white rounded-lg p-4 w-full max-w-5xl max-h-[85vh] overflow-hidden relative" @click.stop>
+                                    <button type="button" class="absolute top-3 right-3 bg-gray-900 text-white rounded-full w-8 h-8 flex items-center justify-center z-30" @click.stop.prevent="closeGallery" @mousedown.stop.prevent>×</button>
+                                    <div class="relative flex items-center justify-center bg-gray-50 border rounded-lg h-[60vh] min-h-[320px] mb-3 select-none">
+                                        <button class="absolute left-2 bg-white/90 border rounded-full w-9 h-9 flex items-center justify-center z-20" @click.stop.prevent="prevGallery" @mousedown.stop.prevent>‹</button>
+                                        <img :src="currentImages[currentImageIndex]?.path" class="max-w-full max-h-full object-contain" alt="Imagen">
+                                        <button class="absolute right-2 bg-white/90 border rounded-full w-9 h-9 flex items-center justify-center z-20" @click.stop.prevent="nextGallery" @mousedown.stop.prevent>›</button>
+                                        <button v-if="currentImages[currentImageIndex]" class="absolute top-2 right-12 bg-red-600 text-white rounded px-2 py-1 text-xs z-20" type="button" @click.stop.prevent="markImageForDeletion(currentImages[currentImageIndex])" @mousedown.stop.prevent>Eliminar</button>
+                                    </div>
+                                    <div class="flex items-center gap-2 overflow-x-auto py-2">
+                                        <div v-for="(img, i) in currentImages" :key="img.id" class="border rounded p-1 cursor-pointer flex-shrink-0" :class="{ 'ring-2 ring-blue-500': i === currentImageIndex }" @click="setGalleryIndex(i)">
+                                            <img :src="img.path" class="w-20 h-20 object-cover rounded" alt="thumb">
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

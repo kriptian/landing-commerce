@@ -62,6 +62,7 @@ router.on('finish', () => { isLoading.value = false; });
 // Helper: bajo stock (sólo si existe umbral > 0)
 const isLowStock = (product) => {
     try {
+        if (product && product.track_inventory === false) return false;
         // Con variantes: si alguna variante tiene stock > 0 y existe umbral > 0, y stock <= umbral
         if (product?.variants?.length > 0) {
             return product.variants.some((v) => {
@@ -197,7 +198,7 @@ const fabItems = computed(() => {
                             PROMO {{ promoPercent(product) }}%
                         </div>
                     </div>
-                    <span v-if="((product.variants ? product.variants.length === 0 : true) && Number(product.quantity || 0) === 0)"
+                    <span v-if="(product.track_inventory !== false) && ((product.variants ? product.variants.length === 0 : true) && Number(product.quantity || 0) === 0)"
                           class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">
                         Agotado
                     </span>

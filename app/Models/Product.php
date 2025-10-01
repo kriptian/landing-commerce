@@ -14,6 +14,7 @@ class Product extends Model
     protected $fillable = [
         'name',
         'price',
+        'track_inventory',
         'quantity',
         'minimum_stock',
         'alert',
@@ -64,6 +65,7 @@ class Product extends Model
     {
         return [
             'gallery_images' => 'array',
+            'track_inventory' => 'boolean',
         ];
     }
 

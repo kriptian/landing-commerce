@@ -65,12 +65,13 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
-        // ===== 1. AÑADIMOS VALIDACIÓN PARA 'minimum_stock' =====
+        // ===== 1. AÑADIMOS VALIDACIÓN PARA 'track_inventory' y mínimos =====
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
-            'quantity' => 'required|integer|min:0', 
-            'minimum_stock' => 'required|integer|min:0', // <-- Nuevo
+            'track_inventory' => 'sometimes|boolean',
+            'quantity' => 'nullable|integer|min:0', 
+            'minimum_stock' => 'nullable|integer|min:0',
             'alert' => 'nullable|integer|min:0',
             'category_id' => 'required|exists:categories,id',
             'short_description' => 'nullable|string|max:500',
@@ -82,7 +83,7 @@ class ProductController extends Controller
             'variants.*.options_text' => 'required_with:variants|string',
             'variants.*.price' => 'nullable|numeric|min:0',
             'variants.*.stock' => 'required_with:variants|integer|min:0',
-            'variants.*.minimum_stock' => 'required_with:variants|integer|min:0', // <-- Nuevo para variantes
+            'variants.*.minimum_stock' => 'required_with:variants|integer|min:0',
             'variants.*.alert' => 'nullable|integer|min:0',
             'variants.*.alert' => 'nullable|integer|min:0',
         ]);
@@ -94,6 +95,16 @@ class ProductController extends Controller
         }
 
         $productData = collect($validated)->except(['gallery_files', 'variants'])->toArray(); 
+        // Si no se envía la bandera, considerar true por defecto
+        if (!array_key_exists('track_inventory', $productData)) {
+            $productData['track_inventory'] = true;
+        }
+        // Si no se controla inventario, normalizamos cantidades nulas
+        if (!$productData['track_inventory']) {
+            $productData['quantity'] = 0;
+            $productData['minimum_stock'] = 0;
+            $productData['alert'] = null;
+        }
         $hasVariants = $request->has('variants') && count($request->variants) > 0;
 
         if ($hasVariants) {
@@ -172,12 +183,13 @@ class ProductController extends Controller
             return back();
         }
 
-        // ===== 3. AÑADIMOS VALIDACIÓN PARA 'minimum_stock' EN UPDATE =====
+        // ===== 3. AÑADIMOS VALIDACIÓN PARA 'track_inventory' EN UPDATE =====
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
-            'quantity' => 'required|integer|min:0', 
-            'minimum_stock' => 'required|integer|min:0', // <-- Nuevo
+            'track_inventory' => 'sometimes|boolean',
+            'quantity' => 'nullable|integer|min:0', 
+            'minimum_stock' => 'nullable|integer|min:0',
             'alert' => 'nullable|integer|min:0',
             'category_id' => 'required|exists:categories,id',
             'short_description' => 'nullable|string|max:500',
@@ -192,7 +204,7 @@ class ProductController extends Controller
             'variants.*.options_text' => 'required_with:variants|string',
             'variants.*.price' => 'nullable|numeric|min:0',
             'variants.*.stock' => 'required_with:variants|integer|min:0',
-            'variants.*.minimum_stock' => 'required_with:variants|integer|min:0', // <-- Nuevo para variantes
+            'variants.*.minimum_stock' => 'required_with:variants|integer|min:0',
             'variants_to_delete' => 'nullable|array', 
             'variants_to_delete.*' => 'integer|exists:product_variants,id',
             // Campos de promoción (opcionales)
@@ -216,6 +228,9 @@ class ProductController extends Controller
         }
         
         $productData = $request->except(['_method', 'new_gallery_files', 'images_to_delete', 'variants', 'variants_to_delete']);
+        if (!array_key_exists('track_inventory', $productData)) {
+            $productData['track_inventory'] = $product->track_inventory ?? true;
+        }
 
         if (!empty($productData['specifications']) && is_string($productData['specifications'])) {
             $specArray = array_map('trim', explode(',', $productData['specifications']));
@@ -226,6 +241,12 @@ class ProductController extends Controller
         if ($hasVariants) {
             $productData['quantity'] = collect($request->variants)->sum('stock');
             $productData['minimum_stock'] = collect($request->variants)->sum('minimum_stock');
+            $productData['alert'] = null;
+        }
+        // Si NO se controla inventario, normalizamos cantidades
+        if (!$productData['track_inventory']) {
+            $productData['quantity'] = 0;
+            $productData['minimum_stock'] = 0;
             $productData['alert'] = null;
         }
         
