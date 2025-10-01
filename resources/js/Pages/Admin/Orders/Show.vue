@@ -1,12 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue'; // <-- Importamos ref
+import { computed, ref } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
-// --- Importamos los componentes del Modal ---
-import Modal from '@/Components/Modal.vue';
-import SecondaryButton from '@/Components/SecondaryButton.vue';
-import DangerButton from '@/Components/DangerButton.vue'; // DangerButton es el rojo
 
 const showInfo = ref(false);
 const infoTitle = ref('');
@@ -41,30 +37,28 @@ const statusForm = useForm({
 });
 
 const updateStatus = () => {
+    const newStatus = statusForm.status;
     statusForm.put(route('admin.orders.update', props.order.id), {
         preserveScroll: true,
-        onSuccess: () => { infoTitle.value = 'Estado actualizado'; infoMessage.value='El estado de la orden se guardó correctamente.'; showInfo.value = true; }
+        onSuccess: () => {
+            infoTitle.value = 'Estado actualizado';
+            infoMessage.value = 'El estado de la orden se guardó correctamente.';
+            showInfo.value = true;
+            if (newStatus === 'despachado' || newStatus === 'entregado') {
+                confirmAfterUpdate();
+            }
+        }
     });
 };
 // --- FIN Lógica de Estado ---
 
 
-// ===== LÓGICA NUEVA PARA CONFIRMAR VENTA CON MODAL =====
-const confirmingSale = ref(false);
-
-const openSaleModal = () => {
-    confirmingSale.value = true;
-};
-
-const closeSaleModal = () => {
-    confirmingSale.value = false;
-};
-
-const confirmOrder = () => {
+// ===== Confirmación automática post-estado =====
+const confirmAfterUpdate = () => {
     router.post(route('admin.orders.confirm', props.order.id), {}, {
         preserveScroll: true,
-        onSuccess: () => { infoTitle.value='Venta confirmada'; infoMessage.value='Inventario actualizado correctamente.'; showInfo.value=true; closeSaleModal(); },
-        onError: (errors) => { infoTitle.value='Error al confirmar'; infoMessage.value=Object.values(errors).join('\n'); showInfo.value=true; closeSaleModal(); }
+        onSuccess: () => { infoTitle.value='Venta confirmada'; infoMessage.value='Inventario actualizado correctamente.'; showInfo.value=true; },
+        onError: (errors) => { infoTitle.value='Error al confirmar'; infoMessage.value=Object.values(errors).join('\n'); showInfo.value=true; }
     });
 };
 // ==========================================================
@@ -72,7 +66,7 @@ const confirmOrder = () => {
 </script>
 
 <template>
-    <Head :title="`Orden #${order.id}`" />
+    <Head :title="`Orden #${order.sequence_number ?? order.id}`" />
 
     <AuthenticatedLayout>
         <template #header>
@@ -81,7 +75,7 @@ const confirmOrder = () => {
                     &larr; Volver a Órdenes
                 </Link>
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                    Detalle de la Orden #{{ order.id }}
+                    Detalle de la Orden #{{ order.sequence_number ?? order.id }}
                 </h2>
             </div>
         </template>
@@ -174,17 +168,7 @@ const confirmOrder = () => {
                             </div>
                     </div>
 
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                         <div class="p-6">
-                            <h3 class="text-lg font-semibold mb-4">Acciones Finales</h3>
-                            <button 
-                                @click="openSaleModal"
-                                :disabled="order.status !== 'entregado'"
-                                class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                                Confirmar Venta y Descontar Inventario
-                            </button>
-                         </div>
-                    </div>
+                    <!-- Botón verde eliminado: confirmación se ejecuta automáticamente desde 'Actualizar Estado' -->
                 </div>
 
             </div>

@@ -79,10 +79,28 @@ class OrderController extends Controller
             'status' => ['required', 'string', Rule::in(['recibido', 'en_preparacion', 'despachado', 'entregado', 'cancelado'])],
         ]);
 
+        // Guardamos el estado anterior para reglas posteriores
+        $previousStatus = $order->status;
+
         // Actualizamos la orden con el nuevo estado
         $order->update([
             'status' => $request->status,
         ]);
+
+        // Si se cambia a CANCELADO y antes estuvo en DESPACHADO o ENTREGADO,
+        // devolvemos el inventario de los items
+        if ($request->status === 'cancelado' && in_array($previousStatus, ['despachado', 'entregado'])) {
+            DB::transaction(function () use ($order) {
+                $order->load('items.variant', 'items.product');
+                foreach ($order->items as $item) {
+                    if ($item->variant) {
+                        $item->variant->increment('stock', $item->quantity);
+                    } elseif ($item->product) {
+                        $item->product->increment('quantity', $item->quantity);
+                    }
+                }
+            });
+        }
 
         // Regresamos a la página anterior
         return back();
@@ -100,10 +118,10 @@ class OrderController extends Controller
             abort(403);
         }
 
-        // Regla de negocio: solo permitir confirmar y descontar inventario
-        // cuando la orden está en estado 'entregado'.
-        if ($order->status !== 'entregado') {
-            return back()->withErrors(['confirmation' => 'Solo podés confirmar y descontar inventario cuando la orden está en estado ENTREGADO.']);
+        // Regla de negocio: permitir confirmar y descontar inventario
+        // cuando la orden está en estado 'despachado' o 'entregado'.
+        if (!in_array($order->status, ['despachado', 'entregado'])) {
+            return back()->withErrors(['confirmation' => 'Solo podés confirmar y descontar inventario cuando la orden está DESPACHADA o ENTREGADA.']);
         }
 
         try {
