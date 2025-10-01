@@ -18,17 +18,43 @@ class CartController extends Controller
      */
     public function index(Request $request, \App\Models\Store $store)
     {
-        $cartItems = $request->user()->cart()
-                        ->whereRelation('product', 'store_id', $store->id)
-                        // ===== ESTE ES EL CAMBIO =====
-                        // Ahora cargamos el producto Y la variante asociada
-                        ->with('product', 'variant') 
-                        ->get();
+        if (Auth::check()) {
+            $cartItems = $request->user()->cart()
+                            ->whereRelation('product', 'store_id', $store->id)
+                            ->with('product', 'variant') 
+                            ->get();
 
-                        return Inertia::render('Public/CartPage', [
-                            'cartItems' => $cartItems,
-                            'store' => $store,
-                        ]);
+            return Inertia::render('Public/CartPage', [
+                'cartItems' => $cartItems,
+                'store' => $store,
+            ]);
+        }
+
+        // Invitado: leer carrito desde sesión
+        $sessionCart = $request->session()->get('guest_cart', []); // [key => [product_id, product_variant_id, quantity]]
+        $items = [];
+        foreach ($sessionCart as $key => $row) {
+            $product = Product::with('images')->find($row['product_id']);
+            if (! $product || (int) $product->store_id !== (int) $store->id) {
+                continue;
+            }
+            $variant = null;
+            if (!empty($row['product_variant_id'])) {
+                $variant = ProductVariant::find($row['product_variant_id']);
+            }
+            $items[] = [
+                'id' => null,
+                'session_key' => $key,
+                'product' => $product,
+                'variant' => $variant,
+                'quantity' => (int) ($row['quantity'] ?? 1),
+            ];
+        }
+
+        return Inertia::render('Public/CartPage', [
+            'cartItems' => $items,
+            'store' => $store,
+        ]);
     }
 
     /**
@@ -50,10 +76,8 @@ class CartController extends Controller
         // 2. Revisar el stock (ahora revisa la variante si existe)
         $stockDisponible = 0;
         if ($variant) {
-            // Si es una variante, el stock es el de la variante
             $stockDisponible = $variant->stock;
         } else {
-            // Si es un producto simple (sin variantes), el stock es el general
             $stockDisponible = $product->quantity;
         }
 
@@ -61,41 +85,44 @@ class CartController extends Controller
             return back()->withErrors(['quantity' => 'No hay suficiente stock para esa variante.']);
         }
 
-        // 3. Lógica de guardado (LA PARTE CLAVE)
-        
-        // Construimos la consulta base para buscar el item
-        $cartQuery = Auth::user()->cart()->where('product_id', $request->product_id);
-
-        if ($variant) {
-            // Si hay variante, buscamos el item con ESA VARIANTE específica
-            $cartQuery->where('product_variant_id', $variant->id);
+        // 3. Lógica de guardado (usuarios autenticados vs invitados)
+        if (Auth::check()) {
+            // Usuario autenticado: persistimos en DB
+            $cartQuery = Auth::user()->cart()->where('product_id', $request->product_id);
+            if ($variant) {
+                $cartQuery->where('product_variant_id', $variant->id);
+            } else {
+                $cartQuery->whereNull('product_variant_id');
+            }
+            $cartItem = $cartQuery->first();
+            if ($cartItem) {
+                $cartItem->quantity = $request->quantity; 
+                $cartItem->save();
+            } else {
+                Auth::user()->cart()->create([
+                    'product_id' => $request->product_id,
+                    'product_variant_id' => $variant ? $variant->id : null,
+                    'quantity' => $request->quantity,
+                ]);
+            }
         } else {
-            // Si es producto simple, buscamos el que NO tenga variante
-            $cartQuery->whereNull('product_variant_id');
-        }
-
-        $cartItem = $cartQuery->first();
-
-        if ($cartItem) {
-            // Si ya lo tiene, solo actualizamos la cantidad
-            $cartItem->quantity = $request->quantity; 
-            $cartItem->save();
-        } else {
-            // Si es nuevo (ya sea producto simple o una variante nueva), lo creamos
-            Auth::user()->cart()->create([
-                'product_id' => $request->product_id,
-                'product_variant_id' => $variant ? $variant->id : null, // <-- Guardamos el ID de la variante
-                'quantity' => $request->quantity,
-            ]);
+            // Invitado: guardar en sesión
+            $session = $request->session();
+            $cart = $session->get('guest_cart', []);
+            $key = 'p'.$request->product_id.'-v'.($variant ? $variant->id : '0');
+            $cart[$key] = [
+                'product_id' => (int) $request->product_id,
+                'product_variant_id' => $variant ? (int) $variant->id : null,
+                'quantity' => (int) $request->quantity,
+            ];
+            $session->put('guest_cart', $cart);
         }
 
         return back();
     }
 
-
     /**
      * Elimina un item del carrito.
-     * (Esta función está perfecta como la tenías)
      */
     public function destroy(Cart $cart)
     {
