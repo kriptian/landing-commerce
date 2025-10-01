@@ -37,7 +37,11 @@ const closeModal = () => {
 };
 
 const deleteItem = () => {
-    router.delete(route('cart.destroy', itemToDelete.value), {
+    const isGuestKey = typeof itemToDelete.value === 'string' && itemToDelete.value.startsWith('p');
+    const url = isGuestKey
+        ? route('cart.guest.destroy', itemToDelete.value)
+        : route('cart.destroy', itemToDelete.value);
+    router.delete(url, {
         preserveScroll: true,
         onSuccess: () => {
             toast.success('Producto eliminado del carrito.');
@@ -92,7 +96,7 @@ const deleteItem = () => {
                     </tr>
                 </thead>
                 <tbody class="divide-y">
-                    <tr v-for="item in cartItems" :key="item.id" class="hover:bg-gray-50">
+                    <tr v-for="item in cartItems" :key="item.id ?? item.session_key" class="hover:bg-gray-50">
                         <td class="px-4 py-4 flex items-center space-x-4">
                             <img :src="item.product.main_image_url" alt="product image" class="w-16 h-16 object-cover rounded-md ring-1 ring-gray-200">
                             <div>
@@ -112,7 +116,7 @@ const deleteItem = () => {
                             {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format((item.variant?.price ?? item.product.price) * item.quantity) }}
                         </td>
                         <td class="px-4 py-4">
-                            <button @click="confirmItemDeletion(item.id)" class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-red-50 text-red-600 hover:bg-red-100 ring-1 ring-red-200">
+                            <button @click="confirmItemDeletion(item.id ?? item.session_key)" class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-red-50 text-red-600 hover:bg-red-100 ring-1 ring-red-200">
                                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3a1 1 0 00-1 1v1H4a1 1 0 100 2h1v12a2 2 0 002 2h10a2 2 0 002-2V7h1a1 1 0 100-2h-4V4a1 1 0 00-1-1H9zm2 4a1 1 0 112 0v10a1 1 0 11-2 0V7zm-4 0a1 1 0 112 0v10a1 1 0 11-2 0V7zm8 0a1 1 0 112 0v10a1 1 0 11-2 0V7z"/></svg>
                             </button>
                         </td>

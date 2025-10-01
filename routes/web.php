@@ -58,6 +58,7 @@ Route::get('/tienda/{store:slug}/producto/{product}', [PublicProductController::
 Route::post('/cart', [CartController::class, 'store'])->name('cart.store');
 Route::get('/tienda/{store:slug}/cart', [CartController::class, 'index'])->name('cart.index');
 Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
+Route::delete('/guest-cart/{key}', [CartController::class, 'destroyGuest'])->name('cart.guest.destroy');
 
 // Rutas Privadas (que requieren autenticación)
 Route::middleware(['auth', 'verified'])->group(function () {

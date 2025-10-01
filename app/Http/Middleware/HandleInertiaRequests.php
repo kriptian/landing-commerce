@@ -51,7 +51,15 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
             ],
             'cart' => [
-                'count' => Auth::check() ? Auth::user()->cart()->sum('quantity') : 0,
+                'count' => (function () use ($request) {
+                    if (Auth::check()) {
+                        return Auth::user()->cart()->sum('quantity');
+                    }
+                    $sessionCart = $request->session()->get('guest_cart', []);
+                    return collect($sessionCart)->sum(function ($row) {
+                        return (int) ($row['quantity'] ?? 0);
+                    });
+                })(),
             ],
             
             // ===== AQUÍ VA LA MAGIA NUEVA =====

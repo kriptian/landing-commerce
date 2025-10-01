@@ -132,4 +132,14 @@ class CartController extends Controller
         $cart->delete();
         return back();
     }
+
+    public function destroyGuest(Request $request, string $key)
+    {
+        $cart = $request->session()->get('guest_cart', []);
+        if (array_key_exists($key, $cart)) {
+            unset($cart[$key]);
+            $request->session()->put('guest_cart', $cart);
+        }
+        return back();
+    }
 }
