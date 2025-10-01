@@ -54,6 +54,11 @@ Route::get('/tiendas', function () {
 Route::get('/tienda/{store:slug}', [PublicProductController::class, 'index'])->name('catalogo.index');
 Route::get('/tienda/{store:slug}/producto/{product}', [PublicProductController::class, 'show'])->name('catalogo.show');
 
+// Carrito (público, basado en sesión)
+Route::post('/cart', [CartController::class, 'store'])->name('cart.store');
+Route::get('/tienda/{store:slug}/cart', [CartController::class, 'index'])->name('cart.index');
+Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
+
 // Rutas Privadas (que requieren autenticación)
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', function (Request $request) {
@@ -89,10 +94,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // Carrito y Checkout
-    Route::post('/cart', [CartController::class, 'store'])->name('cart.store');
-    Route::get('/tienda/{store:slug}/cart', [CartController::class, 'index'])->name('cart.index');
-    Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
+    // Checkout (puede permanecer bajo login)
     Route::get('/tienda/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
     Route::post('/tienda/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 
