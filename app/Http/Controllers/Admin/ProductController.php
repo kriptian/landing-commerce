@@ -82,8 +82,8 @@ class ProductController extends Controller
             'variants' => 'nullable|array',
             'variants.*.options_text' => 'required_with:variants|string',
             'variants.*.price' => 'nullable|numeric|min:0',
-            'variants.*.stock' => 'required_with:variants|integer|min:0',
-            'variants.*.minimum_stock' => 'required_with:variants|integer|min:0',
+            'variants.*.stock' => 'required_if:track_inventory,1|integer|min:0',
+            'variants.*.minimum_stock' => 'required_if:track_inventory,1|integer|min:0',
             'variants.*.alert' => 'nullable|integer|min:0',
             'variants.*.alert' => 'nullable|integer|min:0',
         ]);
@@ -203,8 +203,8 @@ class ProductController extends Controller
             'variants.*.id' => 'nullable|integer|exists:product_variants,id',
             'variants.*.options_text' => 'required_with:variants|string',
             'variants.*.price' => 'nullable|numeric|min:0',
-            'variants.*.stock' => 'required_with:variants|integer|min:0',
-            'variants.*.minimum_stock' => 'required_with:variants|integer|min:0',
+            'variants.*.stock' => 'required_if:track_inventory,1|integer|min:0',
+            'variants.*.minimum_stock' => 'required_if:track_inventory,1|integer|min:0',
             'variants_to_delete' => 'nullable|array', 
             'variants_to_delete.*' => 'integer|exists:product_variants,id',
             // Campos de promoción (opcionales)

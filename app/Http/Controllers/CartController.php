@@ -75,10 +75,13 @@ class CartController extends Controller
 
         // 2. Revisar el stock (ahora revisa la variante si existe). Si el producto no controla inventario y no tiene variantes, permitir libremente.
         $stockDisponible = 0;
-        if ($variant) {
+        if ($product->track_inventory === false) {
+            // Inventario desactivado: permitir libremente (con o sin variante)
+            $stockDisponible = PHP_INT_MAX;
+        } else if ($variant) {
             $stockDisponible = $variant->stock;
         } else {
-            $stockDisponible = ($product->track_inventory === false) ? PHP_INT_MAX : $product->quantity;
+            $stockDisponible = $product->quantity;
         }
 
         if ($request->quantity > $stockDisponible) {

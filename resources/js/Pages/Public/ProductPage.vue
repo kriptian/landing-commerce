@@ -1,7 +1,7 @@
 <script setup>
 import ProductGallery from '@/Components/Product/ProductGallery.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 
 const props = defineProps({
@@ -10,7 +10,19 @@ const props = defineProps({
 
 import { ref as vref } from 'vue';
 const showVariantAlert = vref(false);
-const selectedVariantId = ref(null);
+const selectedVariantIds = ref([]); // permitir seleccionar varias variantes
+
+// UI amigable cuando hay muchas variantes
+const isMobile = ref(false);
+const updateIsMobile = () => { isMobile.value = window.innerWidth < 768; };
+onMounted(() => { updateIsMobile(); window.addEventListener('resize', updateIsMobile); });
+onBeforeUnmount(() => window.removeEventListener('resize', updateIsMobile));
+const showAllVariants = ref(false);
+const showVariantsModal = ref(false);
+// Siempre mostrar máximo 3 en ambas versiones
+const visibleCount = computed(() => 3);
+const visibleVariants = computed(() => showAllVariants.value ? props.product.variants : props.product.variants.slice(0, visibleCount.value));
+const hiddenVariantsCount = computed(() => Math.max(0, (props.product.variants?.length || 0) - visibleCount.value));
 
 const store = computed(() => props.product.store);
 const showSocialFab = ref(false);
@@ -30,9 +42,11 @@ const socialLinks = computed(() => {
 
 const hasAnySocial = computed(() => socialLinks.value.length > 0);
 
+// Si hay exactamente una seleccionada, la tratamos como selección única
 const selectedVariant = computed(() => {
-    if (!selectedVariantId.value) return null;
-    return props.product.variants.find(v => v.id === selectedVariantId.value);
+    const ids = selectedVariantIds.value || [];
+    if (ids.length !== 1) return null;
+    return props.product.variants.find(v => v.id === ids[0]);
 });
 
 const isInventoryTracked = computed(() => props.product.track_inventory !== false);
@@ -95,7 +109,7 @@ const decreaseQuantity = () => {
     }
 };
 
-watch(selectedVariantId, () => {
+watch(selectedVariantIds, () => {
     selectedQuantity.value = 1;
 });
 
@@ -109,19 +123,24 @@ watch(selectedQuantity, (newQty) => {
 });
 
 const addToCart = () => {
-    if (props.product.variants.length > 0 && !selectedVariantId.value) {
+    // Si hay variantes, exigir al menos una selección
+    if (props.product.variants.length > 0 && selectedVariantIds.value.length === 0) {
         showVariantAlert.value = true;
         return;
     }
 
-    router.post(route('cart.store'), {
-        product_id: props.product.id,
-        product_variant_id: selectedVariantId.value,
-        quantity: selectedQuantity.value,
-    }, {
-        preserveScroll: true, 
-        onSuccess: () => {},
-        onError: () => {}
+    // Si hay múltiples seleccionadas, agregamos cada una con cantidad 1
+    const ids = props.product.variants.length > 0 ? selectedVariantIds.value : [null];
+    const qty = (ids.length === 1) ? selectedQuantity.value : 1;
+
+    ids.forEach((variantId) => {
+        router.post(route('cart.store'), {
+            product_id: props.product.id,
+            product_variant_id: variantId,
+            quantity: qty,
+        }, {
+            preserveScroll: true,
+        });
     });
 };
 
@@ -192,9 +211,9 @@ const getVariantDisplayPrices = (variant) => {
                 <div v-if="product.variants.length > 0" class="border-t pt-4">
                     <h3 class="text-xl font-semibold mb-3">Opciones Disponibles:</h3>
                     <div class="space-y-2">
-                        <div v-for="variant in product.variants" :key="variant.id">
-                            <label class="flex items-center p-4 border rounded-lg cursor-pointer" :class="{ 'border-blue-600 ring-2 ring-blue-300': selectedVariantId === variant.id }">
-                                <input type="radio" :value="variant.id" v-model="selectedVariantId" class="form-radio text-blue-600">
+                        <div v-for="variant in visibleVariants" :key="variant.id">
+                            <label class="flex items-center p-4 border rounded-lg cursor-pointer" :class="{ 'border-blue-600 ring-2 ring-blue-300': selectedVariantIds.includes(variant.id) }">
+                                <input type="checkbox" :value="variant.id" v-model="selectedVariantIds" class="form-checkbox text-blue-600">
                                 <div class="ml-4 flex-grow">
                                     <span class="font-semibold text-gray-800">
                                         <span v-for="(value, key) in variant.options" :key="key" class="mr-2">
@@ -213,6 +232,7 @@ const getVariantDisplayPrices = (variant) => {
                                 </span>
                             </label>
                         </div>
+                        <button v-if="hiddenVariantsCount > 0" type="button" class="text-sm text-blue-600 hover:text-blue-800" @click="showVariantsModal = true">Ver +{{ hiddenVariantsCount }} opciones</button>
                     </div>
                 </div>
                 
@@ -220,18 +240,18 @@ const getVariantDisplayPrices = (variant) => {
             <div class="flex items-center space-x-4">
                         <label class="font-semibold">Cantidad:</label>
                         <div class="flex items-center border rounded-md">
-                            <button @click="decreaseQuantity" :disabled="!selectedVariant && product.variants.length > 0" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
-                            <input type="number" v-model.number="selectedQuantity" class="w-16 text-center border-y-0 border-x" />
-                            <button @click="increaseQuantity" :disabled="!selectedVariant && product.variants.length > 0" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-r-md disabled:opacity-50">+</button>
+                            <button @click="decreaseQuantity" :disabled="(product.variants.length > 0 && selectedVariantIds.length !== 1)" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
+                            <input type="number" v-model.number="selectedQuantity" :disabled="(product.variants.length > 0 && selectedVariantIds.length !== 1)" class="w-16 text-center border-y-0 border-x disabled:bg-gray-100" />
+                            <button @click="increaseQuantity" :disabled="(product.variants.length > 0 && selectedVariantIds.length !== 1)" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-r-md disabled:opacity-50">+</button>
                         </div>
-                <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked" class="text-sm text-gray-600">({{ isFinite(displayStock) ? displayStock : '∞' }} en stock)</p>
+                <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked && selectedVariantIds.length <= 1" class="text-sm text-gray-600">({{ isFinite(displayStock) ? displayStock : '∞' }} en stock)</p>
                     </div>
 
                     <button 
                         @click="addToCart"
-                    :disabled="(product.variants.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
+                        :disabled="(product.variants.length > 0 && selectedVariantIds.length === 0) || (isInventoryTracked && selectedVariantIds.length === 1 && (displayStock === 0 || selectedQuantity > displayStock))"
                         class="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:bg-blue-700">
-                        {{ product.variants.length > 0 && !selectedVariant ? 'Selecciona una opción' : (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') }}
+                        {{ product.variants.length > 0 && selectedVariantIds.length === 0 ? 'Selecciona al menos una opción' : (isInventoryTracked && selectedVariantIds.length === 1 ? (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') : 'Agregar al Carrito') }}
                     </button>
                 </div>
                 
@@ -252,6 +272,41 @@ const getVariantDisplayPrices = (variant) => {
         </section>
 
     </main>
+
+    <!-- Modal de variantes (desktop) -->
+    <div v-if="showVariantsModal" class="fixed inset-0 bg-black/40 z-[1000] flex items-center justify-center p-4" @click.self="showVariantsModal = false">
+        <div class="bg-white rounded-lg w-full max-w-3xl max-h-[80vh] overflow-hidden shadow-xl" @click.stop>
+            <div class="flex items-center justify-between px-4 py-3 border-b">
+                <h4 class="font-semibold">Selecciona opciones</h4>
+                <button class="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center" @click="showVariantsModal = false">×</button>
+            </div>
+            <div class="p-4 overflow-y-auto pb-24" style="max-height: 65vh;">
+                <div class="space-y-2">
+                    <div v-for="variant in product.variants" :key="`modal-${variant.id}`">
+                        <label class="flex items-center p-4 border rounded-lg cursor-pointer" :class="{ 'border-blue-600 ring-2 ring-blue-300': selectedVariantIds.includes(variant.id) }">
+                            <input type="checkbox" :value="variant.id" v-model="selectedVariantIds" class="form-checkbox text-blue-600">
+                            <div class="ml-4 flex-grow">
+                                <span class="font-semibold text-gray-800">
+                                    <span v-for="(value, key) in variant.options" :key="key" class="mr-2">
+                                        <span class="font-normal">{{ key }}:</span> {{ value }}
+                                    </span>
+                                </span>
+                                <span class="ml-2 text-blue-600">({{ formatCOP(getVariantDisplayPrices(variant).current) }})</span>
+                                <span v-if="getVariantDisplayPrices(variant).original" class="ml-2 text-gray-400 line-through">{{ formatCOP(getVariantDisplayPrices(variant).original) }}</span>
+                            </div>
+                            <span v-if="isInventoryTracked" class="text-sm font-medium" :class="{ 'text-red-600': variant.stock === 0, 'text-gray-600': variant.stock > 0 }">
+                                {{ variant.stock > 0 ? `${variant.stock} disponibles` : 'Agotado' }}
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 px-4 py-3 border-t sticky bottom-0 bg-white">
+                <button class="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200" @click="showVariantsModal = false">Cerrar</button>
+                <button class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700" @click="showVariantsModal = false">Aplicar</button>
+            </div>
+        </div>
+    </div>
 
     <!-- FAB Social (móvil y desktop) -->
     <div v-if="hasAnySocial" class="fixed bottom-6 left-6 z-50">

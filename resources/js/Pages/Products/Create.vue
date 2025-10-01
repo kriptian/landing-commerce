@@ -212,17 +212,17 @@ const submit = () => {
                                 </div>
                             </div>
                             
-                            <div class="md:col-span-2 mt-6 border-t pt-6">
-                                <h3 class="text-lg font-medium text-gray-900">Inventario por Variantes</h3>
+                                <div class="md:col-span-2 mt-6 border-t pt-6">
+                                <h3 class="text-lg font-medium text-gray-900">Variantes del Producto</h3>
                                 <p class="text-sm text-gray-600 mb-4">
-                                    Añadí cada combinación como una variante separada. El inventario total de arriba será la suma de todas las variantes.
+                                    Añadí cada combinación como una variante separada.
                                 </p>
                                 <div class="hidden md:grid grid-cols-6 gap-4 mb-2 text-sm font-medium text-gray-600">
                                     <div class="col-span-2">Opciones (ej: Color:Rojo)</div>
                                     <div>Precio (Opcional)</div>
-                                    <div>Stock Actual</div>
-                                    <div>Stock Mínimo</div>
-                                    <div>Alerta (Opcional)</div>
+                                    <div v-if="form.track_inventory">Stock Actual</div>
+                                    <div v-if="form.track_inventory">Stock Mínimo</div>
+                                    <div v-if="form.track_inventory">Alerta (Opcional)</div>
                                 </div>
                                 <div v-for="(variant, index) in form.variants" :key="index" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-center mb-2">
                                     <div class="md:col-span-2">
@@ -242,7 +242,7 @@ const submit = () => {
                                             placeholder="Usa precio principal"
                                             class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
                                     </div>
-                                    <div>
+                                    <div v-if="form.track_inventory">
                                         <label class="block text-sm font-medium text-gray-700 md:hidden">Stock Actual</label>
                                         <input 
                                             type="number" 
@@ -251,7 +251,7 @@ const submit = () => {
                                         <p v-if="form.errors[`variants.${index}.stock`]" class="mt-1 text-sm text-red-600">{{ form.errors[`variants.${index}.stock`] }}</p>
                                     </div>
                                     
-                                    <div>
+                                    <div v-if="form.track_inventory">
                                         <label class="block text-sm font-medium text-gray-700 md:hidden">Stock Mínimo</label>
                                         <input 
                                             type="number" 
@@ -260,7 +260,7 @@ const submit = () => {
                                         <p v-if="form.errors[`variants.${index}.minimum_stock`]" class="mt-1 text-sm text-red-600">{{ form.errors[`variants.${index}.minimum_stock`] }}</p>
                                     </div>
 
-                                    <div>
+                                    <div v-if="form.track_inventory">
                                         <label class="block text-sm font-medium text-gray-700 md:hidden">Alerta (Opcional)</label>
                                         <input 
                                             type="number" 
