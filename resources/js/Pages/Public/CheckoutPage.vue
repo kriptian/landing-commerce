@@ -46,7 +46,11 @@ const submitOrder = () => {
 </script>
 
 <template>
-    <Head title="Finalizar Compra" />
+    <Head title="Finalizar Compra">
+        <template #default>
+            <link v-if="store?.logo_url" rel="icon" type="image/png" :href="store.logo_url">
+        </template>
+    </Head>
 
     <header class="bg-white shadow-sm sticky top-0">
         <nav class="container mx-auto px-6 py-4">

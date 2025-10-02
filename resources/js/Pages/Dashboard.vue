@@ -31,7 +31,11 @@ const copyUrl = async () => {
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head title="Dashboard">
+        <template #default>
+            <link rel="icon" type="image/png" href="/images/digitalsolution-logo.png">
+        </template>
+    </Head>
 
     <AuthenticatedLayout>
         <template #header>

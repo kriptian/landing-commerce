@@ -7,7 +7,11 @@ defineProps({
 </script>
 
 <template>
-    <Head title="Nuestras Tiendas" />
+    <Head title="Nuestras Tiendas">
+        <template #default>
+            <link rel="icon" type="image/png" href="/images/digitalsolution-logo.png">
+        </template>
+    </Head>
     <div class="bg-gray-100 min-h-screen">
         <header class="bg-white shadow-sm">
             <nav class="container mx-auto px-6 py-4">

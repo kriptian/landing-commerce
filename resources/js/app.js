@@ -10,10 +10,11 @@ import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 // --- 1. IMPORTAMOS NUESTRO COMPONENTE DE GALERÍA ---
 import ProductGallery from './Components/Product/ProductGallery.vue';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'Digitalsolution';
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    // Mostrar solo el título provisto por cada página (sin sufijo "- Laravel")
+    title: (title) => title,
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.vue`,
