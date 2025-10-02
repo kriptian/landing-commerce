@@ -5,6 +5,7 @@ const props = defineProps({
   type: { type: String, default: 'error' }, // 'success' | 'error' | 'warning' | 'info'
   title: { type: String, default: '' },
   message: { type: String, default: '' },
+  messages: { type: Array, default: () => [] },
   primaryText: { type: String, default: 'Aceptar' },
   secondaryText: { type: String, default: '' },
   primaryHref: { type: String, default: '' },
@@ -31,6 +32,9 @@ const iconClass = {
       </div>
       <h3 class="text-2xl font-bold text-gray-900">{{ title }}</h3>
       <p class="mt-2 text-sm text-gray-600" v-if="message">{{ message }}</p>
+      <ul v-if="messages && messages.length" class="mt-3 text-left list-disc list-inside text-sm text-gray-700 space-y-1">
+        <li v-for="(m, i) in messages" :key="i">{{ m }}</li>
+      </ul>
       <div class="mt-6 flex flex-col sm:flex-row justify-center gap-3">
         <a v-if="primaryHref" :href="primaryHref" target="_blank" class="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-full hover:bg-green-700 w-full sm:w-auto justify-center" @click="emit('primary')">{{ primaryText }}</a>
         <button v-else type="button" class="px-5 py-2.5 rounded-full border text-gray-700 hover:bg-gray-50 w-full sm:w-auto" @click="emit('primary')">{{ primaryText }}</button>

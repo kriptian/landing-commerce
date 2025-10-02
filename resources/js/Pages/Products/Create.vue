@@ -11,6 +11,37 @@ const props = defineProps({
 import { usePage } from '@inertiajs/vue3';
 const page = usePage();
 const showSaved = ref(page?.props?.flash?.success ? true : false);
+const showErrors = ref(false);
+const errorMessages = ref([]);
+
+// Validación previa en el navegador
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
+const onGalleryInput = (event) => {
+    const files = Array.from(event?.target?.files || []);
+    const msgs = [];
+    const validFiles = [];
+    for (const file of files) {
+        const isImage = (file?.type || '').startsWith('image/');
+        if (!isImage) {
+            msgs.push(`${file.name}: no es una imagen válida.`);
+            continue;
+        }
+        if (file.size > MAX_IMAGE_BYTES) {
+            msgs.push(`${file.name}: supera el límite de 2 MB.`);
+            continue;
+        }
+        validFiles.push(file);
+    }
+    if (msgs.length) {
+        errorMessages.value = ['Problemas con las imágenes seleccionadas:', ...msgs];
+        showErrors.value = true;
+        // Limpiar selección para evitar enviar archivos inválidos
+        if (event?.target) event.target.value = '';
+        form.gallery_files = [];
+        return;
+    }
+    form.gallery_files = validFiles;
+};
 
 // --- Lógica de menús dependientes (Sigue igual) ---
 const selectedParentId = ref(null); 
@@ -81,6 +112,19 @@ const submit = () => {
         onError: async () => {
             // Llevar el foco/scroll al primer error y dejar claro qué falta
             await nextTick();
+            // Construir mensajes legibles
+            const msgs = [];
+            for (const [key, val] of Object.entries(form.errors)) {
+                if (key.startsWith('gallery_files.') && String(val).includes('The gallery files.')) {
+                    msgs.push('Una o más imágenes superan el tamaño máximo permitido (2 MB) o no son válidas.');
+                } else if (key.startsWith('new_gallery_files.')) {
+                    msgs.push('Una o más imágenes nuevas superan el tamaño máximo permitido (2 MB) o no son válidas.');
+                } else {
+                    msgs.push(String(val));
+                }
+            }
+            errorMessages.value = msgs;
+            showErrors.value = msgs.length > 0;
             const firstErrorField = Object.keys(form.errors)[0];
             const el = document.getElementById(firstErrorField);
             if (el && typeof el.scrollIntoView === 'function') {
@@ -208,7 +252,8 @@ const submit = () => {
                                 </div>
                                 <div class="mb-4">
                                     <label for="gallery_files" class="block font-medium text-sm text-gray-700">Imágenes de la Galería</label>
-                                    <input @input="form.gallery_files = $event.target.files" type="file" multiple class="block mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                    <input id="gallery_files" @input="onGalleryInput($event)" type="file" multiple class="block mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                    <p class="mt-1 text-xs text-gray-500">Formatos de imagen y hasta 2 MB por archivo.</p>
                                 </div>
                             </div>
                             
@@ -298,5 +343,16 @@ const submit = () => {
         primary-text="Entendido"
         @primary="showSaved=false"
         @close="showSaved=false"
+    />
+
+    <AlertModal
+        :show="showErrors"
+        type="error"
+        title="No pudimos guardar el producto"
+        message="Revisá los siguientes puntos:"
+        :messages="errorMessages"
+        primary-text="Entendido"
+        @primary="showErrors=false"
+        @close="showErrors=false"
     />
 </template>
