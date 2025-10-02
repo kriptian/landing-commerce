@@ -6,7 +6,7 @@
 
         <title inertia>{{ config('app.name', 'Ondigitalsolution') }}</title>
         <link rel="icon" type="image/png" href="/images/digitalsolution-logo.png?v=4">
-        <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+        <link rel="shortcut icon" type="image/png" href="/images/digitalsolution-logo.png?v=4">
         <link rel="apple-touch-icon" href="/images/digitalsolution-logo.png?v=4">
 
         <!-- Primary Meta Tags -->
