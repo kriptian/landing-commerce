@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Models\Store;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 // Controladores Públicos
 use App\Http\Controllers\Public\ProductController as PublicProductController;
@@ -34,13 +35,25 @@ use Illuminate\Support\Facades\Artisan;
 */
 
 Route::get('/', function (Request $request) {
-    // Intento de resolver tienda por dominio personalizado
-    $host = $request->getHost();
-    $store = \App\Models\Store::where('custom_domain', $host)->first();
+    // Resolver tienda por dominio personalizado con normalización:
+    // - minúsculas
+    // - soportar con o sin "www."
+    $host = Str::lower($request->getHost());
+    $hostStripped = preg_replace('/^www\./', '', $host);
+
+    $store = \App\Models\Store::query()
+        ->whereIn('custom_domain', [
+            $host,
+            $hostStripped,
+            'www.' . $hostStripped,
+        ])
+        ->first();
+
     if ($store) {
         // Redirige 301 al catálogo público de esa tienda usando el slug
         return redirect()->route('catalogo.index', ['store' => $store->slug], 301);
     }
+
     // Si no hay dominio de tienda, mostrar la landing comercial
     return Inertia::render('Public/Landing');
 });
