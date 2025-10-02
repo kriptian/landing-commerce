@@ -41,7 +41,8 @@ Route::get('/', function (Request $request) {
         // Redirige 301 al catálogo público de esa tienda usando el slug
         return redirect()->route('catalogo.index', ['store' => $store->slug], 301);
     }
-    return redirect()->route('login');
+    // Si no hay dominio de tienda, mostrar la landing comercial
+    return Inertia::render('Public/Landing');
 });
 
 // Rutas Públicas de la Tienda
