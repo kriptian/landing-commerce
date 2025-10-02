@@ -69,22 +69,33 @@ const submit = () => {
 
             
 
-            <div class="mt-4 flex items-center justify-end">
-                <a
-                    href="https://wa.me/573208204198?text=Hola%20quiero%20crear%20mi%20propia%20tienda"
-                    target="_blank"
-                    rel="noopener"
-                    class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                >
-                    ¿Necesitás una tienda? Contactá a un asesor
-                </a>
+            <div class="mt-4 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <template v-if="canResetPassword">
+                        <Link
+                            :href="route('password.request')"
+                            class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                        >
+                            ¿Olvidaste tu contraseña?
+                        </Link>
+                    </template>
+
+                    <a
+                        href="https://wa.me/573208204198?text=Hola%20quiero%20crear%20mi%20propia%20tienda"
+                        target="_blank"
+                        rel="noopener"
+                        class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                        ¿Necesitás una tienda? Contactá a un asesor
+                    </a>
+                </div>
 
                 <PrimaryButton
                     class="ms-4"
                     :class="{ 'opacity-25': form.processing }"
                     :disabled="form.processing"
                 >
-                    Log in
+                    Iniciar sesión
                 </PrimaryButton>
             </div>
         </form>
