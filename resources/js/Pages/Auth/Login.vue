@@ -72,7 +72,7 @@ const submit = () => {
         <Head title="Iniciar sesión" />
 
                 <!-- Logo encima del título (en todas las vistas) -->
-                <img src="/images/digitalsolution-logo_2.png?v=1" alt="ondigitalsolution.com" class="block mx-auto mb-4 h-[135px] sm:h-[160px] lg:h-[200px] w-auto object-contain" />
+                <img src="/images/digitalsolution-logo.png?v=4" alt="ondigitalsolution.com" class="block mx-auto mb-4 h-[135px] sm:h-[160px] lg:h-[200px] w-auto object-contain" />
 
                 <div class="mb-1 text-center">
                     <h2 class="text-2xl font-bold text-gray-900">Iniciar sesión</h2>
