@@ -69,14 +69,10 @@ const submit = () => {
         <!-- Lado derecho: formulario -->
         <section class="flex items-center justify-center p-6 lg:p-10 bg-gray-50">
             <div class="w-full max-w-md bg-white shadow-xl rounded-2xl p-6 sm:p-8 border border-gray-100">
-        <Head title="Iniciar sesión">
-            <template #default>
-                <link rel="icon" type="image/png" href="/images/digitalsolution-logo.png">
-            </template>
-        </Head>
+        <Head title="Iniciar sesión" />
 
                 <!-- Logo encima del título (en todas las vistas) -->
-                <img src="/images/digitalsolution-logo.png" alt="digitalsolution.com" class="block mx-auto mb-4 h-[135px] sm:h-[160px] lg:h-[200px] w-auto" />
+                <img src="/images/digitalsolution-logo_2.png?v=1" alt="ondigitalsolution.com" class="block mx-auto mb-4 h-[135px] sm:h-[160px] lg:h-[200px] w-auto object-contain" />
 
                 <div class="mb-1 text-center">
                     <h2 class="text-2xl font-bold text-gray-900">Iniciar sesión</h2>
