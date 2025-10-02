@@ -45,29 +45,52 @@ const copyUrl = async () => {
 
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-indigo-100 overflow-hidden shadow-sm sm:rounded-xl">
-                    <div class="p-6 md:p-8">
-                        <h3 class="text-lg font-semibold text-indigo-900">¡Bienvenido a tu panel de administración!</h3>
-                        <p class="text-sm text-indigo-700 mt-1">Gestioná productos, categorías, pedidos y más desde un solo lugar.</p>
+                <div class="relative overflow-hidden bg-gradient-to-br from-blue-800 via-blue-700 to-cyan-600 text-white shadow-md sm:rounded-2xl">
+                    <div class="relative z-10 p-6 md:p-8">
+                        <h3 class="text-lg md:text-xl font-semibold">¡Bienvenido a tu panel de administración!</h3>
+                        <div class="h-1 w-14 bg-orange-400 rounded-full mt-2"></div>
+                        <p class="text-sm/6 md:text-base/6 text-white/90 mt-2">Gestioná productos, categorías, pedidos y más desde un solo lugar.</p>
                     </div>
+                    <div class="pointer-events-none absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_20%_20%,white_0,transparent_35%),radial-gradient(circle_at_80%_0,white_0,transparent_35%)]"></div>
                 </div>
 
                 <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                        <div class="text-xs uppercase tracking-wide text-gray-500">Ventas de hoy</div>
-                        <div class="mt-1 text-2xl font-semibold text-gray-900">{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(metrics?.salesToday || 0) }}</div>
+                    <div class="bg-white/90 backdrop-blur-sm rounded-2xl p-5 shadow-md ring-1 ring-gray-100">
+                        <div class="flex items-center gap-3">
+                            <span class="p-2 rounded-lg bg-blue-50 text-blue-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M3 12l6-6 4 4 7-7"/></svg>
+                            </span>
+                            <div>
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Ventas de hoy</div>
+                                <div class="mt-1 text-2xl font-semibold text-gray-900">{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(metrics?.salesToday || 0) }}</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                        <div class="text-xs uppercase tracking-wide text-gray-500">Órdenes de hoy</div>
-                        <div class="mt-1 text-2xl font-semibold text-gray-900">{{ metrics?.ordersToday || 0 }}</div>
+                    <div class="bg-white/90 backdrop-blur-sm rounded-2xl p-5 shadow-md ring-1 ring-gray-100">
+                        <div class="flex items-center gap-3">
+                            <span class="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                            </span>
+                            <div>
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Órdenes de hoy</div>
+                                <div class="mt-1 text-2xl font-semibold text-gray-900">{{ metrics?.ordersToday || 0 }}</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                        <div class="text-xs uppercase tracking-wide text-gray-500">Ticket promedio</div>
-                        <div class="mt-1 text-2xl font-semibold text-gray-900">{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(metrics?.avgTicketToday || 0) }}</div>
+                    <div class="bg-white/90 backdrop-blur-sm rounded-2xl p-5 shadow-md ring-1 ring-gray-100">
+                        <div class="flex items-center gap-3">
+                            <span class="p-2 rounded-lg bg-cyan-50 text-cyan-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M12 4.5v15M4.5 12h15"/></svg>
+                            </span>
+                            <div>
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Ticket promedio</div>
+                                <div class="mt-1 text-2xl font-semibold text-gray-900">{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(metrics?.avgTicketToday || 0) }}</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div v-if="store" class="bg-white border border-blue-100 rounded-xl p-6 my-8 shadow-sm">
+                <div v-if="store" class="bg-white/90 backdrop-blur-sm rounded-2xl p-6 my-8 shadow-md ring-1 ring-blue-100">
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div>
                             <p class="font-semibold text-blue-900">¡Compartí tu tienda con el mundo!</p>
