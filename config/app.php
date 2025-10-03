@@ -10,6 +10,9 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // Correo del Súper Admin utilizado para habilitar la pestaña "SuperStores"
+    'super_admin_email' => env('SUPER_ADMIN_EMAIL'),
+
     'timezone' => env('APP_TIMEZONE', 'America/Bogota'),
 
     'locale' => env('APP_LOCALE', 'en'),
