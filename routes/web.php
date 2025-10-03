@@ -66,6 +66,7 @@ Route::get('/tiendas', function () {
 })->name('home');
 
 Route::get('/tienda/{store:slug}', [PublicProductController::class, 'index'])->name('catalogo.index');
+Route::get('/tienda/{store:slug}/categories/{category}/children', [PublicProductController::class, 'children'])->name('catalog.categories.children');
 Route::get('/tienda/{store:slug}/producto/{product}', [PublicProductController::class, 'show'])->name('catalogo.show');
 
 // Carrito (público, basado en sesión)
@@ -120,6 +121,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // ===== ESTAS SON LAS RUTAS QUE CORREGIMOS =====
         Route::resource('categories', CategoryController::class);
         Route::post('categories/{parentCategory}/subcategories', [CategoryController::class, 'storeSubcategory'])->name('categories.storeSubcategory');
+        Route::get('categories/{category}/children', [CategoryController::class, 'children'])->name('categories.children');
         Route::resource('products', AdminProductController::class);
         Route::put('products-store/promo', [AdminProductController::class, 'updateStorePromo'])->name('products.store_promo');
         Route::resource('users', UserController::class);

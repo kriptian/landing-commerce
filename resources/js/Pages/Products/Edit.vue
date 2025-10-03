@@ -10,6 +10,7 @@ import DangerButton from '@/Components/DangerButton.vue';
 const props = defineProps({
     product: Object,
     categories: Array, 
+    selectedCategoryPath: Array,
 });
 
 const page = usePage();
@@ -47,25 +48,64 @@ const onNewGalleryInput = (event) => {
     form.new_gallery_files = validFiles;
 };
 
-// --- Lógica de menús dependientes (sigue igual) ---
-const initialParent = props.product.category.parent_id 
-    ? props.product.category.parent 
-    : props.product.category;
-const initialSubcategory = props.product.category.parent_id 
-    ? props.product.category 
-    : null;
-const selectedParentId = ref(initialParent ? initialParent.id : null);
-const subcategories = computed(() => {
-    if (!selectedParentId.value) return [];
-    const parent = props.categories.find(c => c.id === selectedParentId.value);
-    return parent ? parent.children : [];
-});
-watch(selectedParentId, (newVal, oldVal) => {
-    if (newVal !== oldVal) {
-        form.category_id = null;
+// --- Selects en cascada multi-nivel (con preselección) ---
+const levels = ref([ { options: props.categories, selected: null } ]);
+const hydratePath = async () => {
+    // Preseleccionamos desde la raíz a la hoja
+    if (!Array.isArray(props.selectedCategoryPath) || props.selectedCategoryPath.length === 0) return;
+    // Nivel 0 ya tiene opciones: categorías raíz
+    for (let i = 0; i < props.selectedCategoryPath.length; i++) {
+        const node = props.selectedCategoryPath[i];
+        // Seleccionar en el nivel i
+        if (!levels.value[i]) {
+            levels.value[i] = { options: [], selected: null };
+        }
+        // Si el nivel i no tiene opciones (i>0), cargamos hijos del seleccionado anterior
+        if (i > 0 && levels.value[i].options.length === 0) {
+            const prevSelectedId = levels.value[i-1].selected;
+            if (prevSelectedId) {
+                const res = await fetch(route('admin.categories.children', prevSelectedId));
+                const json = await res.json();
+                levels.value[i].options = Array.isArray(json.data) ? json.data : [];
+            }
+        }
+        // Establecer selección del nivel i
+        levels.value[i].selected = node.id;
+        form.category_id = node.id;
+        // Asegurar que exista un nivel i+1 si hay más por seleccionar
+        if (i < props.selectedCategoryPath.length - 1) {
+            if (!levels.value[i+1]) levels.value[i+1] = { options: [], selected: null };
+        }
     }
-});
-// --- FIN Lógica ---
+    // Finalmente, ofrecer hijos del último seleccionado
+    const lastId = form.category_id;
+    if (lastId) {
+        const res = await fetch(route('admin.categories.children', lastId));
+        const json = await res.json();
+        const children = Array.isArray(json.data) ? json.data : [];
+        if (children.length > 0) {
+            levels.value.push({ options: children, selected: null });
+        }
+    }
+};
+
+const removeDeeperLevels = (levelIndex) => {
+    levels.value.splice(levelIndex + 1);
+};
+const onSelectAtLevel = async (levelIndex) => {
+    const selectedId = levels.value[levelIndex].selected;
+    removeDeeperLevels(levelIndex);
+    form.category_id = selectedId || null;
+    if (!selectedId) return;
+    const res = await fetch(route('admin.categories.children', selectedId));
+    if (!res.ok) return;
+    const json = await res.json();
+    const children = Array.isArray(json.data) ? json.data : [];
+    if (children.length > 0) {
+        levels.value.push({ options: children, selected: null });
+    }
+};
+// --- FIN Selects en cascada ---
 
 
 // --- Lógica de Variantes (ajustada) ---
@@ -116,7 +156,12 @@ const showGalleryModal = ref(false);
 const currentImageIndex = ref(0);
 const isMobile = ref(false);
 function updateIsMobile() { isMobile.value = window.innerWidth < 768; }
-onMounted(() => { updateIsMobile(); window.addEventListener('resize', updateIsMobile); });
+onMounted(() => { 
+    updateIsMobile(); 
+    window.addEventListener('resize', updateIsMobile);
+    // Preseleccionar la cadena de categorías del producto
+    hydratePath();
+});
 onBeforeUnmount(() => window.removeEventListener('resize', updateIsMobile));
 
 const visibleCount = computed(() => isMobile.value ? 1 : 4);
@@ -288,23 +333,20 @@ const confirmSave = () => {
                                          </div>
                                      </div>
                                     
-                                    <div class="mb-4">
-                                        <label for="parent_category" class="block font-medium text-sm text-gray-700">Categoría Principal</label>
-                                        <select id="parent_category" v-model="selectedParentId" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
-                                            <option :value="null">Seleccione una categoría</option>
-                                            <option v-for="category in categories" :key="category.id" :value="category.id">
-                                                {{ category.name }}
-                                            </option>
-                                        </select>
+                                    <div class="mb-2">
+                                        <label class="block font-medium text-sm text-gray-700">Categorías</label>
                                     </div>
-                                    <div v-if="subcategories.length > 0" class="mb-4">
-                                        <label for="category_id" class="block font-medium text-sm text-gray-700">Subcategoría</label>
-                                        <select id="category_id" v-model="form.category_id" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
-                                            <option :value="null">Seleccione una subcategoría</option>
-                                            <option v-for="subcategory in subcategories" :key="subcategory.id" :value="subcategory.id">
-                                                {{ subcategory.name }}
-                                            </option>
-                                        </select>
+                                    <div class="space-y-3">
+                                        <div v-for="(lvl, idx) in levels" :key="idx" class="mb-1">
+                                            <select 
+                                                class="block w-full rounded-md shadow-sm border-gray-300"
+                                                v-model="lvl.selected"
+                                                @change="onSelectAtLevel(idx)"
+                                            >
+                                                <option :value="null">Seleccione una categoría</option>
+                                                <option v-for="opt in lvl.options" :key="opt.id" :value="opt.id">{{ opt.name }}</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                                 

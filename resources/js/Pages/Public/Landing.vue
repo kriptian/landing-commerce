@@ -25,7 +25,7 @@ import { Head, Link } from '@inertiajs/vue3';
                         </ul>
                         <div class="mt-8 flex flex-col sm:flex-row gap-3">
                             <a
-                                href="https://wa.me/573208204198?text=Hola%20quiero%20crear%20mi%20tienda%20online%20con%20Ondigitalsolution"
+                                href="https://wa.me/573024061771?text=Hola%20quiero%20crear%20mi%20tienda%20online%20con%20Ondigitalsolution"
                                 target="_blank"
                                 rel="noopener"
                                 class="inline-flex items-center justify-center gap-2 px-5 py-3 bg-white text-blue-800 font-semibold rounded-lg shadow hover:bg-blue-50 border border-white/60"

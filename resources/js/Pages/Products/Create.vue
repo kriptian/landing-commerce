@@ -43,17 +43,34 @@ const onGalleryInput = (event) => {
     form.gallery_files = validFiles;
 };
 
-// --- Lógica de menús dependientes (Sigue igual) ---
-const selectedParentId = ref(null); 
-const subcategories = computed(() => {
-    if (!selectedParentId.value) return [];
-    const parent = props.categories.find(c => c.id === selectedParentId.value);
-    return parent ? parent.children : [];
-});
-watch(selectedParentId, () => {
-    form.category_id = null;
-});
-// --- FIN Lógica ---
+// --- Selects en cascada multi-nivel ---
+const levels = ref([ { options: props.categories, selected: null } ]);
+
+const addLevel = () => {
+    levels.value.push({ options: [], selected: null });
+};
+const removeDeeperLevels = (levelIndex) => {
+    levels.value.splice(levelIndex + 1);
+};
+
+const onSelectAtLevel = async (levelIndex) => {
+    const selectedId = levels.value[levelIndex].selected;
+    // Reset niveles inferiores
+    removeDeeperLevels(levelIndex);
+    form.category_id = selectedId; // por defecto, si no hay hijos, esto será la categoría elegida
+    if (!selectedId) return;
+    // Cargar hijos
+    const res = await fetch(route('admin.categories.children', selectedId));
+    if (!res.ok) return;
+    const json = await res.json();
+    const children = Array.isArray(json.data) ? json.data : [];
+    if (children.length > 0) {
+        // Añadir nuevo nivel con los hijos
+        levels.value.push({ options: children, selected: null });
+        // Si el usuario no selecciona más profundo, category_id puede quedarse en el padre
+    }
+};
+// --- FIN Selects en cascada ---
 
 const form = useForm({
     name: '',
@@ -216,25 +233,22 @@ const submit = () => {
                                     </div>
                                 </div>
 
-                                <div class="mt-4 mb-4">
-                                    <label for="parent_category" class="block font-medium text-sm text-gray-700">Categoría Principal</label>
-                                    <select id="parent_category" v-model="selectedParentId" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
-                                        <option :value="null">Seleccione una categoría</option>
-                                        <option v-for="category in categories" :key="category.id" :value="category.id">
-                                            {{ category.name }}
-                                        </option>
-                                    </select>
+                                <div class="mt-4 mb-2">
+                                    <label class="block font-medium text-sm text-gray-700">Categorías</label>
                                 </div>
-                                <div v-if="subcategories.length > 0" class="mb-4">
-                                    <label for="category_id" class="block font-medium text-sm text-gray-700">Subcategoría</label>
-                                    <select id="category_id" v-model="form.category_id" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
-                                        <option :value="null">Seleccione una subcategoría</option>
-                                        <option v-for="subcategory in subcategories" :key="subcategory.id" :value="subcategory.id">
-                                            {{ subcategory.name }}
-                                        </option>
-                                    </select>
-                                    <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
+                                <div class="space-y-3">
+                                    <div v-for="(lvl, idx) in levels" :key="idx" class="mb-1">
+                                        <select 
+                                            class="block w-full rounded-md shadow-sm border-gray-300"
+                                            v-model="lvl.selected"
+                                            @change="onSelectAtLevel(idx)"
+                                        >
+                                            <option :value="null">Seleccione una categoría</option>
+                                            <option v-for="opt in lvl.options" :key="opt.id" :value="opt.id">{{ opt.name }}</option>
+                                        </select>
+                                    </div>
                                 </div>
+                                <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
                             </div>
                             
                             <div>

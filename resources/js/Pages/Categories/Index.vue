@@ -35,7 +35,13 @@ const deleteCategory = () => {
     router.delete(route('admin.categories.destroy', categoryToDelete.value), {
         preserveScroll: true,
         onSuccess: () => { closeModal(); noticeMessage.value = '¡Categoría eliminada con éxito!'; showNotice.value = true; },
-        onError: () => { closeModal(); noticeMessage.value = 'Hubo un error al eliminar la categoría.'; showNotice.value = true; }
+        onError: (errors) => {
+            closeModal();
+            // Mensaje específico si hay productos asociados
+            const msg = (errors && (errors.delete || errors.message)) || 'No se pudo eliminar: existen productos asociados.';
+            noticeMessage.value = msg;
+            showNotice.value = true;
+        }
     });
 };
 // ---------------------------------------------
@@ -79,14 +85,12 @@ const deleteCategory = () => {
                                     <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ category.id }}</td>
                                     <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ category.name }}</td>
                                     <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium">
-                                        <div class="flex items-center gap-3">
-                                            <Link :href="route('admin.categories.edit', category.id)" class="text-indigo-600 hover:text-indigo-900 inline-flex items-center gap-1">
-                                                <svg class="w-5 h-5 sm:hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16.862 3.487a2.25 2.25 0 113.182 3.182L9.428 17.284a3.75 3.75 0 01-1.582.992l-2.685.805a.75.75 0 01-.93-.93l.805-2.685a3.75 3.75 0 01.992-1.582L16.862 3.487z"/><path d="M15.75 4.5l3.75 3.75"/></svg>
-                                                <span class="hidden sm:inline">Editar</span>
+                                        <div class="flex items-center gap-2">
+                                            <Link :href="route('admin.categories.edit', category.id)" class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-indigo-600" title="Editar">
+                                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16.862 3.487a2.25 2.25 0 113.182 3.182L9.428 17.284a3.75 3.75 0 01-1.582.992l-2.685.805a.75.75 0 01-.93-.93l.805-2.685a3.75 3.75 0 01.992-1.582L16.862 3.487z"/><path d="M15.75 4.5l3.75 3.75"/></svg>
                                             </Link>
-                                            <button @click="confirmCategoryDeletion(category.id)" class="text-red-600 hover:text-red-900 inline-flex items-center gap-1">
-                                                <svg class="w-5 h-5 sm:hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M16.5 4.5V6h3.75a.75.75 0 010 1.5H3.75A.75.75 0 013 6h3.75V4.5A2.25 2.25 0 019 2.25h6A2.25 2.25 0 0117.25 4.5zM5.625 7.5h12.75l-.701 10.518A2.25 2.25 0 0115.43 20.25H8.57a2.25 2.25 0 01-2.244-2.232L5.625 7.5z" clip-rule="evenodd"/></svg>
-                                                <span class="hidden sm:inline">Eliminar</span>
+                                            <button @click="confirmCategoryDeletion(category.id)" class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-red-600" title="Eliminar">
+                                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M16.5 4.5V6h3.75a.75.75 0 010 1.5H3.75A.75.75 0 013 6h3.75V4.5A2.25 2.25 0 019 2.25h6A2.25 2.25 0 0117.25 4.5zM5.625 7.5h12.75l-.701 10.518A2.25 2.25 0 0115.43 20.25H8.57a2.25 2.25 0 01-2.244-2.232L5.625 7.5z" clip-rule="evenodd"/></svg>
                                             </button>
                                         </div>
                                     </td>
@@ -126,7 +130,7 @@ const deleteCategory = () => {
 
     <AlertModal
         :show="showNotice"
-        type="info"
+        type="error"
         title="Categorías"
         :message="noticeMessage"
         primary-text="Entendido"

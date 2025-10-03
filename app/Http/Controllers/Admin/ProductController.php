@@ -59,7 +59,7 @@ class ProductController extends Controller
     public function create()
     {
         return Inertia::render('Products/Create', [
-            'categories' => auth()->user()->store->categories()->whereNull('parent_id')->with('children')->get(),
+            'categories' => auth()->user()->store->categories()->whereNull('parent_id')->orderBy('name')->get(['id','name']),
         ]);
     }
 
@@ -165,9 +165,23 @@ class ProductController extends Controller
 
         $product->load('images', 'category.parent', 'variants'); 
 
+        // Construimos la ruta completa de categorías desde la raíz hasta la seleccionada
+        $selectedCategoryPath = [];
+        $current = $product->category; 
+        while ($current) {
+            $selectedCategoryPath[] = [
+                'id' => $current->id,
+                'name' => $current->name,
+                'parent_id' => $current->parent_id,
+            ];
+            $current = $current->parent;
+        }
+        $selectedCategoryPath = array_reverse($selectedCategoryPath);
+
         return Inertia::render('Products/Edit', [
             'product' => $product,
-            'categories' => auth()->user()->store->categories()->whereNull('parent_id')->with('children')->get(),
+            'categories' => auth()->user()->store->categories()->whereNull('parent_id')->orderBy('name')->get(['id','name']),
+            'selectedCategoryPath' => $selectedCategoryPath,
         ]);
     }
 

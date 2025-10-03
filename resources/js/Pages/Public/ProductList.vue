@@ -1,6 +1,28 @@
 <script setup>
+// Navegación por niveles: cache de hijos y pila de navegación
+const childrenCache = ref(new Map()); // parentId -> items
+const menuStack = ref([]); // [{ id, name }]
+const isLevelLoading = ref(false);
+const currentParentId = computed(() => menuStack.value.length ? menuStack.value[menuStack.value.length - 1].id : null);
+const currentTitle = computed(() => menuStack.value.length ? menuStack.value[menuStack.value.length - 1].name : 'Categorías');
+const currentItems = computed(() => {
+  if (!currentParentId.value) return props.categories;
+  return childrenCache.value.get(currentParentId.value) || [];
+});
+const openNode = async (cat) => {
+  if (!cat.has_children_with_products) return;
+  menuStack.value.push({ id: cat.id, name: cat.name });
+  if (!childrenCache.value.has(cat.id)) {
+    isLevelLoading.value = true;
+    const res = await fetch(route('catalog.categories.children', { store: props.store.slug, category: cat.id }));
+    const json = await res.json();
+    childrenCache.value.set(cat.id, Array.isArray(json.data) ? json.data : []);
+    isLevelLoading.value = false;
+  }
+};
+const goBack = () => { if (menuStack.value.length) menuStack.value.pop(); };
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, watch, nextTick, computed } from 'vue';
+import { ref, watch, nextTick, computed, h } from 'vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -16,6 +38,26 @@ const search = ref(props.filters.search);
 
 // --- LÓGICA PARA LA BÚSQUEDA ANIMADA ---
 const isSearchActive = ref(false);
+const drawerOpen = ref(false);
+const expanded = ref({});
+// Modo navegación: aplicamos filtro inmediato sin checkboxes/botones
+const selected = ref(new Set());
+const toggleNode = (cat) => {
+  expanded.value[cat.id] = !expanded.value[cat.id];
+};
+const applyImmediate = (categoryId) => {
+  router.get(route('catalogo.index', { store: props.store.slug }), { category: categoryId, search: search.value || undefined }, { preserveState: true, replace: true, preserveScroll: true });
+  drawerOpen.value = false;
+};
+const viewAllInLevel = () => {
+  // Toma ids visibles del nivel actual y aplica todos
+  const ids = (currentItems.value || []).map(i => i.id);
+  router.get(route('catalogo.index', { store: props.store.slug }), { categories: ids.join(',') }, { preserveState: true, replace: true, preserveScroll: true });
+  drawerOpen.value = false;
+};
+const applySearch = () => {
+  router.get(route('catalogo.index', { store: props.store.slug }), { search: search.value || undefined, category: props.filters.category || undefined }, { preserveState: true, replace: true, preserveScroll: true });
+};
 const searchInput = ref(null); // Referencia al input de búsqueda
 
 const toggleSearch = () => {
@@ -58,6 +100,14 @@ watch(search, (value) => {
 const isLoading = ref(false);
 router.on('start', () => { isLoading.value = true; });
 router.on('finish', () => { isLoading.value = false; });
+
+// Al abrir el drawer, reiniciar navegación al nivel raíz
+watch(drawerOpen, (open) => {
+    if (open) {
+        menuStack.value = [];
+        isLevelLoading.value = false;
+    }
+});
 
 // Helper: bajo stock (sólo si existe umbral > 0)
 const isLowStock = (product) => {
@@ -139,46 +189,46 @@ const fabItems = computed(() => {
     <main class="container mx-auto px-6 py-12">
         <h2 class="text-3xl font-bold mb-4">Nuestro Catálogo</h2>
 
-        <div class="mb-8 p-4 bg-gray-50 rounded-lg">
-            <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                
-                <div class="flex-grow">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Filtrar por categoría</label>
-                    <Dropdown align="left" width="64">
-                        <template #trigger>
-                            <button type="button" class="inline-flex justify-between items-center w-full md:w-auto rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
-                                <span>{{ filters.category ? categories.find(c => c.id == filters.category).name : 'Todas las categorías' }}</span>
-                                <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                </svg>
-                            </button>
-                        </template>
-                        <template #content>
-                            <DropdownLink :href="route('catalogo.index', { store: store.slug })"> Todas </DropdownLink>
-                            <DropdownLink v-for="category in categories" :key="category.id" :href="route('catalogo.index', { store: store.slug, category: category.id })">
-                                {{ category.name }}
-                            </DropdownLink>
-                        </template>
-                    </Dropdown>
-                </div>
-                
-                <div class="flex items-center space-x-2">
-                    <input 
-                        ref="searchInput"
-                        v-model="search"
-                        type="text"
-                        placeholder="Buscar..."
-                        class="block h-10 rounded-md shadow-sm transition-all duration-300 ease-in-out border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-                        :class="{ 'w-48 sm:w-64 px-2 opacity-100': isSearchActive, 'w-0 p-0 border-transparent opacity-0': !isSearchActive }"
-                    />
-                    <button @click="toggleSearch" type="button" class="p-2 rounded-full hover:bg-gray-200 transition-colors">
-                        <svg v-if="isSearchActive" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                        <svg v-else class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    </button>
-                </div>
-
+        <div class="mb-4 flex items-center justify-between">
+            <button @click="drawerOpen = true" class="p-2 rounded border hover:bg-gray-100" aria-label="Abrir filtros">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/></svg>
+            </button>
+            <div class="flex items-center gap-2">
+                <input ref="searchInput" v-model="search" type="text" placeholder="Buscar..." class="border rounded px-3 py-2 text-sm" />
+                <button @click="applySearch" class="px-3 py-2 rounded border hover:bg-gray-100">Buscar</button>
             </div>
         </div>
+
+        <transition name="fade-slide">
+            <div v-if="drawerOpen" class="fixed inset-0 z-50 flex">
+                <div class="relative w-80 max-w-[90%] bg-white h-full shadow-2xl">
+                    <div class="sticky top-0 z-10 bg-white/95 backdrop-blur border-b px-4 py-3 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <button v-if="menuStack.length" @click="goBack" class="p-2 rounded hover:bg-gray-100" aria-label="Volver">‹</button>
+                            <h3 class="font-semibold text-gray-900">{{ currentTitle }}</h3>
+                        </div>
+                        <button @click="drawerOpen=false" class="p-2 rounded hover:bg-gray-100" aria-label="Cerrar">✖</button>
+                    </div>
+                    <div class="px-2 py-2 overflow-y-auto h-[calc(100%-56px)]">
+                        <div class="px-3 pb-2 flex items-center justify-between">
+                            <div class="text-sm font-semibold text-gray-800">{{ currentTitle }}</div>
+                            <button @click="viewAllInLevel" class="text-xs font-semibold text-blue-600 hover:underline">Ver todo</button>
+                        </div>
+                        <div v-if="isLevelLoading" class="px-2 py-2 text-sm text-gray-500">Cargando...</div>
+                        <div v-for="cat in currentItems" :key="cat.id" class="mb-1">
+                            <button class="w-full flex items-center justify-between rounded-lg px-3 py-2 hover:bg-gray-50 active:scale-[.99] transition" @click="cat.has_children_with_products ? openNode(cat) : applyImmediate(cat.id)">
+                                <span class="font-medium text-gray-800">{{ cat.name }}</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xs bg-gray-100 text-gray-700 rounded-full px-2 py-0.5">{{ cat.products_count }}</span>
+                                    <span v-if="cat.has_children_with_products" class="w-4 h-4 inline-flex items-center justify-center">›</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex-1 bg-black/40" @click="drawerOpen=false"></div>
+            </div>
+        </transition>
 
         <div v-if="isLoading" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
             <div v-for="i in 6" :key="i" class="animate-pulse border rounded-xl shadow-sm overflow-hidden bg-white">
