@@ -220,14 +220,19 @@ class CategoryController extends Controller
         return redirect()->route('admin.categories.index');
     }
 
-    public function children(Request $request, Category $category)
+    public function children(Request $request, $category)
     {
+        // Evitar 404 por binding: resolvemos manualmente
+        $model = Category::find($category);
+        if (!$model) {
+            return response()->json(['data' => []]);
+        }
         // Seguridad: solo categorías de la tienda del usuario
-        if ($category->store_id !== $request->user()->store_id) {
+        if ($model->store_id !== $request->user()->store_id) {
             abort(403);
         }
 
-        $children = $category->children()
+        $children = $model->children()
             ->select('id','name','parent_id')
             ->withCount('children')
             ->orderBy('name')

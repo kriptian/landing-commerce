@@ -7,42 +7,97 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
-## About Laravel
+## Deploy y Rollback (Producción en Hostinger)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Guía breve y comprobada para desplegar y volver atrás si es necesario.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Archivos requeridos en el servidor
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+El dominio principal de Hostinger apunta a `public_html`, por lo que se necesitan estos `.htaccess`:
 
-## Learning Laravel
+- `public_html/.htaccess` (puente a `public/`):
+  ```apache
+  <IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^$ public/ [L]
+    RewriteRule (.*) public/$1 [L]
+  </IfModule>
+  ```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- `public/.htaccess` (Laravel):
+  ```apache
+  <IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+      Options -MultiViews -Indexes
+    </IfModule>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+  </IfModule>
+  ```
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+Si llegaran a borrarse en el servidor, recrearlos con este contenido y limpiar cachés de Laravel.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Deploy seguro
 
-## Laravel Sponsors
+1) En el servidor (SSH), dentro de `public_html`:
+   ```bash
+   bash deploy.sh "mi-secreto-deploy"
+   ```
+   Esto pone el sitio en mantenimiento con secreto, sincroniza `origin/main`, ejecuta `composer install --no-dev`, migra (si hay), limpia y recachea rutas y config, e intenta `opcache_reset()`.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+2) Verificar rápidamente:
+   - `php artisan route:list | grep catalogo.index`
+   - Navegar el sitio. Si hay CDN, purgar cache de la home y `build/manifest.json`.
 
-### Premium Partners
+### Rollback a un commit estable
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```bash
+php artisan down --secret="restore"
+git reset --hard <SHA_ESTABLE>
+php artisan optimize:clear && php artisan route:cache && php artisan config:cache
+php artisan up
+```
+
+Si aparece 403, recrear los `.htaccess` anteriores y repetir el paso de limpieza de cachés.
+
+### Restaurar el entorno local al estado de producción
+
+```bash
+git stash -u -m "backup-pre-restore"   # opcional
+git checkout main
+git reset --hard ddaa7a8                # SHA estable
+git clean -fd
+# (Opcional) forzar remoto a ese punto
+git push --force-with-lease origin main
+```
+
+Para recuperar el stash: `git stash apply stash@{0}`. Para eliminarlo: `git stash drop stash@{0}`.
+
+### Flujo recomendado
+
+- Trabajar en ramas de feature y abrir PR a `main`.
+- Desplegar solo desde `main` con `deploy.sh`.
+- Crear tags para puntos estables:
+  ```bash
+  git tag -a prod-estable-YYYY-MM-DD-HHMM -m "punto estable"
+  git push --tags
+  ```
+
+## Notas de entorno local
+
+Si `php artisan optimize:clear` falla por conexión MySQL en local (host no resuelve), usar `CACHE_DRIVER=file`. Para desarrollo simple puede usarse SQLite:
+
+```env
+DB_CONNECTION=sqlite
+# y crear el archivo
+touch database/database.sqlite
+```
+
+## Agradecimientos
+
+Este proyecto se basa en Laravel + Inertia + Vue. Gracias a la comunidad por las herramientas y documentación.
 
 ## Contributing
 

@@ -260,7 +260,7 @@ const getVariantDisplayPrices = (variant) => {
                 </div>
                 
                 <div class="border-t pt-4">
-                    <h3 class="text-xl font-semibold mb-3">Especificaciones Técnicas</h3>
+                    <h3 class="text-xl font-semibold mb-3">Especificaciones</h3>
                     <ul class="list-disc list-inside text-gray-600 space-y-1">
                         <li v-for="spec in specifications" :key="spec">{{ spec }}</li>
                     </ul>
@@ -269,7 +269,7 @@ const getVariantDisplayPrices = (variant) => {
         </section>
 
         <section class="long-description mt-12 md:mt-16 border-t pt-8">
-            <h2 class="text-2xl font-bold mb-4">Descripción Detallada</h2>
+            <h2 class="text-2xl font-bold mb-4">Descripción</h2>
             <div class="prose max-w-none text-gray-600">
                 <p>{{ product.long_description }}</p> 
             </div>

@@ -177,23 +177,9 @@ const confirmAfterUpdate = () => {
 
     <Modal :show="confirmingSale" @close="closeSaleModal">
         <div class="p-6">
-            <h2 class="text-lg font-medium text-gray-900">
-                ¿Confirmar venta y descontar inventario?
-            </h2>
-
-            <p class="mt-1 text-sm text-gray-600">
-                Esta acción es irreversible. El stock de los productos en esta orden será reducido.
-            </p>
-
+            
             <div class="mt-6 flex justify-end">
-                <SecondaryButton @click="closeSaleModal"> Cancelar </SecondaryButton>
-
-                <DangerButton
-                    class="ms-3"
-                    @click="confirmOrder"
-                >
-                    Sí, Confirmar Venta
-                </DangerButton>
+                
             </div>
         </div>
     </Modal>

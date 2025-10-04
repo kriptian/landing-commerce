@@ -65,19 +65,7 @@ Route::get('/tiendas', function () {
     ]);
 })->name('home');
 
-Route::get('/tienda/{store:slug}', [PublicProductController::class, 'index'])->name('catalogo.index');
-Route::get('/tienda/{store:slug}/categories/{category}/children', [PublicProductController::class, 'children'])->name('catalog.categories.children');
-Route::get('/tienda/{store:slug}/producto/{product}', [PublicProductController::class, 'show'])->name('catalogo.show');
-
-// Carrito (público, basado en sesión)
-Route::post('/cart', [CartController::class, 'store'])->name('cart.store');
-Route::get('/tienda/{store:slug}/cart', [CartController::class, 'index'])->name('cart.index');
-Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
-Route::delete('/guest-cart/{key}', [CartController::class, 'destroyGuest'])->name('cart.guest.destroy');
-
-// Checkout público (no requiere autenticación)
-Route::get('/tienda/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
-Route::post('/tienda/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+// (Rutas públicas sin "/tienda") se definen más abajo para no interferir con rutas /admin
 
 // Rutas Privadas (que requieren autenticación)
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -149,3 +137,35 @@ Route::get('/crear-link-de-almacenamiento', function () {
         return 'Error al crear el link: ' . $e->getMessage();
     }
 });
+
+// ========================
+// RUTAS PÚBLICAS EN RAÍZ (sin "/tienda")
+// Defínelas al final para no capturar rutas /admin o del sistema
+// ========================
+
+// Slugs reservados para no colisionar con rutas del sistema cuando usamos la raíz
+$reservedSlugs = implode('|', [
+    'admin','login','register','logout','profile','dashboard','tiendas','cart','checkout','api','storage','crear-link-de-almacenamiento'
+]);
+Route::pattern('store', "^(?!($reservedSlugs)$)[A-Za-z0-9\-_.]+$");
+
+Route::get('/{store:slug}', [PublicProductController::class, 'index'])->name('catalogo.index');
+Route::get('/{store:slug}/categories/{category}/children', [PublicProductController::class, 'children'])->name('catalog.categories.children');
+Route::get('/{store:slug}/producto/{product}', [PublicProductController::class, 'show'])->name('catalogo.show');
+
+// Carrito (público, basado en sesión)
+Route::post('/cart', [CartController::class, 'store'])->name('cart.store');
+Route::get('/{store:slug}/cart', [CartController::class, 'index'])->name('cart.index');
+Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
+Route::delete('/guest-cart/{key}', [CartController::class, 'destroyGuest'])->name('cart.guest.destroy');
+
+// Checkout público (no requiere autenticación)
+Route::get('/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
+Route::post('/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+
+// REDIRECCIONES legacy desde "/tienda/..." a las nuevas URLs en raíz (301)
+Route::redirect('/tienda/{store}', '/{store}', 301);
+Route::redirect('/tienda/{store}/producto/{product}', '/{store}/producto/{product}', 301);
+Route::redirect('/tienda/{store}/categories/{category}/children', '/{store}/categories/{category}/children', 301);
+Route::redirect('/tienda/{store}/checkout', '/{store}/checkout', 301);
+Route::redirect('/tienda/{store}/cart', '/{store}/cart', 301);

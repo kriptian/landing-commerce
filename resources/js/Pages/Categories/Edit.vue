@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
+import { safeRoute } from '@/app';
 import Modal from '@/Components/Modal.vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -22,11 +23,12 @@ const newSubcategoryForm = useForm({
 });
 
 const updateCategoryName = () => {
-    form.put(route('admin.categories.update', props.category.id));
+    form.put(route('admin.categories.update', { category: props.category.id }));
 };
 
 const addNewSubcategory = () => {
-    newSubcategoryForm.post(route('admin.categories.storeSubcategory', props.category.id), {
+    const url = safeRoute('admin.categories.storeSubcategory', { parentCategory: props.category.id }, `/admin/categories/${props.category.id}/subcategories`);
+    newSubcategoryForm.post(url, {
         onSuccess: () => { newSubcategoryForm.reset(); loadChildren(); },
         preserveScroll: true,
     });
@@ -48,7 +50,7 @@ const closeDeleteModal = () => {
 
 const deleteCategory = () => {
     if (!categoryToDelete.value) return;
-    router.delete(route('admin.categories.destroy', categoryToDelete.value), {
+    router.delete(route('admin.categories.destroy', { category: categoryToDelete.value }), {
         preserveScroll: true,
         onSuccess: () => {
             const deletedId = categoryToDelete.value;
@@ -91,7 +93,8 @@ const children = ref(props.category.children || []);
 const loadChildren = async () => {
     try {
         isLoadingChildren.value = true;
-        const res = await fetch(route('admin.categories.children', props.category.id));
+        const url = safeRoute('admin.categories.children', { category: props.category.id }, `/admin/categories/${props.category.id}/children`);
+        const res = await fetch(url);
         if (!res.ok) return;
         const json = await res.json();
         children.value = Array.isArray(json.data) ? json.data : [];
@@ -119,7 +122,8 @@ const submitNewChild = (parentId) => {
     if (!name) return;
     creatingChild.value[parentId] = true;
     errorByParent.value[parentId] = null;
-    router.post(route('admin.categories.storeSubcategory', parentId), { name }, {
+    const url = safeRoute('admin.categories.storeSubcategory', { parentCategory: parentId }, `/admin/categories/${parentId}/subcategories`);
+    router.post(url, { name }, {
         preserveScroll: true,
         onSuccess: () => {
             newChildName.value[parentId] = '';
@@ -158,17 +162,24 @@ const cancelRename = (id) => {
 const submitRename = (id, parentId = null) => {
     const val = (renameValueById.value[id] || '').trim();
     if (!val) return;
-    router.put(route('admin.categories.update', id), { name: val }, {
-        preserveScroll: true,
-        onSuccess: () => {
-            cancelRename(id);
-            if (parentId && parentId !== props.category.id) {
-                loadChildrenFor(parentId);
-            } else {
-                loadChildren();
-            }
-        },
-    });
+    const url = route('admin.categories.update', { category: id });
+    // Evitamos navegación de Inertia para que no reordene visualmente; actualizamos por axios
+    if (window.axios) {
+        // Usamos POST + _method=PUT para máxima compatibilidad con la ruta resource
+        window.axios.post(url, { name: val, _method: 'PUT' }, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(() => {
+                cancelRename(id);
+                if (parentId && parentId !== props.category.id) {
+                    loadChildrenFor(parentId);
+                } else {
+                    loadChildren();
+                }
+            })
+            .catch(() => cancelRename(id));
+        return;
+    }
+    // Fallback si no existe axios
+    router.put(url, { name: val }, { preserveScroll: true, onSuccess: () => { cancelRename(id); parentId && parentId !== props.category.id ? loadChildrenFor(parentId) : loadChildren(); } });
 };
 
 // Expandir/colapsar y cargar subniveles de un hijo
@@ -179,7 +190,8 @@ const childrenByParent = ref({});
 const loadChildrenFor = async (parentId) => {
     loadingByParent.value[parentId] = true;
     try {
-        const res = await fetch(route('admin.categories.children', parentId));
+        const url = safeRoute('admin.categories.children', { category: parentId }, `/admin/categories/${parentId}/children`);
+        const res = await fetch(url);
         if (!res.ok) return;
         const json = await res.json();
         childrenByParent.value[parentId] = Array.isArray(json.data) ? json.data : [];
@@ -301,8 +313,8 @@ const errorText = ref('');
                                             <div v-if="!renamingById[gchild.id]">{{ gchild.name }}</div>
                                             <div v-else class="flex items-center gap-2">
                                                 <input v-model="renameValueById[gchild.id]" type="text" class="block w-full rounded-md shadow-sm border-gray-300" />
-                                                <button type="button" class="bg-blue-500 text-white text-xs font-semibold py-1 px-2 rounded" @click="submitRename(gchild.id, child.id)">Guardar</button>
-                                                <button type="button" class="text-xs text-gray-600" @click="cancelRename(gchild.id)">Cancelar</button>
+                                                <button type="button" class="w-8 h-8 inline-flex items-center justify-center rounded bg-blue-500 text-white hover:bg-blue-600" title="Guardar" @click="submitRename(gchild.id, child.id)">✔</button>
+                                                <button type="button" class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100" title="Cancelar" @click="cancelRename(gchild.id)">✖</button>
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2">

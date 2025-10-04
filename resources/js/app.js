@@ -9,6 +9,19 @@ import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 
 // --- 1. IMPORTAMOS NUESTRO COMPONENTE DE GALERÍA ---
 import ProductGallery from './Components/Product/ProductGallery.vue';
+// Helper global: usa Ziggy si existe; si no, usa un path literal de respaldo
+export function safeRoute(name, params = {}, fallbackPath = '/') {
+    try {
+        if (typeof route === 'function') {
+            return route(name, params);
+        }
+    } catch (e) { /* ignore */ }
+    let url = String(fallbackPath);
+    Object.entries(params || {}).forEach(([k, v]) => {
+        url = url.replace(new RegExp(`:${k}\\b|{${k}}`, 'g'), String(v));
+    });
+    return url;
+}
 
 const appName = import.meta.env.VITE_APP_NAME || 'Ondigitalsolution';
 
