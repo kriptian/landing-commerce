@@ -202,21 +202,22 @@ const getVariantDisplayPrices = (variant) => {
             </div>
             <div class="info flex flex-col space-y-4">
                 <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900">{{ product.name }}</h1>
-                <div class="flex items-baseline gap-2">
-                    <p class="text-2xl md:text-3xl font-extrabold text-blue-600">
-                        {{ formatCOP(displayPrice) }}
-                    </p>
-                    <p v-if="originalPrice" class="text-base md:text-lg text-gray-400 line-through">
-                        {{ formatCOP(originalPrice) }}
-                    </p>
-                </div>
+				<div class="flex items-center gap-2">
+					<p class="text-2xl md:text-3xl font-extrabold text-gray-900">
+						{{ formatCOP(displayPrice) }}
+					</p>
+					<span v-if="effectivePromoPercent > 0" class="inline-flex items-center rounded bg-red-600 text-white font-bold px-2 py-1 text-xs md:text-sm">-{{ effectivePromoPercent }}%</span>
+				</div>
+				<p v-if="originalPrice" class="text-sm md:text-base text-gray-400 line-through">
+					{{ formatCOP(originalPrice) }}
+				</p>
                 <p class="text-lg text-gray-600">{{ product.short_description }}</p>
 
                 <div v-if="product.variants.length > 0" class="border-t pt-4">
                     <h3 class="text-xl font-semibold mb-3">Opciones Disponibles:</h3>
                     <div class="space-y-2">
                         <div v-for="variant in visibleVariants" :key="variant.id">
-                            <label class="flex items-center p-4 border rounded-lg cursor-pointer" :class="{ 'border-blue-600 ring-2 ring-blue-300': selectedVariantIds.includes(variant.id) }">
+							<label class="flex items-center p-4 border rounded-lg cursor-pointer" :class="{ 'border-blue-600 ring-2 ring-blue-300': selectedVariantIds.includes(variant.id) }">
                                 <input type="checkbox" :value="variant.id" v-model="selectedVariantIds" class="form-checkbox text-blue-600">
                                 <div class="ml-4 flex-grow">
                                     <span class="font-semibold text-gray-800">
@@ -224,9 +225,8 @@ const getVariantDisplayPrices = (variant) => {
                                             <span class="font-normal">{{ key }}:</span> {{ value }}
                                         </span>
                                     </span>
-                                    <span class="ml-2 text-blue-600">
-                                        ({{ formatCOP(getVariantDisplayPrices(variant).current) }})
-                                    </span>
+									<span class="ml-2 text-gray-900 font-semibold">({{ formatCOP(getVariantDisplayPrices(variant).current) }})</span>
+									<span v-if="effectivePromoPercent > 0" class="ml-2 inline-flex items-center rounded bg-red-600 text-white font-bold px-1.5 py-0.5 text-xs">-{{ effectivePromoPercent }}%</span>
                                     <span v-if="getVariantDisplayPrices(variant).original" class="ml-2 text-gray-400 line-through">
                                         {{ formatCOP(getVariantDisplayPrices(variant).original) }}
                                     </span>
@@ -287,7 +287,7 @@ const getVariantDisplayPrices = (variant) => {
             <div class="p-4 overflow-y-auto pb-24" style="max-height: 65vh;">
                 <div class="space-y-2">
                     <div v-for="variant in product.variants" :key="`modal-${variant.id}`">
-                        <label class="flex items-center p-4 border rounded-lg cursor-pointer" :class="{ 'border-blue-600 ring-2 ring-blue-300': selectedVariantIds.includes(variant.id) }">
+							<label class="flex items-center p-4 border rounded-lg cursor-pointer" :class="{ 'border-blue-600 ring-2 ring-blue-300': selectedVariantIds.includes(variant.id) }">
                             <input type="checkbox" :value="variant.id" v-model="selectedVariantIds" class="form-checkbox text-blue-600">
                             <div class="ml-4 flex-grow">
                                 <span class="font-semibold text-gray-800">
@@ -295,8 +295,9 @@ const getVariantDisplayPrices = (variant) => {
                                         <span class="font-normal">{{ key }}:</span> {{ value }}
                                     </span>
                                 </span>
-                                <span class="ml-2 text-blue-600">({{ formatCOP(getVariantDisplayPrices(variant).current) }})</span>
-                                <span v-if="getVariantDisplayPrices(variant).original" class="ml-2 text-gray-400 line-through">{{ formatCOP(getVariantDisplayPrices(variant).original) }}</span>
+									<span class="ml-2 text-gray-900 font-semibold">({{ formatCOP(getVariantDisplayPrices(variant).current) }})</span>
+									<span v-if="effectivePromoPercent > 0" class="ml-2 inline-flex items-center rounded bg-red-600 text-white font-bold px-1.5 py-0.5 text-xs">-{{ effectivePromoPercent }}%</span>
+									<span v-if="getVariantDisplayPrices(variant).original" class="ml-2 text-gray-400 line-through">{{ formatCOP(getVariantDisplayPrices(variant).original) }}</span>
                             </div>
                             <span v-if="isInventoryTracked" class="text-sm font-medium" :class="{ 'text-red-600': variant.stock === 0, 'text-gray-600': variant.stock > 0 }">
                                 {{ variant.stock > 0 ? `${variant.stock} disponibles` : 'Agotado' }}

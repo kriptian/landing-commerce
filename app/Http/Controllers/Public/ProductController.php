@@ -29,7 +29,7 @@ class ProductController extends Controller
         })->filter(fn($c) => $c['products_count'] > 0)->values();
 
         // Empezamos la consulta de productos (incluimos variantes para calcular bajo stock en frontend)
-        $productsQuery = $store->products()->with([
+        $productsQuery = $store->products()->where('is_active', true)->with([
             'images',
             'variants:id,product_id,stock,minimum_stock,alert'
         ]);
@@ -82,7 +82,7 @@ class ProductController extends Controller
         // --- FIN DE LA LÓGICA ---
 
         return Inertia::render('Public/ProductList', [
-            'products' => $productsQuery->latest()->paginate(10)->withQueryString(),
+            'products' => $productsQuery->latest()->paginate(24)->withQueryString(),
             'store' => $store,
             'categories' => $categories, // Mandamos solo las categorías principales para los botones
             'filters' => [
@@ -98,7 +98,7 @@ class ProductController extends Controller
      */
     public function show(Store $store, Product $product)
     {
-        if ($product->store_id !== $store->id) {
+        if ($product->store_id !== $store->id || !$product->is_active) {
             abort(404);
         }
 

@@ -32,6 +32,13 @@ class ProductController extends Controller
             $search = $request->get('search');
             $query->where('name', 'like', "%{$search}%");
         }
+        if ($request->filled('status')) {
+            if ($request->status === 'active') {
+                $query->where('is_active', true);
+            } elseif ($request->status === 'inactive') {
+                $query->where('is_active', false);
+            }
+        }
 
         $products = $query->get();
 
@@ -39,7 +46,7 @@ class ProductController extends Controller
             'products' => $products,
             'categories' => $store->categories()->orderBy('name')->get(['id','name']),
             'store' => $store->only(['promo_active','promo_discount_percent']),
-            'filters' => $request->only(['category','search']),
+            'filters' => $request->only(['category','search','status']),
         ]);
     }
 
@@ -187,11 +194,12 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
-        // Atajo: actualización rápida solo de promoción desde el listado
-        if ($request->hasAny(['promo_active', 'promo_discount_percent']) && !$request->has('name')) {
+        // Atajo: actualización rápida desde el listado (promos o activación)
+        if ($request->hasAny(['promo_active', 'promo_discount_percent', 'is_active']) && !$request->has('name')) {
             $data = $request->validate([
                 'promo_active' => 'sometimes|boolean',
                 'promo_discount_percent' => 'sometimes|nullable|integer|min:1|max:90',
+                'is_active' => 'sometimes|boolean',
             ]);
             $product->update($data);
             return back();

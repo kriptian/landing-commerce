@@ -241,47 +241,37 @@ const fabItems = computed(() => {
             </div>
         </div>
 
-        <div v-else-if="products.data.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-            <div v-for="product in products.data" :key="product.id" class="group border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
-                <div class="relative">
-                    <img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-40 sm:h-48 md:h-56 object-cover transform group-hover:scale-105 transition duration-300">
-                    <!-- Solo banda diagonal (sin remate de esquina). La promo global de tienda tiene prioridad. -->
-                    <div v-if="hasPromo(product)"
-                         class="pointer-events-none select-none absolute inset-0 z-10">
-                        <div class="absolute -left-14 top-4 -rotate-45 w-64 sm:w-72 bg-red-600 text-white uppercase font-extrabold tracking-wide text-[12px] sm:text-sm text-center py-1 px-4 shadow-lg flex items-center justify-center whitespace-nowrap">
-                            PROMO {{ promoPercent(product) }}%
-                        </div>
-                    </div>
-                    <span v-if="(product.track_inventory !== false) && ((product.variants ? product.variants.length === 0 : true) && Number(product.quantity || 0) === 0)"
-                          class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">
-                        Agotado
-                    </span>
-                    <span v-else-if="isLowStock(product)"
-                          class="absolute top-3 left-3 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">
-                        ¡Pocas unidades!
-                    </span>
-                </div>
-                <div class="p-4 flex flex-col gap-3">
-                    <h3 class="text-base sm:text-lg font-semibold text-gray-900 line-clamp-2">{{ product.name }}</h3>
-                    <div class="flex items-baseline gap-2">
-                        <p class="text-lg sm:text-xl text-blue-600 font-extrabold">
-                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
-                                hasPromo(product) ? Math.round(product.price * (100 - promoPercent(product)) / 100) : product.price
-                            ) }}
-                        </p>
-                        <p v-if="hasPromo(product)" class="text-sm text-gray-400 line-through">
-                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
-                        </p>
-                    </div>
-                    <div class="mt-1">
-                        <Link :href="route('catalogo.show', { store: store.slug, product: product.id })" class="inline-flex items-center justify-center gap-2 w-full bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg text-center hover:bg-blue-700">
-                            Ver
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M13.5 4.5a.75.75 0 01.75-.75h6a.75.75 0 01.75.75v6a.75.75 0 01-1.5 0V6.31l-7.22 7.22a.75.75 0 11-1.06-1.06L18.44 5.25h-3.44a.75.75 0 01-.75-.75z"/><path d="M6 3.75A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25h12A2.25 2.25 0 0020.25 18v-5.25a.75.75 0 00-1.5 0V18c0 .414-.336.75-.75.75H6A.75.75 0 015.25 18V6c0-.414.336-.75.75-.75h5.25a.75.75 0 000-1.5H6z"/></svg>
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        </div>
+		<div v-else-if="products.data.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+			<Link v-for="product in products.data" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group block border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
+				<div class="relative">
+					<img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-40 sm:h-48 md:h-56 object-cover transform group-hover:scale-105 transition duration-300">
+					<span v-if="(product.track_inventory !== false) && ((product.variants ? product.variants.length === 0 : true) && Number(product.quantity || 0) === 0)"
+					  class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">
+						Agotado
+					</span>
+					<span v-else-if="isLowStock(product)"
+					  class="absolute top-3 left-3 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">
+						¡Pocas unidades!
+					</span>
+				</div>
+				<div class="p-4 flex flex-col gap-3">
+					<h3 class="text-base sm:text-lg font-semibold text-gray-900 line-clamp-2">{{ product.name }}</h3>
+					<div class="flex items-center gap-2">
+						<p class="text-lg sm:text-xl text-gray-900 font-extrabold">
+							{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
+								hasPromo(product) ? Math.round(product.price * (100 - promoPercent(product)) / 100) : product.price
+							) }}
+						</p>
+						<span v-if="hasPromo(product)" class="inline-flex items-center rounded bg-red-600 text-white font-bold px-1.5 py-0.5 text-[11px] sm:text-xs">
+							-{{ promoPercent(product) }}%
+						</span>
+					</div>
+					<p v-if="hasPromo(product)" class="text-xs sm:text-sm text-gray-400 line-through">
+						{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
+					</p>
+				</div>
+			</Link>
+		</div>
         <div v-else>
             <div class="text-center py-16">
                 <p class="text-xl font-semibold text-gray-700">No se encontraron productos</p>

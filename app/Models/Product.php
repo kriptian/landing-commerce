@@ -25,6 +25,7 @@ class Product extends Model
         'is_featured',
         'promo_active',
         'promo_discount_percent',
+        'is_active',
         // 'main_image_url', // <-- LO QUITAMOS DE AQUÍ PORQUE NO ES UNA COLUMNA REAL
     ];
 
@@ -43,8 +44,13 @@ class Product extends Model
                     return $firstImage->path;
                 }
 
-                // Si no hay imagen, devuelve una imagen genérica de relleno
-                return 'https://via.placeholder.com/400x300.png?text=Sin+Imagen';
+                // Si no hay imagen del producto, usamos el logo de la tienda si existe
+                if ($this->store && !empty($this->store->logo_url)) {
+                    return $this->store->logo_url;
+                }
+
+                // Fallback local para evitar dependencias externas
+                return asset('img/product-placeholder.svg');
             },
         );
     }

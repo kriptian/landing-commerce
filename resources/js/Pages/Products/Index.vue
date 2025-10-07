@@ -20,6 +20,7 @@ const props = defineProps({
 const page = usePage();
 const search = ref(props.filters?.search || '');
 const selectedCategory = ref(props.filters?.category || '');
+const selectedStatus = ref(props.filters?.status || '');
 const confirmingProductDeletion = ref(false);
 const productToDelete = ref(null);
 const showProductNotice = ref(page?.props?.flash?.success ? true : false);
@@ -61,7 +62,7 @@ const updateStorePromoPercent = (val) => {
     router.put(route('admin.products.store_promo'), { promo_active: true, promo_discount_percent: pct }, { preserveScroll: true });
 };
 const applyFilters = () => {
-    router.get(route('admin.products.index'), { search: search.value, category: selectedCategory.value }, { preserveState: true, replace: true, preserveScroll: true });
+    router.get(route('admin.products.index'), { search: search.value, category: selectedCategory.value, status: selectedStatus.value }, { preserveState: true, replace: true, preserveScroll: true });
 };
 // ---------------------------------------------
 </script>
@@ -86,6 +87,11 @@ const applyFilters = () => {
                                     <option value="">Todas las categorías</option>
                                     <option v-for="c in props.categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                                 </select>
+                                <select v-model="selectedStatus" @change="applyFilters" class="border rounded px-2 py-2 text-sm h-10 min-w-[150px]">
+                                    <option value="">Todos</option>
+                                    <option value="active">Activos</option>
+                                    <option value="inactive">Inactivos</option>
+                                </select>
                                 <div class="hidden md:block h-6 w-px bg-gray-200"></div>
                                 <div class="flex items-center gap-2 border rounded-lg px-3 py-2">
                                     <span class="text-sm text-gray-600">Promo Global:</span>
@@ -109,6 +115,7 @@ const applyFilters = () => {
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Cantidad</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoría</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Activo</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Promoción</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                                     </tr>
@@ -118,10 +125,19 @@ const applyFilters = () => {
                                         <td colspan="6" class="px-3 py-3 sm:px-6 sm:py-4 text-center text-gray-500">No hay productos creados.</td>
                                     </tr>
                                     <tr v-for="product in products" :key="product.id">
-                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ product.name }}</td>
+                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
+                                            <span>{{ product.name }}</span>
+                                            <span v-if="!product.is_active" class="ml-2 inline-flex items-center rounded bg-gray-200 text-gray-700 text-xs font-semibold px-2 py-0.5">Inactivo</span>
+                                        </td>
                                         <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">$ {{ Number(product.price).toLocaleString('es-CO') }}</td>
                                         <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ product.quantity }}</td>
                                         <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ product.category ? product.category.name : 'Sin Categoría' }}</td>
+                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
+                                            <label class="inline-flex items-center gap-1 text-sm">
+                                                <input type="checkbox" :checked="product.is_active" @change="router.put(route('admin.products.update', product.id), { is_active: !product.is_active }, { preserveScroll: true })" class="rounded border-gray-300">
+                                                {{ product.is_active ? 'Sí' : 'No' }}
+                                            </label>
+                                        </td>
                                         <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                                             <div class="flex items-center gap-2">
                                                 <label class="inline-flex items-center gap-1 text-sm">
