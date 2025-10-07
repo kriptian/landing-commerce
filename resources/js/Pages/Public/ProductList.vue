@@ -85,6 +85,36 @@ const promoPercent = (product) => {
   return 0;
 };
 
+// Estado global de promos
+const storePromoActive = computed(() => {
+    try {
+        const percent = Number(props.store?.promo_discount_percent || 0);
+        return Boolean(props.store?.promo_active) && percent > 0;
+    } catch (e) { return false; }
+});
+const anyProductPromo = computed(() => {
+    try {
+        const arr = props.products?.data || [];
+        return arr.some(p => Boolean(p?.promo_active) && Number(p?.promo_discount_percent || 0) > 0);
+    } catch (e) { return false; }
+});
+const maxPromoPercent = computed(() => {
+    let max = storePromoActive.value ? Number(props.store.promo_discount_percent) : 0;
+    try {
+        const arr = props.products?.data || [];
+        for (const p of arr) {
+            const pct = Number(p?.promo_discount_percent || 0);
+            if (Boolean(p?.promo_active) && pct > 0) max = Math.max(max, pct);
+        }
+    } catch (e) {}
+    return max;
+});
+const hasAnyPromoGlobally = computed(() => storePromoActive.value || anyProductPromo.value);
+const goToPromo = () => {
+    router.get(route('catalogo.index', { store: props.store.slug }), { promo: 1 }, { preserveState: true, replace: true, preserveScroll: true });
+    drawerOpen.value = false;
+};
+
 
 watch(search, (value) => {
     setTimeout(() => {
@@ -199,6 +229,37 @@ const fabItems = computed(() => {
             </div>
         </div>
 
+		<!-- Cinta de ofertas (animada) -->
+		<div v-if="hasAnyPromoGlobally" class="mb-4">
+			<button @click="goToPromo" class="promo-ribbon w-full rounded-xl py-3 shadow-lg ring-1 ring-red-400/40 hover:ring-red-300 transition">
+				<div class="marquee">
+					<div class="marquee__inner text-white font-extrabold uppercase tracking-wider text-sm sm:text-base">
+						<span class="flex items-center gap-2">
+							<span class="blink">🔥</span>
+							Ofertas hasta {{ maxPromoPercent }}%
+							<span aria-hidden="true">•</span>
+							Toca para ver
+							<span aria-hidden="true">↗</span>
+						</span>
+						<span class="flex items-center gap-2">
+							<span class="blink">🔥</span>
+							Ofertas hasta {{ maxPromoPercent }}%
+							<span aria-hidden="true">•</span>
+							Toca para ver
+							<span aria-hidden="true">↗</span>
+						</span>
+						<span class="flex items-center gap-2">
+							<span class="blink">🔥</span>
+							Ofertas hasta {{ maxPromoPercent }}%
+							<span aria-hidden="true">•</span>
+							Toca para ver
+							<span aria-hidden="true">↗</span>
+						</span>
+					</div>
+				</div>
+			</button>
+		</div>
+
         <transition name="fade-slide">
             <div v-if="drawerOpen" class="fixed inset-0 z-50 flex">
                 <div class="relative w-80 max-w-[90%] bg-white h-full shadow-2xl">
@@ -213,6 +274,13 @@ const fabItems = computed(() => {
                         <div class="px-3 pb-2 flex items-center justify-between">
                             <div class="text-sm font-semibold text-gray-800">{{ currentTitle }}</div>
                             <button @click="viewAllInLevel" class="text-xs font-semibold text-blue-600 hover:underline">Ver todo</button>
+                        </div>
+                        <!-- Entrada destacada de Promoción -->
+                        <div v-if="hasAnyPromoGlobally" class="mb-1">
+                            <button class="w-full flex items-center justify-between rounded-lg px-3 py-2 bg-red-50 hover:bg-red-100 active:scale-[.99] transition border border-red-200" @click="goToPromo">
+                                <span class="font-bold text-red-700 uppercase">Promociones</span>
+                                <span class="text-xs bg-red-600 text-white rounded-full px-2 py-0.5">Hasta {{ maxPromoPercent }}%</span>
+                            </button>
                         </div>
                         <div v-if="isLevelLoading" class="px-2 py-2 text-sm text-gray-500">Cargando...</div>
                         <div v-for="cat in currentItems" :key="cat.id" class="mb-1">
@@ -328,3 +396,49 @@ const fabItems = computed(() => {
     </Link>
     </div>
 </template>
+
+<style scoped>
+/* Cinta con gradiente y shimmer */
+.promo-ribbon {
+	background: linear-gradient(90deg, #ef4444, #dc2626);
+	position: relative;
+	overflow: hidden;
+}
+.promo-ribbon::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: -50%;
+	width: 50%;
+	height: 100%;
+	background: linear-gradient(120deg, transparent, rgba(255,255,255,.35), transparent);
+	transform: skewX(-20deg);
+	animation: shimmer 2.2s infinite;
+}
+@keyframes shimmer {
+	0% { left: -60%; }
+	60% { left: 120%; }
+	100% { left: 120%; }
+}
+
+/* Marquee horizontal */
+.marquee {
+	position: relative;
+	overflow: hidden;
+	width: 100%;
+}
+.marquee__inner {
+	display: inline-flex;
+	gap: 2rem;
+	white-space: nowrap;
+	animation: marquee 12s linear infinite;
+}
+@keyframes marquee {
+	0%   { transform: translateX(0); }
+	100% { transform: translateX(-50%); }
+}
+
+/* Parpadeo suave para el ícono */
+.blink { animation: blink 1.2s ease-in-out infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+</style>

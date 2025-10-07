@@ -79,6 +79,14 @@ class ProductController extends Controller
             $productsQuery->where('name', 'like', '%' . $request->search . '%');
         }
         
+        // Filtro: solo productos en promoción (global o individual)
+        if ($request->boolean('promo')) {
+            $storePromoOn = (int) ($store->promo_active ? 1 : 0) === 1 && (int) ($store->promo_discount_percent ?? 0) > 0;
+            if (!$storePromoOn) {
+                $productsQuery->where('promo_active', true)->where('promo_discount_percent', '>', 0);
+            }
+        }
+
         // --- FIN DE LA LÓGICA ---
 
         return Inertia::render('Public/ProductList', [
@@ -89,6 +97,7 @@ class ProductController extends Controller
                 'category' => $request->input('category'),
                 'categories' => $request->input('categories'),
                 'search' => $request->input('search'),
+                'promo' => $request->boolean('promo'),
             ],
         ]);
     }
