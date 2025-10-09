@@ -203,6 +203,9 @@ const fabItems = computed(() => {
     <Head :title="`Catálogo de ${store.name}`">
         <template #default>
             <link v-if="store.logo_url" rel="icon" type="image/png" :href="store.logo_url">
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
         </template>
     </Head>
 
@@ -217,7 +220,7 @@ const fabItems = computed(() => {
         </nav>
     </header>
     <main class="container mx-auto px-6 py-12">
-        <h2 class="text-3xl font-bold mb-4">Nuestro Catálogo</h2>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight mb-4 bg-clip-text text-transparent bg-gradient-to-b from-gray-900 to-gray-600" style="font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;">Nuestro Catálogo</h2>
 
         <div class="mb-4 flex items-center justify-between">
             <button @click="drawerOpen = true" class="p-2 rounded border hover:bg-gray-100" aria-label="Abrir filtros">

@@ -1,6 +1,6 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useToast } from 'vue-toastification';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -8,50 +8,144 @@ import DangerButton from '@/Components/DangerButton.vue';
 
 const toast = useToast();
 
-// ===== CAMBIO 1: AHORA RECIBIMOS EL OBJETO 'store' COMPLETO =====
+// ===== Recibimos el objeto de tienda y los items del carrito =====
 const props = defineProps({
-    cartItems: Array,
-    store: Object, // <-- CAMBIAMOS storeSlug por el objeto completo
+	cartItems: Array,
+	store: Object,
 });
-// =============================================================
+
+// ===== Utilidades =====
+const formatCurrency = (value) => new Intl.NumberFormat('es-CO', {
+	style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0,
+}).format(value);
+
+const getItemKey = (item) => item.id ?? item.session_key;
+const getUnitPrice = (item) => item.variant?.price ?? item.product.price;
+// Helpers de precio con promoción (prioridad tienda > producto)
+const getBaseUnitPrice = (item) => Number(item.variant?.price ?? item.product.price);
+const hasPromo = (item) => {
+	try {
+		return (props.store?.promo_active && props.store?.promo_discount_percent)
+			|| (item.product?.promo_active && item.product?.promo_discount_percent);
+	} catch (e) { return false; }
+};
+const promoPercent = (item) => {
+	try {
+		if (props.store?.promo_active && props.store?.promo_discount_percent) return Number(props.store.promo_discount_percent);
+		if (item.product?.promo_active && item.product?.promo_discount_percent) return Number(item.product.promo_discount_percent);
+		return 0;
+	} catch (e) { return 0; }
+};
+const getDisplayUnitPrice = (item) => {
+	const base = getBaseUnitPrice(item);
+	const percent = promoPercent(item);
+	return percent > 0 ? Math.round((base * (100 - percent)) / 100) : base;
+};
+const getMaxQty = (item) => {
+	if (item.product?.track_inventory === false) return 9999; // sin límite práctico
+	if (item.variant && typeof item.variant.stock === 'number') return Math.max(1, item.variant.stock);
+	if (typeof item.product?.quantity === 'number') return Math.max(1, item.product.quantity);
+	return 99;
+};
 
 const totalPrice = computed(() => {
-    return props.cartItems.reduce((total, item) => {
-        const price = item.variant?.price ?? item.product.price;
-        return total + (price * item.quantity);
-    }, 0);
+	return props.cartItems.reduce((total, item) => total + (getDisplayUnitPrice(item) * item.quantity), 0);
 });
 
+// ===== Selección de productos (para UX similar al ejemplo) =====
+const selectedKeys = ref(new Set());
+watch(() => props.cartItems, (items) => {
+	const all = new Set(items.map(getItemKey));
+	selectedKeys.value = all; // seleccionar todos por defecto
+}, { immediate: true });
+
+const allSelected = computed(() => props.cartItems.length > 0 && props.cartItems.every(i => selectedKeys.value.has(getItemKey(i))));
+const toggleSelectAll = () => {
+	if (allSelected.value) {
+		selectedKeys.value = new Set();
+	} else {
+		selectedKeys.value = new Set(props.cartItems.map(getItemKey));
+	}
+};
+const isSelected = (key) => selectedKeys.value.has(key);
+const toggleSelect = (key) => {
+	const next = new Set(selectedKeys.value);
+	if (next.has(key)) next.delete(key); else next.add(key);
+	selectedKeys.value = next;
+};
+
+const selectedTotal = computed(() => props.cartItems
+	.filter(i => selectedKeys.value.has(getItemKey(i)))
+	.reduce((acc, i) => acc + getDisplayUnitPrice(i) * i.quantity, 0)
+);
+
+// ===== Cantidades =====
+const submitQuantity = (item, quantity) => {
+	const payload = {
+		product_id: item.product.id,
+		product_variant_id: item.variant?.id ?? null,
+		quantity,
+	};
+	router.post(route('cart.store'), payload, {
+		preserveScroll: true,
+		preserveState: true,
+		onSuccess: () => toast.success('Cantidad actualizada'),
+		onError: () => toast.error('No se pudo actualizar la cantidad'),
+	});
+};
+const increment = (item) => {
+	const max = getMaxQty(item);
+	const next = Math.min(item.quantity + 1, max);
+	if (next !== item.quantity) submitQuantity(item, next);
+};
+const decrement = (item) => {
+	const next = Math.max(1, item.quantity - 1);
+	if (next !== item.quantity) submitQuantity(item, next);
+};
+const onQtyInput = (item, e) => {
+	let v = parseInt(String(e?.target?.value ?? '').replace(/[^0-9]/g, ''), 10);
+	if (Number.isNaN(v)) v = item.quantity;
+	v = Math.max(1, Math.min(getMaxQty(item), v));
+	if (v !== item.quantity) submitQuantity(item, v);
+};
+
+// ===== Eliminación (modal de confirmación) =====
 const confirmingItemDeletion = ref(false);
 const itemToDelete = ref(null);
 const showSocialFab = ref(false);
+const hasAnySocial = computed(() => {
+	try {
+		const phone = (props.store?.phone ?? '').toString().replace(/[^0-9]/g, '');
+		return Boolean(props.store?.facebook_url || props.store?.instagram_url || props.store?.tiktok_url || phone);
+	} catch (e) { return false; }
+});
 
 const confirmItemDeletion = (id) => {
-    itemToDelete.value = id;
-    confirmingItemDeletion.value = true;
+	itemToDelete.value = id;
+	confirmingItemDeletion.value = true;
 };
 
 const closeModal = () => {
-    confirmingItemDeletion.value = false;
-    itemToDelete.value = null;
+	confirmingItemDeletion.value = false;
+	itemToDelete.value = null;
 };
 
 const deleteItem = () => {
-    const isGuestKey = typeof itemToDelete.value === 'string' && itemToDelete.value.startsWith('p');
-    const url = isGuestKey
-        ? route('cart.guest.destroy', itemToDelete.value)
-        : route('cart.destroy', itemToDelete.value);
-    router.delete(url, {
-        preserveScroll: true,
-        onSuccess: () => {
-            toast.success('Producto eliminado del carrito.');
-            closeModal();
-        },
-        onError: () => {
-            toast.error('Hubo un error al eliminar el producto.');
-            closeModal();
-        }
-    });
+	const isGuestKey = typeof itemToDelete.value === 'string' && itemToDelete.value.startsWith('p');
+	const url = isGuestKey
+		? route('cart.guest.destroy', itemToDelete.value)
+		: route('cart.destroy', itemToDelete.value);
+	router.delete(url, {
+		preserveScroll: true,
+		onSuccess: () => {
+			toast.success('Producto eliminado del carrito.');
+			closeModal();
+		},
+		onError: () => {
+			toast.error('Hubo un error al eliminar el producto.');
+			closeModal();
+		}
+	});
 };
 </script>
 
@@ -59,6 +153,9 @@ const deleteItem = () => {
     <Head title="Mi Carrito">
         <template #default>
             <link v-if="store.logo_url" rel="icon" type="image/png" :href="store.logo_url">
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
         </template>
     </Head>
 
@@ -74,7 +171,7 @@ const deleteItem = () => {
     </header>
     <main class="container mx-auto px-6 py-12">
         <div class="mb-8 flex justify-between items-center">
-            <h1 class="text-3xl font-bold">Mi Carrito de Compras</h1>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight bg-clip-text text-transparent bg-gradient-to-b from-gray-900 to-gray-600" style="font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;">Mi Carrito de Compras</h1>
             <Link :href="route('catalogo.index', { store: store.slug })" class="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-800 text-sm font-semibold rounded-md hover:bg-gray-300">
                 Seguir Comprando
             </Link>
@@ -87,59 +184,94 @@ const deleteItem = () => {
             </Link>
         </div>
 
-        <div v-else class="bg-white shadow rounded-2xl overflow-hidden">
-            <div class="overflow-x-auto">
-            <table class="min-w-[700px] w-full">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Producto</th>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Cantidad</th>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Precio Unit.</th>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Total</th>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y">
-                    <tr v-for="item in cartItems" :key="item.id ?? item.session_key" class="hover:bg-gray-50">
-                        <td class="px-4 py-4 flex items-center space-x-4">
-                            <img :src="item.product.main_image_url" alt="product image" class="w-16 h-16 object-cover rounded-md ring-1 ring-gray-200">
-                            <div>
-                                <p class="font-semibold text-gray-900">{{ item.product.name }}</p>
-                                <div v-if="item.variant" class="text-sm text-gray-500">
-                                    <span v-for="(value, key) in item.variant.options" :key="key" class="mr-2">
-                                        <strong>{{ key }}:</strong> {{ value }}
-                                    </span>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="px-4 py-4 text-gray-700">{{ item.quantity }}</td>
-                        <td class="px-4 py-4 text-gray-700">
-                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(item.variant?.price ?? item.product.price) }}
-                        </td>
-                        <td class="px-4 py-4 text-gray-700">
-                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format((item.variant?.price ?? item.product.price) * item.quantity) }}
-                        </td>
-                        <td class="px-4 py-4">
-                            <button @click="confirmItemDeletion(item.id ?? item.session_key)" class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-red-50 text-red-600 hover:bg-red-100 ring-1 ring-red-200">
-                                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3a1 1 0 00-1 1v1H4a1 1 0 100 2h1v12a2 2 0 002 2h10a2 2 0 002-2V7h1a1 1 0 100-2h-4V4a1 1 0 00-1-1H9zm2 4a1 1 0 112 0v10a1 1 0 11-2 0V7zm-4 0a1 1 0 112 0v10a1 1 0 11-2 0V7zm8 0a1 1 0 112 0v10a1 1 0 11-2 0V7z"/></svg>
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-            </div>
+		<div v-else>
+			<div class="grid md:grid-cols-3 gap-6">
+				<!-- Lista de productos -->
+				<section class="md:col-span-2 space-y-4">
+					<!-- Selector general -->
+					<div class="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between">
+						<label class="flex items-center gap-3 text-gray-700">
+							<input type="checkbox" class="w-5 h-5 accent-blue-600" :checked="allSelected" @change="toggleSelectAll">
+							<span class="font-medium">Seleccionar todos</span>
+						</label>
+						<div class="text-sm text-gray-500">{{ cartItems.length }} producto(s)</div>
+					</div>
 
-            <div class="p-6 bg-gray-50 border-t flex justify-end">
-                <div class="text-right">
-                    <p class="text-xl font-bold text-gray-900">
-                        Total: {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalPrice) }}
-                    </p>
-                    <Link :href="route('checkout.index', { store: store.slug })" class="inline-block mt-4 w-full sm:w-auto bg-green-600 text-white font-bold py-2.5 px-5 rounded-lg text-center hover:bg-green-700">
-                        Proceder al Pago
-                    </Link>
-                </div>
-            </div>
-        </div>
+					<!-- Items -->
+					<div v-for="item in cartItems" :key="getItemKey(item)" class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+						<div class="flex items-start gap-3">
+							<input type="checkbox" class="mt-2 w-5 h-5 accent-blue-600" :checked="isSelected(getItemKey(item))" @change="toggleSelect(getItemKey(item))">
+							<div class="flex flex-col items-start">
+								<img :src="item.product.main_image_url" alt="product image" class="w-16 h-16 md:w-20 md:h-20 object-cover rounded-md ring-1 ring-gray-200">
+								<span v-if="(item.product?.track_inventory !== false) && ((item.variant ? Number(item.variant.stock||0) : Number(item.product?.quantity||0)) > 0) && (item.variant ? Number(item.variant.alert||0) : Number(item.product?.alert||0)) > 0 && (item.variant ? Number(item.variant.stock||0) <= Number(item.variant.alert||0) : Number(item.product?.quantity||0) <= Number(item.product?.alert||0))" class="mt-1 inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 text-[10px] font-semibold px-1.5 py-0.5 rounded ring-1 ring-yellow-300">
+									<span class="inline-block w-1.5 h-1.5 bg-yellow-500 rounded-full"></span>
+									¡Pocas unidades!
+								</span>
+							</div>
+							<div class="flex-1 min-w-0">
+								<div class="flex items-start justify-between gap-3">
+									<p class="font-semibold text-gray-900 leading-snug line-clamp-2">{{ item.product.name }}</p>
+									<button @click="confirmItemDeletion(getItemKey(item))" class="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-red-50 text-red-600 hover:bg-red-100 ring-1 ring-red-200">
+										<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3a1 1 0 00-1 1v1H4a1 1 0 100 2h1v12a2 2 0 002 2h10a2 2 0 002-2V7h1a1 1 0 100-2h-4V4a1 1 0 00-1-1H9zm2 4a1 1 0 112 0v10a1 1 0 11-2 0V7zm-4 0a1 1 0 112 0v10a1 1 0 11-2 0V7zm8 0a1 1 0 112 0v10a1 1 0 11-2 0V7z"/></svg>
+									</button>
+								</div>
+								<div v-if="item.variant" class="text-xs text-gray-500 mt-1">
+									<span v-for="(value, key) in item.variant.options" :key="key" class="mr-2">
+										<strong>{{ key }}:</strong> {{ value }}
+									</span>
+								</div>
+
+								<div class="mt-3 flex items-center justify-between">
+									<div class="">
+										<p class="text-sm text-gray-500">Precio unitario</p>
+										<div class="flex items-center gap-2">
+											<p class="text-lg font-bold text-gray-900">{{ formatCurrency(getDisplayUnitPrice(item)) }}</p>
+											<span v-if="promoPercent(item) > 0" class="inline-flex items-center rounded bg-red-600 text-white font-bold px-1.5 py-0.5 text-xs">-{{ promoPercent(item) }}%</span>
+										</div>
+										<p v-if="promoPercent(item) > 0" class="text-xs text-gray-400 line-through">{{ formatCurrency(getBaseUnitPrice(item)) }}</p>
+									</div>
+									<div class="flex items-center gap-2">
+										<button @click="decrement(item)" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">−</button>
+										<input :value="item.quantity" @change="onQtyInput(item, $event)" :min="1" :max="getMaxQty(item)" inputmode="numeric" class="w-12 h-9 text-center border rounded-md" />
+										<button @click="increment(item)" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800">＋</button>
+									</div>
+								</div>
+								<div class="mt-2 flex items-center justify-between text-sm">
+									<p class="text-gray-500">Total</p>
+									<p class="font-semibold">{{ formatCurrency(getDisplayUnitPrice(item) * item.quantity) }}</p>
+								</div>
+								<p class="mt-1 text-xs text-gray-500">Máx {{ getMaxQty(item) >= 9999 ? 'sin límite' : getMaxQty(item) }} unidad(es)</p>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<!-- Resumen -->
+				<aside class="hidden md:block md:col-span-1">
+					<div class="bg-white rounded-xl border border-gray-200 p-6 sticky top-24">
+						<h2 class="text-lg font-semibold mb-4">Resumen</h2>
+						<div class="flex items-center justify-between text-gray-700">
+							<span>Total seleccionado</span>
+							<span class="text-xl font-bold">{{ formatCurrency(selectedTotal) }}</span>
+						</div>
+						<Link :href="route('checkout.index', { store: store.slug })" class="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700">Continuar compra</Link>
+					</div>
+				</aside>
+			</div>
+
+			<!-- Espaciador inferior para no tapar contenido en móvil -->
+			<div class="h-24 md:hidden"></div>
+			<!-- Barra fija móvil -->
+			<div class="md:hidden fixed inset-x-0 bottom-0 bg-white border-t border-gray-200 p-4 z-40" :class="{ 'pl-24': hasAnySocial }">
+				<div class="flex items-center justify-between">
+					<div class="text-sm">
+						<p class="text-gray-500">Total</p>
+						<p class="text-xl font-bold">{{ formatCurrency(selectedTotal) }}</p>
+					</div>
+					<Link :href="route('checkout.index', { store: store.slug })" class="inline-flex items-center justify-center px-5 py-3 rounded-full bg-blue-600 text-white font-semibold shadow-md active:scale-95">Continuar compra</Link>
+				</div>
+			</div>
+		</div>
     </main>
 
     <!-- FAB Social en carrito (móvil y desktop) -->
