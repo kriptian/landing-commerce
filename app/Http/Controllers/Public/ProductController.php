@@ -16,6 +16,24 @@ class ProductController extends Controller
      */
     public function index(Request $request, Store $store)
     {
+        // Cuando el enlace se comparte en redes (WhatsApp/FB/Twitter/etc.),
+        // los crawlers no ejecutan JS. Servimos una vista Blade estática con OG dinámicos.
+        if ($this->isCrawler($request)) {
+            $title = $store->name;
+            $description = 'Catálogo de ' . $store->name;
+            $image = $this->absoluteUrl($store->logo_url) ?: $this->fallbackOgImage();
+            $url = $request->fullUrl();
+
+            return response()->view('og.store', [
+                'title' => $title,
+                'description' => $description,
+                'image' => $image,
+                'url' => $url,
+                'site_name' => $store->name,
+                'icon' => $image,
+            ]);
+        }
+
         // 1. Árbol: solo categorías con productos (propios o en descendientes), con contador de productos
         $rootCats = $store->categories()->whereNull('parent_id')->get(['id','name']);
         $categories = $rootCats->map(function($cat) use ($store) {
@@ -112,6 +130,22 @@ class ProductController extends Controller
         }
 
         $product->load('images', 'category', 'variants', 'store');
+        // Crawler: OG por producto
+        if ($this->isCrawler(request())) {
+            $title = $product->name . ' · ' . $store->name;
+            $description = $product->short_description ?: ('Compra ' . $product->name . ' en ' . $store->name);
+            $image = $this->absoluteUrl($product->main_image_url) ?: ($this->absoluteUrl($store->logo_url) ?: $this->fallbackOgImage());
+            $url = request()->fullUrl();
+
+            return response()->view('og.product', [
+                'title' => $title,
+                'description' => $description,
+                'image' => $image,
+                'url' => $url,
+                'site_name' => $store->name,
+                'icon' => $this->absoluteUrl($store->logo_url) ?: $this->fallbackOgImage(),
+            ]);
+        }
         
         return inertia('Public/ProductPage', [
             'product' => $product,
@@ -173,5 +207,35 @@ class ProductController extends Controller
             }
         }
         return false;
+    }
+
+    private function isCrawler(Request $request): bool
+    {
+        $ua = strtolower((string) $request->userAgent());
+        if ($ua === '') return false;
+        $bots = [
+            'facebookexternalhit', 'facebot', 'whatsapp', 'twitterbot', 'linkedinbot',
+            'telegrambot', 'discordbot', 'slackbot', 'pinterest', 'googlebot', 'bingbot'
+        ];
+        foreach ($bots as $bot) {
+            if (str_contains($ua, $bot)) return true;
+        }
+        return false;
+    }
+
+    private function absoluteUrl(?string $path): ?string
+    {
+        $u = trim((string) ($path ?? ''));
+        if ($u === '') return null;
+        if (preg_match('/^https?:\/\//i', $u)) return $u;
+        $host = request()->getSchemeAndHttpHost();
+        if (str_starts_with($u, '/')) return $host . $u;
+        return $host . '/' . ltrim($u, '/');
+    }
+
+    private function fallbackOgImage(): string
+    {
+        $host = request()->getSchemeAndHttpHost();
+        return $host . '/images/New_Logo_ondgtl.png?v=5';
     }
 }

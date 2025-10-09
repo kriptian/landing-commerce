@@ -35,7 +35,7 @@ const submit = () => {
 
         <div class="w-full max-w-md bg-white shadow-xl rounded-2xl p-6 sm:p-8 border border-gray-100">
             <!-- Logo encima del título -->
-            <img src="/images/digitalsolution-logo.png?v=4" alt="ondigitalsolution.com" class="block mx-auto mb-4 h-[135px] sm:h-[160px] w-auto object-contain" />
+            <img src="/images/New_Logo_ondgtl.png?v=5" alt="ondigitalsolution.com" class="block mx-auto mb-4 h-[135px] sm:h-[160px] w-auto object-contain" />
 
             <div class="mb-1 text-center">
                 <h2 class="text-2xl font-bold text-gray-900">Iniciar sesión</h2>

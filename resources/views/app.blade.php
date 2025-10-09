@@ -5,9 +5,9 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <title inertia>{{ config('app.name', 'Ondigitalsolution') }}</title>
-        <link rel="icon" type="image/png" href="/images/digitalsolution-logo.png?v=4">
-        <link rel="shortcut icon" type="image/png" href="/images/digitalsolution-logo.png?v=4">
-        <link rel="apple-touch-icon" href="/images/digitalsolution-logo.png?v=4">
+        <link rel="icon" type="image/png" href="/images/New_Logo_ondgtl.png?v=5">
+        <link rel="shortcut icon" type="image/png" href="/images/New_Logo_ondgtl.png?v=5">
+        <link rel="apple-touch-icon" href="/images/New_Logo_ondgtl.png?v=5">
 
         <!-- Primary Meta Tags -->
         <meta name="title" content="{{ config('app.name', 'Ondigitalsolution') }}">
@@ -19,8 +19,8 @@
         <meta property="og:site_name" content="{{ config('app.name', 'Ondigitalsolution') }}">
         <meta property="og:title" content="{{ config('app.name', 'Ondigitalsolution') }}">
         <meta property="og:description" content="Tu tienda online en {{ parse_url(config('app.url'), PHP_URL_HOST) ?? 'ondigitalsolution.com' }}">
-        <meta property="og:image" content="{{ config('app.url') }}/images/digitalsolution-logo.png?v=4">
-        <meta property="og:image:secure_url" content="{{ config('app.url') }}/images/digitalsolution-logo.png?v=4">
+        <meta property="og:image" content="{{ config('app.url') }}/images/New_Logo_ondgtl.png?v=5">
+        <meta property="og:image:secure_url" content="{{ config('app.url') }}/images/New_Logo_ondgtl.png?v=5">
         <meta property="og:image:width" content="1200">
         <meta property="og:image:height" content="630">
 
@@ -29,7 +29,7 @@
         <meta property="twitter:url" content="{{ config('app.url') }}">
         <meta property="twitter:title" content="{{ config('app.name', 'Ondigitalsolution') }}">
         <meta property="twitter:description" content="Tu tienda online en {{ parse_url(config('app.url'), PHP_URL_HOST) ?? 'ondigitalsolution.com' }}">
-        <meta property="twitter:image" content="{{ config('app.url') }}/images/digitalsolution-logo.png?v=4">
+        <meta property="twitter:image" content="{{ config('app.url') }}/images/New_Logo_ondgtl.png?v=5">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

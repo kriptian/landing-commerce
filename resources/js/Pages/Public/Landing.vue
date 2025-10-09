@@ -41,14 +41,14 @@ import { Head, Link } from '@inertiajs/vue3';
                         <!-- Logo en móvil con tarjeta suave para no saturar -->
                         <div class="sm:hidden mt-8 flex justify-center">
                             <div class="rounded-xl border border-gray-200 bg-white shadow-lg p-3 w-56">
-                                <img src="/images/digitalsolution-logo.png?v=4" alt="Ondigitalsolution" class="w-full h-auto object-contain opacity-95" />
+                                <img src="/images/New_Logo_ondgtl.png?v=5" alt="Ondigitalsolution" class="w-full h-auto object-contain opacity-95" />
                             </div>
                         </div>
                     </div>
                     <div class="relative hidden sm:block">
                         <!-- Tarjeta blanca translúcida detrás del logo para legibilidad -->
                         <div class="absolute -inset-8 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl border border-white/80"></div>
-                        <img src="/images/digitalsolution-logo.png?v=4" alt="Ondigitalsolution" class="relative w-full max-w-md mx-auto" />
+                        <img src="/images/New_Logo_ondgtl.png?v=5" alt="Ondigitalsolution" class="relative w-full max-w-md mx-auto" />
                     </div>
                 </div>
             </div>
@@ -123,7 +123,7 @@ import { Head, Link } from '@inertiajs/vue3';
         <footer class="bg-gray-50 border-t border-gray-100">
             <div class="max-w-7xl mx-auto px-6 py-8 text-sm text-gray-600 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
-                    <img src="/images/digitalsolution-logo.png?v=4" class="h-6 w-6" alt="Ondigitalsolution" />
+                    <img src="/images/New_Logo_ondgtl.png?v=5" class="h-6 w-6" alt="Ondigitalsolution" />
                     <span>{{ new Date().getFullYear() }} © Ondigitalsolution</span>
                 </div>
                 <div class="flex items-center gap-4"></div>
