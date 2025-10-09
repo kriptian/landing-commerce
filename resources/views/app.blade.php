@@ -5,9 +5,14 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <title inertia>{{ config('app.name', 'Ondigitalsolution') }}</title>
-        <link rel="icon" type="image/png" href="/images/New_Logo_ondgtl.png?v=5">
-        <link rel="shortcut icon" type="image/png" href="/images/New_Logo_ondgtl.png?v=5">
-        <link rel="apple-touch-icon" href="/images/New_Logo_ondgtl.png?v=5">
+        @php
+            $isStorePublicRoute = request()->routeIs('catalogo.*') || request()->routeIs('cart.*') || request()->routeIs('checkout.*');
+        @endphp
+        @unless($isStorePublicRoute)
+            <link rel="icon" type="image/png" href="/images/New_Logo_ondgtl.png?v=5">
+            <link rel="shortcut icon" type="image/png" href="/images/New_Logo_ondgtl.png?v=5">
+            <link rel="apple-touch-icon" href="/images/New_Logo_ondgtl.png?v=5">
+        @endunless
 
         <!-- Primary Meta Tags -->
         <meta name="title" content="{{ config('app.name', 'Ondigitalsolution') }}">
