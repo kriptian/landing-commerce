@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, usePage, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 import { useToast } from 'vue-toastification';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -79,6 +79,64 @@ const deleteRole = () => {
 };
 // ===========================================
 
+// Scroll lateral fades
+const usersScrollRef = ref(null);
+const rolesScrollRef = ref(null);
+const usersShowLeftFade = ref(false);
+const usersShowRightFade = ref(false);
+const rolesShowLeftFade = ref(false);
+const rolesShowRightFade = ref(false);
+const updateFades = (elRef, leftRef, rightRef) => {
+    const el = elRef.value;
+    if (!el) return;
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+    const left = el.scrollLeft || 0;
+    leftRef.value = left > 0;
+    rightRef.value = left < (maxScrollLeft - 1);
+};
+onMounted(() => {
+    const hUsers = () => updateFades(usersScrollRef, usersShowLeftFade, usersShowRightFade);
+    const hRoles = () => updateFades(rolesScrollRef, rolesShowLeftFade, rolesShowRightFade);
+    nextTick(() => { hUsers(); hRoles(); });
+    usersScrollRef.value?.addEventListener('scroll', hUsers, { passive: true });
+    rolesScrollRef.value?.addEventListener('scroll', hRoles, { passive: true });
+    window.addEventListener('resize', hUsers);
+    window.addEventListener('resize', hRoles);
+});
+onBeforeUnmount(() => {
+    usersScrollRef.value?.removeEventListener('scroll', () => {});
+    rolesScrollRef.value?.removeEventListener('scroll', () => {});
+    window.removeEventListener('resize', () => {});
+});
+
+// Redimensionables: primera columna de usuarios y roles
+const USERS_COL_KEY = 'users_firstcol_w_px';
+const ROLES_COL_KEY = 'roles_firstcol_w_px';
+const FIRST_MIN = 60; const FIRST_MAX = 320;
+const usersFirstColWidth = ref(Number(localStorage.getItem(USERS_COL_KEY)) || 180);
+const rolesFirstColWidth = ref(Number(localStorage.getItem(ROLES_COL_KEY)) || 200);
+const usersFirstColStyle = computed(() => ({ width: usersFirstColWidth.value+'px', minWidth: usersFirstColWidth.value+'px', maxWidth: usersFirstColWidth.value+'px' }));
+const rolesFirstColStyle = computed(() => ({ width: rolesFirstColWidth.value+'px', minWidth: rolesFirstColWidth.value+'px', maxWidth: rolesFirstColWidth.value+'px' }));
+
+let startX = 0; let startW = 0; let target = 'users';
+const onResizeMove = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const next = Math.max(FIRST_MIN, Math.min(FIRST_MAX, startW + (clientX - startX)));
+    if (target === 'users') usersFirstColWidth.value = next; else rolesFirstColWidth.value = next;
+};
+const stopResize = () => {
+    document.removeEventListener('mousemove', onResizeMove);
+    document.removeEventListener('mouseup', stopResize);
+    document.removeEventListener('touchmove', onResizeMove);
+    document.removeEventListener('touchend', stopResize);
+    try {
+        localStorage.setItem(USERS_COL_KEY, String(usersFirstColWidth.value));
+        localStorage.setItem(ROLES_COL_KEY, String(rolesFirstColWidth.value));
+    } catch(_) {}
+};
+const startResizeUsers = (e) => { target='users'; startX = e.touches ? e.touches[0].clientX : e.clientX; startW = usersFirstColWidth.value; document.addEventListener('mousemove', onResizeMove, { passive:false }); document.addEventListener('mouseup', stopResize); document.addEventListener('touchmove', onResizeMove, { passive:false }); document.addEventListener('touchend', stopResize); };
+const startResizeRoles = (e) => { target='roles'; startX = e.touches ? e.touches[0].clientX : e.clientX; startW = rolesFirstColWidth.value; document.addEventListener('mousemove', onResizeMove, { passive:false }); document.addEventListener('mouseup', stopResize); document.addEventListener('touchmove', onResizeMove, { passive:false }); document.addEventListener('touchend', stopResize); };
+
 </script>
 
 <template>
@@ -116,19 +174,26 @@ const deleteRole = () => {
                             </nav>
                         </div>
 
-                        <div v-if="activeTab === 'users'" class="overflow-x-auto">
+                        <div v-if="activeTab === 'users'" ref="usersScrollRef" class="relative overflow-x-auto">
+                            <div v-show="usersShowLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
+                            <div v-show="usersShowRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>
                             <table class="min-w-[720px] w-full divide-y divide-gray-200 table-auto">
-                                <thead class="bg-gray-50">
+                                <thead class="sticky top-0 z-10 bg-gray-50">
                                     <tr>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                                        <th class="sticky left-0 z-20 bg-gray-50 px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap relative" :style="usersFirstColStyle">
+                                            Nombre
+                                            <div @mousedown="startResizeUsers" @touchstart.prevent="startResizeUsers" class="absolute top-0 right-0 h-full w-3 cursor-col-resize group">
+                                                <div class="mx-auto my-auto h-6 w-1.5 bg-gray-300 rounded-full group-hover:bg-indigo-400"></div>
+                                            </div>
+                                        </th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
                                         <th class="relative px-6 py-3"><span class="sr-only">Acciones</span></th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="user in users" :key="user.id">
-                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ user.name }}</td>
+                                    <tr v-for="(user, idx) in users" :key="user.id" class="odd:bg-white even:bg-gray-100">
+                                        <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap border-r truncate" :style="usersFirstColStyle" :title="user.name" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ user.name }}</td>
                                         <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ user.email }}</td>
                                         <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                                             <span v-if="user.roles.length > 0" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
@@ -150,17 +215,24 @@ const deleteRole = () => {
                             </table>
                         </div>
 
-                        <div v-if="activeTab === 'roles'" class="overflow-x-auto">
+                        <div v-if="activeTab === 'roles'" ref="rolesScrollRef" class="relative overflow-x-auto">
+                            <div v-show="rolesShowLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
+                            <div v-show="rolesShowRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>
                             <table class="min-w-[520px] w-full divide-y divide-gray-200 table-auto">
-                                <thead class="bg-gray-50">
+                                <thead class="sticky top-0 z-10 bg-gray-50">
                                     <tr>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre del Rol</th>
+                                        <th class="sticky left-0 z-20 bg-gray-50 px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap relative" :style="rolesFirstColStyle">
+                                            Nombre del Rol
+                                            <div @mousedown="startResizeRoles" @touchstart.prevent="startResizeRoles" class="absolute top-0 right-0 h-full w-3 cursor-col-resize group">
+                                                <div class="mx-auto my-auto h-6 w-1.5 bg-gray-300 rounded-full group-hover:bg-indigo-400"></div>
+                                            </div>
+                                        </th>
                                         <th class="relative px-6 py-3"><span class="sr-only">Acciones</span></th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="role in roles" :key="role.id">
-                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ role.name }}</td>
+                                    <tr v-for="(role, idx) in roles" :key="role.id" class="odd:bg-white even:bg-gray-100">
+                                        <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap border-r truncate" :style="rolesFirstColStyle" :title="role.name" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ role.name }}</td>
                                         <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <div class="flex justify-end items-center gap-2">
                                                 <Link :href="route('admin.roles.edit', role.id)" class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-indigo-600" title="Editar">

@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'; // <-- Importamos ref
+import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'; // <-- Importamos ref
 // --- 1. IMPORTAMOS LO QUE NECESITAMOS ---
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -67,6 +67,39 @@ onBeforeUnmount(() => {
     scrollBoxRef.value?.removeEventListener('scroll', updateFades);
     window.removeEventListener('resize', updateFades);
 });
+
+// Redimensionable: primera columna
+const CAT_COL_KEY = 'cat_firstcol_w_px';
+const FIRST_MIN = 50;
+const FIRST_MAX = 200;
+const firstColWidth = ref(Number(localStorage.getItem(CAT_COL_KEY)) || 100);
+const firstColStyle = computed(() => ({
+    width: firstColWidth.value + 'px',
+    minWidth: firstColWidth.value + 'px',
+    maxWidth: firstColWidth.value + 'px',
+}));
+let startX = 0;
+let startW = 0;
+const onResizeMove = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const next = Math.max(FIRST_MIN, Math.min(FIRST_MAX, startW + (clientX - startX)));
+    firstColWidth.value = next;
+};
+const stopResize = () => {
+    document.removeEventListener('mousemove', onResizeMove);
+    document.removeEventListener('mouseup', stopResize);
+    document.removeEventListener('touchmove', onResizeMove);
+    document.removeEventListener('touchend', stopResize);
+    try { localStorage.setItem(CAT_COL_KEY, String(firstColWidth.value)); } catch (_) {}
+};
+const startResize = (e) => {
+    startX = e.touches ? e.touches[0].clientX : e.clientX;
+    startW = firstColWidth.value;
+    document.addEventListener('mousemove', onResizeMove, { passive: false });
+    document.addEventListener('mouseup', stopResize);
+    document.addEventListener('touchmove', onResizeMove, { passive: false });
+    document.addEventListener('touchend', stopResize);
+};
 </script>
 
 <template>
@@ -97,7 +130,12 @@ onBeforeUnmount(() => {
                         <table class="min-w-[600px] w-full divide-y divide-gray-200 table-auto">
                             <thead class="sticky top-0 z-10 bg-gray-50">
                                 <tr>
-                                    <th class="sticky left-0 z-20 bg-gray-50 px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">ID</th>
+                                    <th class="sticky left-0 z-20 bg-gray-50 px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap relative" :style="firstColStyle">
+                                        ID
+                                        <div @mousedown="startResize" @touchstart.prevent="startResize" class="absolute top-0 right-0 h-full w-3 cursor-col-resize group">
+                                            <div class="mx-auto my-auto h-6 w-1.5 bg-gray-300 rounded-full group-hover:bg-indigo-400"></div>
+                                        </div>
+                                    </th>
                                     <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Nombre</th>
                                     <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Acciones</th>
                                 </tr>
@@ -107,7 +145,7 @@ onBeforeUnmount(() => {
                                     <td colspan="3" class="px-3 py-3 sm:px-6 sm:py-4 text-center text-gray-500">No hay categorías creadas.</td>
                                 </tr>
                                 <tr v-for="(category, idx) in categories" :key="category.id" class="odd:bg-white even:bg-gray-100">
-                                    <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap border-r" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ category.id }}</td>
+                                    <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap border-r truncate" :style="firstColStyle" :title="String(category.id)" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ category.id }}</td>
                                     <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ category.name }}</td>
                                     <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium">
                                         <div class="flex items-center gap-2">

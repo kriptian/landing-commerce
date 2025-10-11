@@ -152,6 +152,39 @@ onBeforeUnmount(() => {
     scrollBoxRef.value?.removeEventListener('scroll', updateFades);
     window.removeEventListener('resize', updateFades);
 });
+
+// Redimensionable: primera columna (persistente en localStorage)
+const INV_COL_KEY = 'inv_firstcol_w_px';
+const FIRST_MIN = 90;
+const FIRST_MAX = 320;
+const firstColWidth = ref(Number(localStorage.getItem(INV_COL_KEY)) || 180);
+const firstColStyle = computed(() => ({
+    width: firstColWidth.value + 'px',
+    minWidth: firstColWidth.value + 'px',
+    maxWidth: firstColWidth.value + 'px',
+}));
+let startX = 0;
+let startW = 0;
+const onResizeMove = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const next = Math.max(FIRST_MIN, Math.min(FIRST_MAX, startW + (clientX - startX)));
+    firstColWidth.value = next;
+};
+const stopResize = () => {
+    document.removeEventListener('mousemove', onResizeMove);
+    document.removeEventListener('mouseup', stopResize);
+    document.removeEventListener('touchmove', onResizeMove);
+    document.removeEventListener('touchend', stopResize);
+    try { localStorage.setItem(INV_COL_KEY, String(firstColWidth.value)); } catch (_) {}
+};
+const startResize = (e) => {
+    startX = e.touches ? e.touches[0].clientX : e.clientX;
+    startW = firstColWidth.value;
+    document.addEventListener('mousemove', onResizeMove, { passive: false });
+    document.addEventListener('mouseup', stopResize);
+    document.addEventListener('touchmove', onResizeMove, { passive: false });
+    document.addEventListener('touchend', stopResize);
+};
 </script>
 
 <template>
@@ -224,7 +257,12 @@ onBeforeUnmount(() => {
                             <table class="min-w-[920px] sm:min-w-full divide-y divide-gray-200">
                                 <thead class="sticky top-0 z-10 bg-gray-50">
                                     <tr>
-                                        <th class="sticky left-0 z-20 bg-gray-50 px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Producto / Variante</th>
+                                        <th class="sticky left-0 z-20 bg-gray-50 px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap relative" :style="firstColStyle">
+                                            Producto
+                                            <div @mousedown="startResize" @touchstart.prevent="startResize" class="absolute top-0 right-0 h-full w-3 cursor-col-resize group">
+                                                <div class="mx-auto my-auto h-6 w-1.5 bg-gray-300 rounded-full group-hover:bg-indigo-400"></div>
+                                            </div>
+                                        </th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">STOCK ACTUAL</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">$ COMPRA</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">$ VENTA</th>
@@ -239,7 +277,7 @@ onBeforeUnmount(() => {
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     <template v-for="(product, idx) in products.data" :key="product.id">
                                         <tr v-if="matchesProductStatus(product)" class="odd:bg-white even:bg-gray-100">
-                                            <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ product.name }}</td>
+                                            <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r truncate" :style="firstColStyle" :title="product.name" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ product.name }}</td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-800 font-bold">{{ product.quantity }}</td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700">{{ fmt(product.purchase_price) }}</td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700">{{ fmt(product.price) }}</td>
