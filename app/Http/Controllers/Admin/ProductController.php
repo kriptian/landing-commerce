@@ -264,11 +264,11 @@ class ProductController extends Controller
         }
         
         $productData = $request->except(['_method', 'new_gallery_files', 'images_to_delete', 'variants', 'variants_to_delete', 'variant_attributes']);
-        // Solo actualizar variant_attributes si viene con contenido útil
+        // Actualizar variant_attributes también cuando venga vacío explícitamente (para limpiar)
         if ($request->has('variant_attributes')) {
             $va = $request->input('variant_attributes');
-            if (is_array($va) && count($va) > 0) {
-                $productData['variant_attributes'] = $va;
+            if (is_array($va)) {
+                $productData['variant_attributes'] = $va; // puede ser [] para eliminar definición
             }
         }
         if (!array_key_exists('track_inventory', $productData)) {
@@ -326,6 +326,9 @@ class ProductController extends Controller
                     ]);
                 }
             }
+        } else {
+            // Si no hay variantes enviadas, eliminamos todas (caso limpiar atributos)
+            $product->variants()->delete();
         }
         
         // Redirigimos al listado para mostrar el modal de éxito

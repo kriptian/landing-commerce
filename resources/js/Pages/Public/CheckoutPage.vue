@@ -109,20 +109,20 @@ const submitOrder = () => {
             <div class="bg-gray-50 p-8 rounded-lg">
                 <h2 class="text-2xl font-bold mb-6">Resumen de tu Pedido</h2>
                 <div class="space-y-4">
-                    <div v-for="item in cartItems" :key="item.id" class="flex justify-between items-center">
-                        <div class="flex items-center">
-                            <img :src="item.product.main_image_url" class="w-16 h-16 object-cover rounded mr-4">
-                            <div>
-                                <p class="font-semibold">{{ item.product.name }}</p>
-                                <div v-if="item.variant" class="text-sm text-gray-500">
-                                    <span v-for="(value, key) in item.variant.options" :key="key" class="mr-2">
+                    <div v-for="item in cartItems" :key="item.id" class="flex flex-col sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                        <div class="flex items-start gap-3 flex-1 min-w-0">
+                            <img :src="item.product.main_image_url" class="w-16 h-16 object-cover rounded">
+                            <div class="min-w-0">
+                                <p class="font-semibold break-words">{{ item.product.name }}</p>
+                                <div v-if="item.variant" class="text-sm text-gray-500 break-words">
+                                    <span v-for="(value, key) in item.variant.options" :key="key" class="mr-2 inline-block">
                                         <strong>{{ key }}:</strong> {{ value }}
                                     </span>
                                 </div>
                                 <p class="text-sm text-gray-600">Cantidad: {{ item.quantity }}</p>
                             </div>
                         </div>
-                        <p class="font-semibold">
+                        <p class="font-semibold whitespace-nowrap shrink-0 sm:text-right mt-2 sm:mt-0">
                             {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(getBaseUnitPrice(item) * item.quantity) }}
                         </p>
                     </div>

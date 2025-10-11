@@ -166,6 +166,15 @@ function toggleRule(attr, pv, cv, event) {
     if (!checked && idx !== -1) base.splice(idx, 1);
     attr.rulesSelected[pv] = base;
 }
+// Alternar UI de dependencia y limpiar estado si se oculta
+function toggleDependencyUi(attr) {
+    attr.__showDependency = !attr.__showDependency;
+    if (!attr.__showDependency) {
+        attr.dependsOn = '';
+        attr.rulesSelected = {};
+        attr.rules = {};
+    }
+}
 // Hidratar atributos desde variantes existentes
 const hydrateAttributesFromVariants = () => {
     try {
@@ -399,6 +408,9 @@ const submit = () => {
                 options_text: ordered.map(a => `${a.name}:${sel[a.name]}`).join(', '),
                 price: '', purchase_price: null, stock: 0, alert: null,
             }));
+        } else {
+            // Si no hay atributos válidos, aseguramos enviar sin variantes
+            form.variants = [];
         }
     } catch (_) {}
     confirmingSave.value = true;
@@ -539,8 +551,12 @@ const confirmSave = () => {
                                             <input v-model="attr.valuesText" type="text" placeholder="Rojo, Verde, Azul" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
                                         </div>
                                         <!-- Toggle dependencia para no saturar la vista -->
-                                        <div class="md:col-span-5">
-                                            <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" v-model="attr.__showDependency" class="rounded"><span>Configurar dependencia</span></label>
+                                        <div class="md:col-span-5 flex items-center gap-2">
+                                            <button type="button" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300" @click="toggleDependencyUi(attr)" :title="attr.__showDependency ? 'Ocultar dependencia' : 'Configurar dependencia'" :aria-label="attr.__showDependency ? 'Ocultar dependencia' : 'Configurar dependencia'">
+                                                <svg v-if="!attr.__showDependency" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/></svg>
+                                                <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M5 12a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/></svg>
+                                            </button>
+                                            <span class="text-xs text-blue-600 md:hidden" v-text="attr.__showDependency ? 'Ocultar' : 'Depend.'"></span>
                                 </div>
                                         <div v-if="attr.__showDependency" class="md:col-span-5 grid grid-cols-1 md:grid-cols-5 gap-3 items-start">
                                     <div class="md:col-span-2">
@@ -566,10 +582,20 @@ const confirmSave = () => {
                                                 <p class="text-xs text-gray-500 mt-2">Si no seleccionas nada para un valor del padre, se permiten todos los valores del hijo.</p>
                                     </div>
                                     </div>
-                                        <div class="md:col-span-5 flex gap-2">
-                                            <button type="button" class="text-sm text-blue-600 hover:text-blue-800" @click="addAttribute">+ Añadir atributo</button>
-                                            <button v-if="attributes.length > 1" type="button" class="text-sm text-red-600 hover:text-red-800" @click="removeAttribute(ai)">Quitar</button>
-                                    </div>
+                                        <div class="md:col-span-5 flex items-center gap-4">
+                                            <div class="flex items-center gap-2">
+                                                <button type="button" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300" @click="addAttribute" title="Añadir atributo" aria-label="Añadir atributo">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/></svg>
+                                                </button>
+                                                <span class="text-xs md:hidden">Añadir</span>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <button type="button" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300" @click="removeAttribute(ai)" title="Quitar atributo" aria-label="Quitar atributo">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M7 7h10l-1 12a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2L7 7zm9-3a1 1 0 0 1 1 1v1H7V5a1 1 0 0 1 1-1h8zM9 5V4a3 3 0 0 1 3-3 3 3 0 0 1 3 3v1H9z"/></svg>
+                                                </button>
+                                                <span class="text-xs md:hidden">Quitar</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 

@@ -240,7 +240,7 @@ const deleteItem = () => {
 									</span>
 								</div>
 
-								<div class="mt-3 flex items-center justify-between">
+                                <div class="mt-3 flex flex-wrap items-center justify-between gap-y-2">
 									<div class="">
 										<p class="text-sm text-gray-500">Precio unitario</p>
 										<div class="flex items-center gap-2">
@@ -249,11 +249,11 @@ const deleteItem = () => {
 										</div>
 										<p v-if="promoPercent(item) > 0" class="text-xs text-gray-400 line-through">{{ formatCurrency(getBaseUnitPrice(item)) }}</p>
 									</div>
-									<div class="flex items-center gap-2">
-										<button @click="decrement(item)" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">−</button>
-										<input :value="item.quantity" @change="onQtyInput(item, $event)" :min="1" :max="getMaxQty(item)" inputmode="numeric" class="w-12 h-9 text-center border rounded-md" />
-										<button @click="increment(item)" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800">＋</button>
-									</div>
+                                    <div class="flex items-center gap-2 min-w-[140px] shrink-0 ml-auto">
+                                        <button @click="decrement(item)" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 shrink-0">−</button>
+                                        <input :value="item.quantity" @change="onQtyInput(item, $event)" :min="1" :max="getMaxQty(item)" inputmode="numeric" class="w-12 h-9 text-center border rounded-md" />
+                                        <button @click="increment(item)" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800 shrink-0">＋</button>
+                                    </div>
 								</div>
 								<div class="mt-2 flex items-center justify-between text-sm">
 									<p class="text-gray-500">Total</p>

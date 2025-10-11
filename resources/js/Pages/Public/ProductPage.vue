@@ -355,7 +355,11 @@ const getVariantDisplayPrices = (variant) => {
                 />
             </div>
             <div class="info flex flex-col space-y-4">
-                <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900">{{ product.name }}</h1>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 flex-1">{{ product.name }}</h1>
+                    <!-- Badge en móvil junto al título para mejor jerarquía visual -->
+                    <span v-if="stockBadge" class="md:hidden inline-flex items-center rounded text-white font-bold px-2 py-1 text-xs" :class="stockBadgeClass">{{ stockBadge }}</span>
+                </div>
 				<div class="flex items-center gap-2">
 					<p class="text-2xl md:text-3xl font-extrabold text-gray-900">
 						{{ formatCOP(displayPrice) }}
@@ -395,14 +399,15 @@ const getVariantDisplayPrices = (variant) => {
                 
                 <div class="pt-4">
             <div class="flex items-center space-x-4">
-                        <span v-if="stockBadge" class="inline-flex items-center rounded text-white font-bold px-2 py-1 text-xs md:text-sm" :class="stockBadgeClass">{{ stockBadge }}</span>
+                        <!-- Badge solo en desktop en esta fila -->
+                        <span v-if="stockBadge" class="hidden md:inline-flex items-center rounded text-white font-bold px-2 py-1 text-xs md:text-sm" :class="stockBadgeClass">{{ stockBadge }}</span>
                         <label class="font-semibold">Cantidad:</label>
-                        <div class="flex items-center border rounded-md">
-                            <button @click="decreaseQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
-                            <input type="number" v-model.number="selectedQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="w-16 text-center border-y-0 border-x disabled:bg-gray-100" />
-                            <button @click="increaseQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-r-md disabled:opacity-50">+</button>
+                        <div class="flex items-center gap-2">
+                            <button @click="decreaseQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">−</button>
+                            <input type="number" v-model.number="selectedQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="w-12 h-9 text-center border rounded-md disabled:bg-gray-100" />
+                            <button @click="increaseQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50">＋</button>
                         </div>
-                <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked" class="text-sm text-gray-600">({{ isFinite(displayStock) ? displayStock : '∞' }} en stock)</p>
+                <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked" class="ml-2 text-xs md:text-sm text-gray-600 whitespace-nowrap shrink-0">{{ isFinite(displayStock) ? displayStock : '∞' }} en stock</p>
                     </div>
 
                     <button 
