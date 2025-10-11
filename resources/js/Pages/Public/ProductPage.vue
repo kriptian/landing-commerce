@@ -202,14 +202,15 @@ const originalPrice = computed(() => {
 });
 
 const displayStock = computed(() => {
-    // Si hay variante y tiene stock definido, úsalo; si no, cae al inventario total del producto
+    // Cuando NO se maneja inventario, no limitamos cantidad
+    if (!isInventoryTracked.value) return Number.POSITIVE_INFINITY;
+    // Con inventario activo: si hay variante seleccionada, usar su stock (o caer al del producto)
     if (selectedVariant.value) {
         const sv = Number(selectedVariant.value.stock);
         if (!Number.isNaN(sv) && sv > 0) return sv;
         return Number(props.product.quantity || 0);
     }
-    if (!isInventoryTracked.value) return Number.POSITIVE_INFINITY;
-    // Sin variante seleccionada: mostrar inventario total
+    // Sin variante seleccionada: usar inventario total del producto
     return Number(props.product.quantity || 0);
 });
 
@@ -403,9 +404,9 @@ const getVariantDisplayPrices = (variant) => {
                         <span v-if="stockBadge" class="hidden md:inline-flex items-center rounded text-white font-bold px-2 py-1 text-xs md:text-sm" :class="stockBadgeClass">{{ stockBadge }}</span>
                         <label class="font-semibold">Cantidad:</label>
                         <div class="flex items-center gap-2">
-                            <button @click="decreaseQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">−</button>
-                            <input type="number" v-model.number="selectedQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="w-12 h-9 text-center border rounded-md disabled:bg-gray-100" />
-                            <button @click="increaseQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50">＋</button>
+                            <button type="button" @click="decreaseQuantity" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">−</button>
+                            <input type="number" v-model.number="selectedQuantity" :min="1" :max="isFinite(displayStock) ? displayStock : undefined" class="w-12 h-9 text-center border rounded-md" />
+                            <button type="button" @click="increaseQuantity" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800">＋</button>
                         </div>
                 <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked" class="ml-2 text-xs md:text-sm text-gray-600 whitespace-nowrap shrink-0">{{ isFinite(displayStock) ? displayStock : '∞' }} en stock</p>
                     </div>

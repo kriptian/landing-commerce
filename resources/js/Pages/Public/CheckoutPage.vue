@@ -123,7 +123,7 @@ const submitOrder = () => {
                             </div>
                         </div>
                         <p class="font-semibold whitespace-nowrap shrink-0 sm:text-right mt-2 sm:mt-0">
-                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(getBaseUnitPrice(item) * item.quantity) }}
+                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(getDisplayUnitPrice(item) * item.quantity) }}
                         </p>
                     </div>
                 </div>
