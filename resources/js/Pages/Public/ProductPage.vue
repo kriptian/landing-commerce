@@ -329,7 +329,6 @@ const getVariantDisplayPrices = (variant) => {
 <template>
     <Head :title="product.name">
         <template #default>
-            <link v-if="store.logo_url" rel="icon" type="image/png" :href="store.logo_url">
         </template>
     </Head>
 

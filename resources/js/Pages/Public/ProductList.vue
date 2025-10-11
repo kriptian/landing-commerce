@@ -199,7 +199,6 @@ const fabItems = computed(() => {
 <template>
     <Head :title="`Catálogo de ${store.name}`">
         <template #default>
-            <link v-if="store.logo_url" rel="icon" type="image/png" :href="store.logo_url">
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">

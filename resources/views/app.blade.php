@@ -6,21 +6,36 @@
 
         <title inertia>{{ config('app.name', 'Ondigitalsolution') }}</title>
         @php
+            use App\Models\Store;
             $defaultFavicon = '/images/New_Logo_ondgtl.png?v=5';
             $favicon = $defaultFavicon;
-            // Para catálogo público usar el logo de la tienda
-            if (request()->routeIs('catalogo.*') || request()->routeIs('cart.*') || request()->routeIs('checkout.*')) {
-                try {
-                    $slug = request()->route('store');
-                    if ($slug) {
-                        $store = \App\Models\Store::query()->where('slug', $slug)->first(['logo_url']);
-                        if ($store && $store->logo_url) {
-                            $favicon = $store->logo_url;
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    // Silencioso: si falla, usamos el por defecto
+            
+            $buildVersionedUrl = function (?string $url, ?int $version) use ($defaultFavicon) {
+                if (empty($url)) {
+                    return $defaultFavicon;
                 }
+                $v = $version ?? 0;
+                return $url . (strpos($url, '?') !== false ? '&' : '?') . 'v=' . $v;
+            };
+            // Intentamos resolver tienda por (1) route-model binding / slug o (2) dominio propio
+            try {
+                $storeForFavicon = null;
+                $routeStore = request()->route('store');
+                if ($routeStore instanceof Store) {
+                    $storeForFavicon = $routeStore;
+                } elseif (is_string($routeStore) && $routeStore !== '') {
+                    $storeForFavicon = Store::query()->where('slug', $routeStore)->first(['logo_url','updated_at']);
+                }
+
+                if (! $storeForFavicon) {
+                    $storeForFavicon = Store::query()->where('custom_domain', request()->getHost())->first(['logo_url','updated_at']);
+                }
+
+                if ($storeForFavicon && $storeForFavicon->logo_url) {
+                    $favicon = $buildVersionedUrl($storeForFavicon->logo_url, $storeForFavicon->updated_at?->getTimestamp());
+                }
+            } catch (\Throwable $e) {
+                // Silencioso: si falla, usamos el por defecto
             }
         @endphp
         <!-- Favicon/Íconos -->
@@ -28,6 +43,11 @@
         <link rel="icon" type="image/png" sizes="16x16" href="{{ $favicon }}">
         <link rel="shortcut icon" type="image/png" href="{{ $favicon }}">
         <link rel="apple-touch-icon" sizes="180x180" href="{{ $favicon }}">
+
+        @if (empty($storeForFavicon))
+        <!-- Indicamos explícitamente el /favicon.ico para home/login/landing (para crawlers como Google) -->
+        <link rel="icon" type="image/x-icon" href="/favicon.ico">
+        @endif
 
         <!-- Primary Meta Tags -->
         <meta name="title" content="{{ config('app.name', 'Ondigitalsolution') }}">
