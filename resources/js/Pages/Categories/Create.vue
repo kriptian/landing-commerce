@@ -47,11 +47,11 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Crear Categoría y Subcategorías" />
+    <Head title="Crear categoría" />
 
     <AuthenticatedLayout>
         <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Crear Nueva Categoría</h2>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Crear categoría</h2>
         </template>
 
         <div class="py-12">
@@ -109,8 +109,9 @@ const submit = () => {
                             </div>
 
                             <div class="flex items-center justify-end mt-8 border-t pt-6">
-                                <button type="submit" :disabled="form.processing" class="bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
-                                    Guardar Todo
+                                <button type="submit" :disabled="form.processing" class="bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 inline-flex items-center gap-2">
+                                    <span class="text-lg">+</span>
+                                    <span>Crear</span>
                                 </button>
                             </div>
                         </form>

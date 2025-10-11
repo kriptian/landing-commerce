@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
 import { ref, watch, nextTick, computed } from 'vue';
+import { safeRoute } from '@/utils/safeRoute';
 
 const props = defineProps({
     products: Object, // Objeto de paginación con los productos y sus variantes
@@ -90,7 +91,7 @@ const matchesProductStatus = (product) => {
 // Función para determinar el estado del stock
 const getStockStatus = (item) => {
     const stock = Number(item.stock) || 0;
-    const threshold = Number(item.alert ?? item.minimum_stock) || 0;
+    const threshold = Number(item.alert) || 0;
     if (stock <= 0) {
         return { text: 'Agotado', class: 'bg-red-100 text-red-800' };
     }
@@ -98,6 +99,31 @@ const getStockStatus = (item) => {
         return { text: '¡Pocas unidades!', class: 'bg-yellow-100 text-yellow-800' };
     }
     return { text: 'En Stock', class: 'bg-green-100 text-green-800' };
+};
+
+// Formateos y cálculos de márgenes
+const fmt = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Number(v || 0));
+const pct = (buy, sell) => {
+    const b = Number(buy || 0);
+    const s = Number(sell || 0);
+    if (!b || !s) return null;
+    if (b <= 0) return null;
+    return Number((((s - b) / b) * 100).toFixed(2));
+};
+
+// Precios efectivos (con herencia producto → variante)
+const effBuy = (product, variant = null) => {
+    const v = variant?.purchase_price;
+    return (v ?? null) !== null ? Number(v) : Number(product.purchase_price ?? 0);
+};
+const effRetail = (product, variant = null) => Number(variant?.price ?? product.price);
+const profit = (buy, sell) => {
+    const b = Number(buy || 0);
+    const s = Number(sell || 0);
+    if (!b || !s) return null;
+    if (b <= 0) return null;
+    const diff = s - b;
+    return diff >= 0 ? diff : null;
 };
 
 // Función para juntar las opciones de la variante en un texto
@@ -115,7 +141,7 @@ const formatVariantOptions = (options) => {
         </template>
 
         <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
                         <!-- Barra de acciones: buscador con cortina + filtro -->
@@ -141,7 +167,16 @@ const formatVariantOptions = (options) => {
                                     </div>
                                 </transition>
                             </div>
-                            <!-- Dropdown de estado (estilizado) -->
+                            <div class="flex items-center gap-2">
+                                <a :href="route('admin.inventory.export')"
+                                   class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
+                                        <path d="M7 10a1 1 0 011-1h2V4a1 1 0 112 0v5h2a1 1 0 01.7 1.714l-3 3a1 1 0 01-1.4 0l-3-3A1 1 0 017 10z"/>
+                                        <path d="M5 15a1 1 0 011 1v2a2 2 0 002 2h8a2 2 0 002-2v-2a1 1 0 112 0v2a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a1 1 0 011-1z"/>
+                                    </svg>
+                                    Exportar a Excel
+                                </a>
+                                <!-- Dropdown de estado (estilizado) -->
                             <div class="relative">
                                 <button type="button" @click="showStatusMenu = !showStatusMenu" class="inline-flex items-center gap-2 px-3 py-2 border rounded-md shadow-sm hover:bg-gray-50">
                                     <span>{{ statusLabel }}</span>
@@ -157,53 +192,47 @@ const formatVariantOptions = (options) => {
                                     </ul>
                                 </transition>
                             </div>
+                            </div>
                         </div>
 
-                        <div class="overflow-x-auto">
+                        <div class="overflow-x-visible">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Producto / Variante</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock Actual</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock Mínimo</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">STOCK ACTUAL</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">$ COMPRA</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">$ VENTA</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">% Gan.</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">$ Gan.</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                                        <th class="relative px-6 py-3">
-                                            <span class="sr-only">Editar</span>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
+                                            <span class="sr-only">Acciones</span>
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     <template v-for="product in products.data" :key="product.id">
-                                        <tr v-if="product.variants.length === 0 && matchesProductStatus(product)">
+                                        <tr v-if="matchesProductStatus(product)">
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ product.name }}</td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-800 font-bold">{{ product.quantity }}</td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-500">{{ product.minimum_stock }}</td>
+                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700">{{ fmt(product.purchase_price) }}</td>
+                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700">{{ fmt(product.price) }}</td>
+                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm" :class="{ 'text-gray-500': pct(product.purchase_price, product.price) === null }">
+                                                <span v-if="pct(product.purchase_price, product.price) !== null">{{ pct(product.purchase_price, product.price) }}%</span>
+                                                <span v-else>—</span>
+                                            </td>
+                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm" :class="{ 'text-gray-500': profit(product.purchase_price, product.price) === null }">
+                                                <span v-if="profit(product.purchase_price, product.price) !== null">{{ fmt(profit(product.purchase_price, product.price)) }}</span>
+                                                <span v-else>—</span>
+                                            </td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                                      :class="getStockStatus({ stock: product.quantity, alert: product.alert, minimum_stock: product.minimum_stock }).class">
-                                                    {{ getStockStatus({ stock: product.quantity, alert: product.alert, minimum_stock: product.minimum_stock }).text }}
+                                                      :class="getStockStatus({ stock: product.quantity, alert: product.alert }).class">
+                                                    {{ getStockStatus({ stock: product.quantity, alert: product.alert }).text }}
                                                 </span>
                                             </td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <Link :href="route('admin.products.edit', product.id)" class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-indigo-600" title="Editar">
-                                                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16.862 3.487a2.25 2.25 0 113.182 3.182L9.428 17.284a3.75 3.75 0 01-1.582.992l-2.685.805a.75.75 0 01-.93-.93l.805-2.685a3.75 3.75 0 01.992-1.582L16.862 3.487z"/><path d="M15.75 4.5l3.75 3.75"/></svg>
-                                                </Link>
-                                            </td>
-                                        </tr>
-                                        <tr v-for="variant in filteredVariants(product.variants)" :key="variant.id">
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm">
-                                                <div class="font-medium text-gray-900">{{ product.name }}</div>
-                                                <div class="text-gray-500">{{ formatVariantOptions(variant.options) }}</div>
-                                            </td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-800 font-bold">{{ variant.stock }}</td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-500">{{ variant.minimum_stock }}</td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
-                                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                                      :class="getStockStatus(variant).class">
-                                                    {{ getStockStatus(variant).text }}
-                                                </span>
-                                            </td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap w-12">
                                                 <Link :href="route('admin.products.edit', product.id)" class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-indigo-600" title="Editar">
                                                     <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16.862 3.487a2.25 2.25 0 113.182 3.182L9.428 17.284a3.75 3.75 0 01-1.582.992l-2.685.805a.75.75 0 01-.93-.93l.805-2.685a3.75 3.75 0 01.992-1.582L16.862 3.487z"/><path d="M15.75 4.5l3.75 3.75"/></svg>
                                                 </Link>

@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
-import { safeRoute } from '@/app';
+import { safeRoute } from '@/utils/safeRoute';
 import Modal from '@/Components/Modal.vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';

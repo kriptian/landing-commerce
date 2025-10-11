@@ -3,6 +3,7 @@ import ProductGallery from '@/Components/Product/ProductGallery.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
+import { useToast } from 'vue-toastification';
 
 const props = defineProps({
     product: Object,
@@ -10,7 +11,113 @@ const props = defineProps({
 
 import { ref as vref } from 'vue';
 const showVariantAlert = vref(false);
-const selectedVariantIds = ref([]); // permitir seleccionar varias variantes
+const toast = useToast();
+
+// Selección por atributos (Color, Talla, etc.)
+const optionKeys = computed(() => {
+    const keys = new Set();
+    (props.product.variants || []).forEach(v => {
+        const opts = v?.options || {};
+        Object.keys(opts).forEach(k => keys.add(k));
+    });
+    return Array.from(keys);
+});
+
+const optionValuesByKey = computed(() => {
+    const map = {};
+    optionKeys.value.forEach(k => { map[k] = []; });
+    (props.product.variants || []).forEach(v => {
+        const opts = v?.options || {};
+        optionKeys.value.forEach(k => {
+            const val = opts[k];
+            if (val != null && !map[k].includes(val)) map[k].push(val);
+        });
+    });
+    return map;
+});
+
+const selectedOptions = ref({});
+function initSelectedOptions() {
+    const obj = {};
+    optionKeys.value.forEach(k => { obj[k] = null; });
+    selectedOptions.value = obj;
+}
+initSelectedOptions();
+
+function selectOption(key, value) {
+    selectedOptions.value[key] = (selectedOptions.value[key] === value) ? null : value;
+}
+
+function isValueSelectable(key, value) {
+    // Permitir seleccionar valores aunque no haya stock; la validación final la hace el botón y el carrito
+    return (props.product.variants || []).some(v => {
+        const opts = v?.options || {};
+        if (opts[key] !== value) return false;
+        for (const k of optionKeys.value) {
+            const sel = selectedOptions.value[k];
+            if (k === key) continue;
+            if (sel != null && opts[k] !== sel) return false;
+        }
+        return true;
+    });
+}
+
+// Dependencia de atributos (opcional). Si está activada, mostramos solo valores que
+// existen en combinación con las selecciones actuales, independientemente del stock.
+const dependentAttributes = true; // habilitado por defecto; podemos parametrizar más adelante
+
+function hasCombination(key, value) {
+    return (props.product.variants || []).some(v => {
+        const opts = v?.options || {};
+        if (opts[key] !== value) return false;
+        for (const k of optionKeys.value) {
+            const sel = selectedOptions.value[k];
+            if (k === key) continue;
+            if (sel != null && opts[k] !== sel) return false;
+        }
+        return true;
+    });
+}
+
+function getValuesForKey(key) {
+    const values = optionValuesByKey.value[key] || [];
+    if (!dependentAttributes) return values;
+    // Si no hay ninguna selección en otras claves, mostramos todo
+    const hasAnyOtherSelection = optionKeys.value.some(k => k !== key && selectedOptions.value[k] != null);
+    if (!hasAnyOtherSelection) return values;
+    return values.filter(v => hasCombination(key, v));
+}
+
+// Si la dependencia está activa, al cambiar una selección invalidamos las que ya no aplican
+watch(selectedOptions, (now) => {
+    if (!dependentAttributes) return;
+    for (const key of optionKeys.value) {
+        const val = now[key];
+        if (val == null) continue;
+        if (!hasCombination(key, val)) {
+            selectedOptions.value[key] = null;
+        }
+    }
+}, { deep: true });
+
+// Calcular stock resultante si se fija un valor para una clave con la selección actual
+function computeStockForValue(key, value) {
+    if (!isInventoryTracked.value) return Number.POSITIVE_INFINITY;
+    let total = 0;
+    (props.product.variants || []).forEach(v => {
+        const opts = v?.options || {};
+        if (opts[key] !== value) return;
+        // Coincidencia con el resto de selecciones
+        for (const k of optionKeys.value) {
+            const sel = selectedOptions.value[k];
+            if (k === key) continue;
+            if (sel != null && opts[k] !== sel) return; // no coincide
+        }
+        const vs = Number(v.stock ?? 0);
+        total += vs > 0 ? vs : Number(props.product.quantity || 0);
+    });
+    return total;
+}
 
 // UI amigable cuando hay muchas variantes
 const isMobile = ref(false);
@@ -43,10 +150,13 @@ const socialLinks = computed(() => {
 const hasAnySocial = computed(() => socialLinks.value.length > 0);
 
 // Si hay exactamente una seleccionada, la tratamos como selección única
+const allKeysSelected = computed(() => optionKeys.value.every(k => selectedOptions.value[k] != null));
 const selectedVariant = computed(() => {
-    const ids = selectedVariantIds.value || [];
-    if (ids.length !== 1) return null;
-    return props.product.variants.find(v => v.id === ids[0]);
+    if (!allKeysSelected.value) return null;
+    return (props.product.variants || []).find(v => {
+        const opts = v?.options || {};
+        return optionKeys.value.every(k => opts[k] === selectedOptions.value[k]);
+    }) || null;
 });
 
 const isInventoryTracked = computed(() => props.product.track_inventory !== false);
@@ -67,8 +177,16 @@ const effectivePromoPercent = computed(() => {
 });
 
 const basePrice = computed(() => {
-    const variantPrice = selectedVariant.value?.price;
-    return Number(variantPrice ?? props.product.price);
+    // Si hay una variante seleccionada, con inventario INACTIVO usamos retail de variante o caemos al precio principal del producto
+    if (selectedVariant.value) {
+        if (!isInventoryTracked.value) {
+            const vr = selectedVariant.value.retail_price;
+            return Number((vr !== null && vr !== '') ? vr : props.product.price);
+        }
+        // Con inventario activo, mantenemos el flujo actual (precio base de variante)
+        return Number(selectedVariant.value.price ?? props.product.price);
+    }
+    return Number(props.product.price);
 });
 
 const displayPrice = computed(() => {
@@ -84,11 +202,15 @@ const originalPrice = computed(() => {
 });
 
 const displayStock = computed(() => {
+    // Si hay variante y tiene stock definido, úsalo; si no, cae al inventario total del producto
     if (selectedVariant.value) {
-        return selectedVariant.value.stock;
+        const sv = Number(selectedVariant.value.stock);
+        if (!Number.isNaN(sv) && sv > 0) return sv;
+        return Number(props.product.quantity || 0);
     }
     if (!isInventoryTracked.value) return Number.POSITIVE_INFINITY;
-    return props.product.variants.length > 0 ? 0 : props.product.quantity; 
+    // Sin variante seleccionada: mostrar inventario total
+    return Number(props.product.quantity || 0);
 });
 
 const selectedQuantity = ref(1);
@@ -109,9 +231,7 @@ const decreaseQuantity = () => {
     }
 };
 
-watch(selectedVariantIds, () => {
-    selectedQuantity.value = 1;
-});
+watch(selectedVariant, () => { selectedQuantity.value = 1; });
 
 watch(selectedQuantity, (newQty) => {
     if (newQty > displayStock.value) {
@@ -123,26 +243,45 @@ watch(selectedQuantity, (newQty) => {
 });
 
 const addToCart = () => {
-    // Si hay variantes, exigir al menos una selección
-    if (props.product.variants.length > 0 && selectedVariantIds.value.length === 0) {
+    // Exigir selección completa cuando hay variantes con múltiples atributos
+    if (props.product.variants.length > 0 && !selectedVariant.value) {
         showVariantAlert.value = true;
         return;
     }
 
-    // Si hay múltiples seleccionadas, agregamos cada una con cantidad 1
-    const ids = props.product.variants.length > 0 ? selectedVariantIds.value : [null];
-    const qty = (ids.length === 1) ? selectedQuantity.value : 1;
+    const variantId = props.product.variants.length > 0 ? selectedVariant.value?.id ?? null : null;
+    const qty = selectedQuantity.value;
 
-    ids.forEach((variantId) => {
-        router.post(route('cart.store'), {
-            product_id: props.product.id,
-            product_variant_id: variantId,
-            quantity: qty,
-        }, {
-            preserveScroll: true,
-        });
+    router.post(route('cart.store'), {
+        product_id: props.product.id,
+        product_variant_id: variantId,
+        quantity: qty,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            try { toast.success('Producto agregado al carrito'); } catch (e) {}
+            // Limpiar selección y cantidad para permitir agregar otra variante
+            initSelectedOptions();
+            selectedQuantity.value = 1;
+        }
     });
 };
+
+// Badge de stock: 'Agotado' o '¡Pocas unidades!'
+const stockBadge = computed(() => {
+    if (!isInventoryTracked.value) return null;
+    const qty = Number(displayStock.value || 0);
+    const alert = Number(props.product?.alert || 0);
+    if (qty <= 0) return 'Agotado';
+    if (alert > 0 && qty <= alert) return '¡Pocas unidades!';
+    return null;
+});
+
+const stockBadgeClass = computed(() => {
+    const b = stockBadge.value;
+    if (!b) return null;
+    return b === 'Agotado' ? 'bg-red-600' : 'bg-yellow-500';
+});
 
 const specifications = computed(() => {
     if (!props.product.specifications) return [];
@@ -158,11 +297,31 @@ const formatCOP = (value) => new Intl.NumberFormat('es-CO', { style: 'currency',
 
 // Precio mostrado por variante (considerando promoción efectiva)
 const getVariantDisplayPrices = (variant) => {
-    const b = Number((variant && variant.price != null) ? variant.price : props.product.price);
-    const p = effectivePromoPercent.value;
-    if (p > 0) {
-        return { current: Math.round((b * (100 - p)) / 100), original: b };
+    // Con inventario INACTIVO: usar retail de variante o caer al precio principal del producto
+    if (!isInventoryTracked.value) {
+        const base = (variant && variant.retail_price != null && variant.retail_price !== '')
+            ? variant.retail_price
+            : props.product.price;
+        const b = Number(base);
+        const p = effectivePromoPercent.value;
+        if (p > 0) return { current: Math.round((b * (100 - p)) / 100), original: b };
+        return { current: b, original: null };
     }
+
+    // Con inventario ACTIVO: mantenemos prioridad existente
+    let base = null;
+    if (variant && variant.retail_price != null && variant.retail_price !== '') {
+        base = variant.retail_price;
+    } else if (props.product.retail_price != null) {
+        base = props.product.retail_price;
+    } else if (variant && variant.price != null) {
+        base = variant.price;
+    } else {
+        base = props.product.price;
+    }
+    const b = Number(base);
+    const p = effectivePromoPercent.value;
+    if (p > 0) return { current: Math.round((b * (100 - p)) / 100), original: b };
     return { current: b, original: null };
 };
 </script>
@@ -177,7 +336,9 @@ const getVariantDisplayPrices = (variant) => {
     <header class="bg-white shadow-sm sticky top-0 z-50">
         <nav class="container mx-auto px-6 py-4 flex items-center justify-between gap-2">
             <div class="flex items-center gap-3 min-w-0 flex-1">
-                <img v-if="store.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-10 w-10 rounded-full object-cover">
+                <Link :href="route('catalogo.index', { store: store.slug })" class="shrink-0" title="Ir al catálogo">
+                    <img v-if="store.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-10 w-10 rounded-full object-cover">
+                </Link>
                 <h1 class="truncate text-lg sm:text-2xl font-bold text-gray-900">{{ store.name }}</h1>
             </div>
             <div class="hidden md:flex items-center space-x-4">
@@ -186,13 +347,7 @@ const getVariantDisplayPrices = (variant) => {
     </header>
     <main class="container mx-auto px-6 py-12">
         
-        <div class="mb-8 flex justify-between items-center">
-            <Link :href="route('catalogo.index', { store: store.slug })" class="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-800 text-sm font-semibold rounded-md hover:bg-gray-300">
-                &larr; Volver al Catálogo
-            </Link>
-            <div class="hidden md:flex items-center space-x-4">
-            </div>
-        </div>
+        
         <section class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-start">
             <div class="gallery">
                 <ProductGallery 
@@ -211,55 +366,55 @@ const getVariantDisplayPrices = (variant) => {
 				<p v-if="originalPrice" class="text-sm md:text-base text-gray-400 line-through">
 					{{ formatCOP(originalPrice) }}
 				</p>
-                <p class="text-lg text-gray-600">{{ product.short_description }}</p>
+                <p v-if="product.short_description" class="text-lg text-gray-600">{{ product.short_description }}</p>
 
                 <div v-if="product.variants.length > 0" class="border-t pt-4">
                     <h3 class="text-xl font-semibold mb-3">Opciones Disponibles:</h3>
-                    <div class="space-y-2">
-                        <div v-for="variant in visibleVariants" :key="variant.id">
-							<label class="flex items-center p-4 border rounded-lg cursor-pointer" :class="{ 'border-blue-600 ring-2 ring-blue-300': selectedVariantIds.includes(variant.id) }">
-                                <input type="checkbox" :value="variant.id" v-model="selectedVariantIds" class="form-checkbox text-blue-600">
-                                <div class="ml-4 flex-grow">
-                                    <span class="font-semibold text-gray-800">
-                                        <span v-for="(value, key) in variant.options" :key="key" class="mr-2">
-                                            <span class="font-normal">{{ key }}:</span> {{ value }}
-                                        </span>
-                                    </span>
-									<span class="ml-2 text-gray-900 font-semibold">({{ formatCOP(getVariantDisplayPrices(variant).current) }})</span>
-									<span v-if="effectivePromoPercent > 0" class="ml-2 inline-flex items-center rounded bg-red-600 text-white font-bold px-1.5 py-0.5 text-xs">-{{ effectivePromoPercent }}%</span>
-                                    <span v-if="getVariantDisplayPrices(variant).original" class="ml-2 text-gray-400 line-through">
-                                        {{ formatCOP(getVariantDisplayPrices(variant).original) }}
-                                    </span>
-                                </div>
-                                <span v-if="isInventoryTracked" class="text-sm font-medium" :class="{ 'text-red-600': variant.stock === 0, 'text-gray-600': variant.stock > 0 }">
-                                    {{ variant.stock > 0 ? `${variant.stock} disponibles` : 'Agotado' }}
-                                </span>
-                            </label>
+                    <div class="space-y-4">
+                        <div v-for="key in optionKeys" :key="`opt-${key}`">
+                            <div class="text-sm text-gray-700 font-medium mb-1">{{ key }}</div>
+                            <div class="flex flex-wrap gap-2">
+                                <button
+                                    v-for="value in getValuesForKey(key)"
+                                    :key="`${key}:${value}`"
+                                    type="button"
+                                    class="px-3 py-1 rounded border"
+                                    :class="{
+                                        'bg-blue-600 text-white border-blue-700': selectedOptions[key] === value,
+                                        'bg-white text-gray-800 border-gray-300': selectedOptions[key] !== value,
+                                        'opacity-50 cursor-not-allowed': isInventoryTracked && (computeStockForValue(key, value) === 0)
+                                    }"
+                                    :disabled="isInventoryTracked && (computeStockForValue(key, value) === 0)"
+                                    @click="selectOption(key, value)"
+                                >
+                                    {{ value }}
+                                </button>
+                            </div>
                         </div>
-                        <button v-if="hiddenVariantsCount > 0" type="button" class="text-sm text-blue-600 hover:text-blue-800" @click="showVariantsModal = true">Ver +{{ hiddenVariantsCount }} opciones</button>
                     </div>
                 </div>
                 
                 <div class="pt-4">
             <div class="flex items-center space-x-4">
+                        <span v-if="stockBadge" class="inline-flex items-center rounded text-white font-bold px-2 py-1 text-xs md:text-sm" :class="stockBadgeClass">{{ stockBadge }}</span>
                         <label class="font-semibold">Cantidad:</label>
                         <div class="flex items-center border rounded-md">
-                            <button @click="decreaseQuantity" :disabled="(product.variants.length > 0 && selectedVariantIds.length !== 1)" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
-                            <input type="number" v-model.number="selectedQuantity" :disabled="(product.variants.length > 0 && selectedVariantIds.length !== 1)" class="w-16 text-center border-y-0 border-x disabled:bg-gray-100" />
-                            <button @click="increaseQuantity" :disabled="(product.variants.length > 0 && selectedVariantIds.length !== 1)" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-r-md disabled:opacity-50">+</button>
+                            <button @click="decreaseQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-l-md disabled:opacity-50">-</button>
+                            <input type="number" v-model.number="selectedQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="w-16 text-center border-y-0 border-x disabled:bg-gray-100" />
+                            <button @click="increaseQuantity" :disabled="(product.variants.length > 0 && !selectedVariant)" class="px-3 py-1 text-lg font-bold hover:bg-gray-200 rounded-r-md disabled:opacity-50">+</button>
                         </div>
-                <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked && selectedVariantIds.length <= 1" class="text-sm text-gray-600">({{ isFinite(displayStock) ? displayStock : '∞' }} en stock)</p>
+                <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked" class="text-sm text-gray-600">({{ isFinite(displayStock) ? displayStock : '∞' }} en stock)</p>
                     </div>
 
                     <button 
                         @click="addToCart"
-                        :disabled="(product.variants.length > 0 && selectedVariantIds.length === 0) || (isInventoryTracked && selectedVariantIds.length === 1 && (displayStock === 0 || selectedQuantity > displayStock))"
+                        :disabled="(product.variants.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
                         class="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:bg-blue-700">
-                        {{ product.variants.length > 0 && selectedVariantIds.length === 0 ? 'Selecciona al menos una opción' : (isInventoryTracked && selectedVariantIds.length === 1 ? (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') : 'Agregar al Carrito') }}
+                        {{ product.variants.length > 0 && !selectedVariant ? 'Selecciona opciones' : (isInventoryTracked ? (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') : 'Agregar al Carrito') }}
                     </button>
                 </div>
                 
-                <div class="border-t pt-4">
+                <div v-if="specifications.length > 0" class="border-t pt-4">
                     <h3 class="text-xl font-semibold mb-3">Especificaciones</h3>
                     <ul class="list-disc list-inside text-gray-600 space-y-1">
                         <li v-for="spec in specifications" :key="spec">{{ spec }}</li>
@@ -268,7 +423,7 @@ const getVariantDisplayPrices = (variant) => {
             </div>
         </section>
 
-        <section class="long-description mt-12 md:mt-16 border-t pt-8">
+        <section v-if="product.long_description" class="long-description mt-12 md:mt-16 border-t pt-8">
             <h2 class="text-2xl font-bold mb-4">Descripción</h2>
             <div class="prose max-w-none text-gray-600">
                 <p>{{ product.long_description }}</p> 
@@ -278,7 +433,7 @@ const getVariantDisplayPrices = (variant) => {
     </main>
 
     <!-- Modal de variantes (desktop) -->
-    <div v-if="showVariantsModal" class="fixed inset-0 bg-black/40 z-[1000] flex items-center justify-center p-4" @click.self="showVariantsModal = false">
+                <div v-if="showVariantsModal" class="fixed inset-0 bg-black/40 z-[1000] flex items-center justify-center p-4" @click.self="showVariantsModal = false">
         <div class="bg-white rounded-lg w-full max-w-3xl max-h-[80vh] overflow-hidden shadow-xl" @click.stop>
             <div class="flex items-center justify-between px-4 py-3 border-b">
                 <h4 class="font-semibold">Selecciona opciones</h4>
@@ -287,8 +442,8 @@ const getVariantDisplayPrices = (variant) => {
             <div class="p-4 overflow-y-auto pb-24" style="max-height: 65vh;">
                 <div class="space-y-2">
                     <div v-for="variant in product.variants" :key="`modal-${variant.id}`">
-							<label class="flex items-center p-4 border rounded-lg cursor-pointer" :class="{ 'border-blue-600 ring-2 ring-blue-300': selectedVariantIds.includes(variant.id) }">
-                            <input type="checkbox" :value="variant.id" v-model="selectedVariantIds" class="form-checkbox text-blue-600">
+                            <label class="flex items-center p-4 border rounded-lg cursor-pointer" :class="{ 'border-blue-600 ring-2 ring-blue-300': selectedVariantId === variant.id }">
+                            <input type="radio" :value="variant.id" v-model="selectedVariantId" name="variant-select-modal" class="form-radio text-blue-600">
                             <div class="ml-4 flex-grow">
                                 <span class="font-semibold text-gray-800">
                                     <span v-for="(value, key) in variant.options" :key="key" class="mr-2">

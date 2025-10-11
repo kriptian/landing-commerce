@@ -92,15 +92,20 @@ class CheckoutController extends Controller
             return redirect()->route('catalogo.index', ['store' => $store->slug])->withErrors('Tu carrito está vacío.');
         }
 
-        $totalPrice = $cartItems->reduce(function ($total, $item) use ($store) {
-            $base = $item->variant->price ?? $item->product->price;
+        // Lógica de precio: usar SIEMPRE el precio actual del producto (alineado con Carrito y Checkout frontend)
+        $computeBaseUnit = function ($item) {
+            return (float) ($item->product->price ?? 0);
+        };
+
+        $totalPrice = $cartItems->reduce(function ($total, $item) use ($store, $computeBaseUnit) {
+            $base = $computeBaseUnit($item);
             $percent = 0;
             if ($store->promo_active && (int) $store->promo_discount_percent > 0) {
                 $percent = (int) $store->promo_discount_percent;
             } elseif ($item->product->promo_active && (int) $item->product->promo_discount_percent > 0) {
                 $percent = (int) $item->product->promo_discount_percent;
             }
-            $unit = $percent > 0 ? (int) round($base * (100 - $percent) / 100) : (int) $base;
+            $unit = $percent > 0 ? (int) round($base * (100 - $percent) / 100) : (int) round($base);
             return $total + ($unit * $item->quantity);
         }, 0);
 
@@ -118,14 +123,14 @@ class CheckoutController extends Controller
         $store->forceFill(['order_sequence' => $nextSequence])->save();
 
         foreach ($cartItems as $item) {
-            $base = $item->variant->price ?? $item->product->price;
+            $base = $computeBaseUnit($item);
             $percent = 0;
             if ($store->promo_active && (int) $store->promo_discount_percent > 0) {
                 $percent = (int) $store->promo_discount_percent;
             } elseif ($item->product->promo_active && (int) $item->product->promo_discount_percent > 0) {
                 $percent = (int) $item->product->promo_discount_percent;
             }
-            $price = $percent > 0 ? (int) round($base * (100 - $percent) / 100) : (int) $base;
+            $price = $percent > 0 ? (int) round($base * (100 - $percent) / 100) : (int) round($base);
 
             $order->items()->create([
                 'product_id' => $item->product_id,

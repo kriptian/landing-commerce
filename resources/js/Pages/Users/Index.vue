@@ -89,11 +89,13 @@ const deleteRole = () => {
             <div class="flex justify-between items-center">
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">Gestionar Usuarios y Roles</h2>
                 <div>
-                    <Link v-if="activeTab === 'roles'" :href="route('admin.roles.create')" class="bg-green-500 text-white font-bold py-2 px-4 rounded hover:bg-green-700 ml-4">
-                        Crear Nuevo Rol
+                    <Link v-if="activeTab === 'roles'" :href="route('admin.roles.create')" class="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded shadow ml-4">
+                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4a2 2 0 0 1 2-2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4zm9-1.5V7h4.5L13 2.5z"/><path d="M8 13h8v2H8zM8 9h5v2H8z"/></svg>
+                        <span>Crear</span>
                     </Link>
-                    <Link v-if="activeTab === 'users'" :href="route('admin.users.create')" class="bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
-                        Crear Nuevo Usuario
+                    <Link v-if="activeTab === 'users'" :href="route('admin.users.create')" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded shadow">
+                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4a2 2 0 0 1 2-2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4zm9-1.5V7h4.5L13 2.5z"/><path d="M8 13h8v2H8zM8 9h5v2H8z"/></svg>
+                        <span>Crear</span>
                     </Link>
                 </div>
             </div>

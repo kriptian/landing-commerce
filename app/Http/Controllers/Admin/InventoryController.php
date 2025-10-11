@@ -4,20 +4,22 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Inertia\Inertia; // <-- Importamos Inertia
+use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\InventoryExport;
 
 class InventoryController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('can:ver inventario');
+        $this->middleware('can:ver inventario')->only(['index', 'export']);
     }
+
     /**
-     * Muestra la página de gestión de inventario.
+     * Muestra la página de gestión de inventario con filtros.
      */
     public function index(Request $request)
     {
-        // Filtros: búsqueda por nombre y estado de inventario
         $search = $request->string('search')->toString();
         $status = $request->string('status')->toString(); // '', 'out_of_stock', 'low_stock'
 
@@ -25,29 +27,23 @@ class InventoryController extends Controller
             ->with('variants')
             ->latest();
 
-        // Búsqueda por nombre del producto
         if (!empty($search)) {
             $productsQuery->where('name', 'like', "%{$search}%");
         }
 
-        // Filtro por estado de inventario
         if ($status === 'out_of_stock') {
             $productsQuery->where(function ($query) {
                 $query->where(function ($q) {
-                    // Productos sin variantes agotados
                     $q->whereDoesntHave('variants')
                         ->where('quantity', '<=', 0);
                 })
-                // O productos con alguna variante agotada
                 ->orWhereHas('variants', function ($q) {
                     $q->where('stock', '<=', 0);
                 });
             });
         } elseif ($status === 'low_stock') {
-            // Solo mostrar bajo stock cuando existe ALERTA (>0) y stock <= alerta
             $productsQuery->where(function ($query) {
                 $query->where(function ($q) {
-                    // Productos sin variantes: requiere columna 'alert' > 0 y quantity <= alert
                     $q->whereDoesntHave('variants')
                         ->where('quantity', '>', 0)
                         ->whereNotNull('alert')
@@ -55,7 +51,6 @@ class InventoryController extends Controller
                         ->whereColumn('quantity', '<=', 'alert');
                 })
                 ->orWhereHas('variants', function ($q) {
-                    // Variantes: alerta > 0 y stock <= alerta
                     $q->where('stock', '>', 0)
                       ->whereNotNull('alert')
                       ->where('alert', '>', 0)
@@ -70,5 +65,14 @@ class InventoryController extends Controller
             'products' => $products,
             'filters' => $request->only(['search', 'status']),
         ]);
+    }
+
+    /**
+     * Exporta el inventario de la tienda a Excel.
+     */
+    public function export(Request $request)
+    {
+        $fileName = 'inventario-' . now()->format('Y-m-d') . '.xlsx';
+        return Excel::download(new InventoryExport($request->user()->store->id), $fileName);
     }
 }

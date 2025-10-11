@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Store;
+use App\Models\Product;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -52,11 +54,41 @@ class HandleInertiaRequests extends Middleware
             ],
             'cart' => [
                 'count' => (function () use ($request) {
-                    if (Auth::check()) {
-                        return Auth::user()->cart()->sum('quantity');
+                    // Determinar la tienda en contexto (rutas públicas usan {store})
+                    $storeParam = $request->route('store');
+                    $storeId = null;
+                    if ($storeParam instanceof Store) {
+                        $storeId = $storeParam->id;
+                    } elseif (is_string($storeParam) || is_numeric($storeParam)) {
+                        $storeId = Store::where('slug', $storeParam)->value('id');
                     }
+
+                    if (!$storeId) {
+                        return 0; // fuera del catálogo público no mostramos conteo global
+                    }
+
+                    if (Auth::check()) {
+                        // Contar únicamente items del carrito pertenecientes a esta tienda
+                        return Auth::user()->cart()
+                            ->whereRelation('product', 'store_id', $storeId)
+                            ->sum('quantity');
+                    }
+
+                    // Invitado: filtrar por productos de la tienda actual
                     $sessionCart = $request->session()->get('guest_cart', []);
-                    return collect($sessionCart)->sum(function ($row) {
+                    if (empty($sessionCart)) return 0;
+                    // Si el item ya trae store_id, lo usamos directo; si no, hacemos fallback a mapear por producto
+                    $needsLookup = collect($sessionCart)->contains(function ($row) { return !isset($row['store_id']); });
+                    $idToStore = [];
+                    if ($needsLookup) {
+                        $productIds = collect($sessionCart)->pluck('product_id')->filter()->unique()->values();
+                        if ($productIds->isNotEmpty()) {
+                            $idToStore = Product::whereIn('id', $productIds)->pluck('store_id', 'id');
+                        }
+                    }
+                    return collect($sessionCart)->sum(function ($row) use ($idToStore, $storeId) {
+                        $rowStoreId = isset($row['store_id']) ? (int) $row['store_id'] : (int) ($idToStore[(int)($row['product_id'] ?? 0)] ?? 0);
+                        if ($rowStoreId !== (int) $storeId) return 0;
                         return (int) ($row['quantity'] ?? 0);
                     });
                 })(),

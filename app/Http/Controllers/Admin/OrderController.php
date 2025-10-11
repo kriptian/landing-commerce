@@ -23,9 +23,12 @@ class OrderController extends Controller
      */
     public function index(Request $request)
     {
-        // (Opcional pero recomendado) Validamos que si nos mandan un estado, sea uno válido.
+        // Validación básica de filtros
         $request->validate([
-            'status' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['recibido', 'en_preparacion', 'despachado', 'entregado', 'cancelado'])]
+            'status' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['recibido', 'en_preparacion', 'despachado', 'entregado', 'cancelado'])],
+            'q' => ['nullable', 'string'],
+            'start' => ['nullable', 'date'],
+            'end' => ['nullable', 'date', 'after_or_equal:start'],
         ]);
 
         // Empezamos la consulta, pero todavía no la ejecutamos
@@ -37,6 +40,23 @@ class OrderController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Filtro de búsqueda (número, nombre, teléfono)
+        if ($request->filled('q')) {
+            $q = trim($request->q);
+            $query->where(function ($qq) use ($q) {
+                $qq->where('customer_name', 'like', "%{$q}%")
+                   ->orWhere('customer_phone', 'like', "%{$q}%");
+            });
+        }
+
+        // Rango de fechas (creación)
+        if ($request->filled('start') || $request->filled('end')) {
+            $start = $request->filled('start') ? \Carbon\Carbon::parse($request->start)->startOfDay() : null;
+            $end = $request->filled('end') ? \Carbon\Carbon::parse($request->end)->endOfDay() : null;
+            $query->when($start, fn($qq) => $qq->where('created_at', '>=', $start))
+                  ->when($end, fn($qq) => $qq->where('created_at', '<=', $end));
+        }
+
         // Ahora sí ejecutamos la consulta y paginamos.
         // withQueryString() hace que los links de la paginación mantengan el filtro.
         $orders = $query->orderByDesc('sequence_number')->orderByDesc('id')->paginate(15)->withQueryString();
@@ -44,7 +64,7 @@ class OrderController extends Controller
         return Inertia::render('Admin/Orders/Index', [
             'orders' => $orders,
             // Mandamos los filtros actuales a la vista para que sepa qué botón resaltar
-            'filters' => $request->only(['status']),
+            'filters' => $request->only(['status','q','start','end']),
         ]);
     }
     /**
@@ -79,30 +99,78 @@ class OrderController extends Controller
             'status' => ['required', 'string', Rule::in(['recibido', 'en_preparacion', 'despachado', 'entregado', 'cancelado'])],
         ]);
 
-        // Guardamos el estado anterior para reglas posteriores
+        // Estados
         $previousStatus = $order->status;
+        $newStatus = $request->status;
 
-        // Actualizamos la orden con el nuevo estado
-        $order->update([
-            'status' => $request->status,
-        ]);
+        // Transiciones que DESCUENTAN inventario: pasar a 'despachado' o 'entregado'
+        $shouldSubtract = !in_array($previousStatus, ['despachado', 'entregado']) && in_array($newStatus, ['despachado', 'entregado']);
+        // Transiciones que DEVUELVEN inventario: salir de 'despachado' o 'entregado'
+        $shouldReturn = in_array($previousStatus, ['despachado', 'entregado']) && !in_array($newStatus, ['despachado', 'entregado']);
 
-        // Si se cambia a CANCELADO y antes estuvo en DESPACHADO o ENTREGADO,
-        // devolvemos el inventario de los items
-        if ($request->status === 'cancelado' && in_array($previousStatus, ['despachado', 'entregado'])) {
-            DB::transaction(function () use ($order) {
+        try {
+            DB::transaction(function () use ($order, $newStatus, $shouldSubtract, $shouldReturn) {
                 $order->load('items.variant', 'items.product');
-                foreach ($order->items as $item) {
-                    if ($item->variant) {
-                        $item->variant->increment('stock', $item->quantity);
-                    } elseif ($item->product) {
-                        $item->product->increment('quantity', $item->quantity);
+
+                if ($shouldSubtract) {
+                    // Validamos y descontamos
+                    foreach ($order->items as $item) {
+                        $product = $item->product; // puede ser null si borrado
+                        // Si la tienda NO controla inventario en este producto, no hacemos nada
+                        if ($product && $product->track_inventory === false) {
+                            continue;
+                        }
+
+                        if ($item->variant) {
+                            $variant = $item->variant;
+                            if ($variant->stock > 0) {
+                                if ($variant->stock < $item->quantity) {
+                                    throw new \Exception("No hay suficiente stock para la variante seleccionada.");
+                                }
+                                $variant->decrement('stock', $item->quantity);
+                            } else {
+                                // Variante sin stock propio: descontamos del inventario total del producto
+                                if ($product) {
+                                    if ($product->quantity < $item->quantity) {
+                                        throw new \Exception("No hay suficiente stock para el producto {$item->product_name}.");
+                                    }
+                                    $product->decrement('quantity', $item->quantity);
+                                }
+                            }
+                        } elseif ($product) {
+                            if ($product->quantity < $item->quantity) {
+                                throw new \Exception("No hay suficiente stock para el producto {$item->product_name}.");
+                            }
+                            $product->decrement('quantity', $item->quantity);
+                        }
+                    }
+                } elseif ($shouldReturn) {
+                    // Devolvemos inventario
+                    foreach ($order->items as $item) {
+                        $product = $item->product;
+                        if ($product && $product->track_inventory === false) {
+                            continue;
+                        }
+                        if ($item->variant) {
+                            // Si la variante maneja stock (>0), incrementamos ahí; si no, devolvemos al total del producto
+                            if ($item->variant->stock > 0) {
+                                $item->variant->increment('stock', $item->quantity);
+                            } elseif ($product) {
+                                $product->increment('quantity', $item->quantity);
+                            }
+                        } elseif ($product) {
+                            $product->increment('quantity', $item->quantity);
+                        }
                     }
                 }
+
+                // Finalmente actualizamos el estado
+                $order->update(['status' => $newStatus]);
             });
+        } catch (\Exception $e) {
+            return back()->withErrors(['status' => $e->getMessage()]);
         }
 
-        // Regresamos a la página anterior
         return back();
     }
     /**
@@ -135,9 +203,8 @@ class OrderController extends Controller
                         // Si el item es una variante, descontamos el stock de la variante
                         $variant = $item->variant;
                         if ($variant->stock < $item->quantity) {
-                            // ===== ESTE ES EL CAMBIO =====
-                            // En vez de explotar, lanzamos un error que podemos atrapar
-                            throw new \Exception("No hay suficiente stock para la variante: {$item->variant->options['Opción']}.");
+                            // Mensaje genérico (las claves de opciones pueden variar: color, talla, etc.)
+                            throw new \Exception("No hay suficiente stock para la variante seleccionada.");
                         }
                         $variant->decrement('stock', $item->quantity);
 

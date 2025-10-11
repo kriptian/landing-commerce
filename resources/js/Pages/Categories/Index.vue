@@ -63,8 +63,9 @@ const deleteCategory = () => {
                         <div class="flex justify-between items-center mb-4">
                             <p>Aquí podés crear, editar y eliminar las categorías de tus productos.</p>
 
-                            <Link :href="route('admin.categories.create')" class="bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
-                                Crear Nueva
+                            <Link :href="route('admin.categories.create')" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded shadow">
+                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4a2 2 0 0 1 2-2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4zm9-1.5V7h4.5L13 2.5z"/><path d="M8 13h8v2H8zM8 9h5v2H8z"/></svg>
+                                <span>Crear</span>
                             </Link>
                         </div>
 

@@ -1,12 +1,13 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 
 const showInfo = ref(false);
 const infoTitle = ref('');
 const infoMessage = ref('');
+const infoType = ref('success'); // 'success' | 'error'
 
 const props = defineProps({
     order: Object,
@@ -41,27 +42,30 @@ const updateStatus = () => {
     statusForm.put(route('admin.orders.update', props.order.id), {
         preserveScroll: true,
         onSuccess: () => {
-            infoTitle.value = 'Estado actualizado';
-            infoMessage.value = 'El estado de la orden se guardó correctamente.';
-            showInfo.value = true;
+            infoType.value = 'success';
             if (newStatus === 'despachado' || newStatus === 'entregado') {
-                confirmAfterUpdate();
+                infoTitle.value = 'Venta confirmada';
+                infoMessage.value = 'Inventario actualizado correctamente.';
+            } else if (newStatus === 'cancelado') {
+                infoTitle.value = 'Pedido cancelado';
+                infoMessage.value = 'El estado se actualizó y el inventario fue revertido si correspondía.';
+            } else {
+                infoTitle.value = 'Estado actualizado';
+                infoMessage.value = 'El estado de la orden se guardó correctamente.';
             }
+            showInfo.value = true;
+        },
+        onError: (errors) => {
+            infoType.value = 'error';
+            infoTitle.value = 'Error al actualizar';
+            infoMessage.value = Array.isArray(errors)
+                ? errors.join('\n')
+                : (errors?.status || Object.values(errors || {}).join('\n') || 'Ocurrió un error inesperado.');
+            showInfo.value = true;
         }
     });
 };
 // --- FIN Lógica de Estado ---
-
-
-// ===== Confirmación automática post-estado =====
-const confirmAfterUpdate = () => {
-    router.post(route('admin.orders.confirm', props.order.id), {}, {
-        preserveScroll: true,
-        onSuccess: () => { infoTitle.value='Venta confirmada'; infoMessage.value='Inventario actualizado correctamente.'; showInfo.value=true; },
-        onError: (errors) => { infoTitle.value='Error al confirmar'; infoMessage.value=Object.values(errors).join('\n'); showInfo.value=true; }
-    });
-};
-// ==========================================================
 
 </script>
 
@@ -186,7 +190,7 @@ const confirmAfterUpdate = () => {
 
     <AlertModal
         :show="showInfo"
-        type="success"
+        :type="infoType"
         :title="infoTitle"
         :message="infoMessage"
         primary-text="Entendido"

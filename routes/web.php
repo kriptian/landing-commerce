@@ -119,6 +119,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
+        Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
     });
 
     // Rutas exclusivas de Súper Admin

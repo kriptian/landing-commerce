@@ -108,7 +108,7 @@ class ProductController extends Controller
         // --- FIN DE LA LÓGICA ---
 
         return Inertia::render('Public/ProductList', [
-            'products' => $productsQuery->latest()->paginate(24)->withQueryString(),
+            'products' => $productsQuery->latest()->paginate(36)->withQueryString(),
             'store' => $store,
             'categories' => $categories, // Mandamos solo las categorías principales para los botones
             'filters' => [

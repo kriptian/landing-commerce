@@ -14,14 +14,17 @@ class Product extends Model
     protected $fillable = [
         'name',
         'price',
+        'purchase_price',
+        'wholesale_price',
+        'retail_price',
         'track_inventory',
         'quantity',
-        'minimum_stock',
         'alert',
         'category_id',
         'short_description',
         'long_description',
         'specifications',
+        'variant_attributes',
         'is_featured',
         'promo_active',
         'promo_discount_percent',
@@ -72,6 +75,7 @@ class Product extends Model
         return [
             'gallery_images' => 'array',
             'track_inventory' => 'boolean',
+            'variant_attributes' => 'array',
         ];
     }
 

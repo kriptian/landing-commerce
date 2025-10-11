@@ -139,27 +139,24 @@ watch(drawerOpen, (open) => {
     }
 });
 
-// Helper: bajo stock (sólo si existe umbral > 0)
+// Helpers de stock para badges en cards
+const isOutOfStock = (product) => {
+    try {
+        if (product && product.track_inventory === false) return false;
+        const qty = Number(product?.quantity || 0);
+        return qty <= 0;
+    } catch (e) { return false; }
+};
+
 const isLowStock = (product) => {
     try {
         if (product && product.track_inventory === false) return false;
-        // Con variantes: si alguna variante tiene stock > 0 y existe umbral > 0, y stock <= umbral
-        if (product?.variants?.length > 0) {
-            return product.variants.some((v) => {
-                const stock = Number(v?.stock || 0);
-                const alert = Number(v?.alert) || 0;
-                if (alert <= 0) return false;
-                return stock > 0 && stock <= alert;
-            });
-        }
-        // Sin variantes: usamos quantity y alert del producto
         const qty = Number(product?.quantity || 0);
-        const alert = Number(product?.alert) || 0;
+        const alert = Number(product?.alert || 0);
+        if (qty <= 0) return false;
         if (alert <= 0) return false;
-        return qty > 0 && qty <= alert;
-    } catch (e) {
-        return false;
-    }
+        return qty <= alert;
+    } catch (e) { return false; }
 };
 
 // (El botón de acción en la tarjeta redirige directamente al detalle del producto)
@@ -316,14 +313,8 @@ const fabItems = computed(() => {
 			<Link v-for="product in products.data" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group block border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
 				<div class="relative">
 					<img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-40 sm:h-48 md:h-56 object-cover transform group-hover:scale-105 transition duration-300">
-					<span v-if="(product.track_inventory !== false) && ((product.variants ? product.variants.length === 0 : true) && Number(product.quantity || 0) === 0)"
-					  class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">
-						Agotado
-					</span>
-					<span v-else-if="isLowStock(product)"
-					  class="absolute top-3 left-3 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">
-						¡Pocas unidades!
-					</span>
+					<span v-if="isOutOfStock(product)" class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">Agotado</span>
+					<span v-else-if="isLowStock(product)" class="absolute top-3 left-3 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">¡Pocas unidades!</span>
 				</div>
 				<div class="p-4 flex flex-col gap-3">
 					<h3 class="text-base sm:text-lg font-semibold text-gray-900 line-clamp-2">{{ product.name }}</h3>

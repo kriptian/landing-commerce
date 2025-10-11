@@ -31,9 +31,13 @@ class CartController extends Controller
         }
 
         // Invitado: leer carrito desde sesión
-        $sessionCart = $request->session()->get('guest_cart', []); // [key => [product_id, product_variant_id, quantity]]
+        $sessionCart = $request->session()->get('guest_cart', []); // [key => [product_id, product_variant_id, quantity, store_id?]]
         $items = [];
         foreach ($sessionCart as $key => $row) {
+            // Si el item tiene store_id y no corresponde, lo omitimos sin tocar la sesión
+            if (isset($row['store_id']) && (int) $row['store_id'] !== (int) $store->id) {
+                continue;
+            }
             $product = Product::with('images')->find($row['product_id']);
             if (! $product || (int) $product->store_id !== (int) $store->id) {
                 continue;
@@ -73,13 +77,15 @@ class CartController extends Controller
         $product = Product::findOrFail($request->product_id);
         $variant = $request->product_variant_id ? ProductVariant::find($request->product_variant_id) : null;
 
-        // 2. Revisar el stock (ahora revisa la variante si existe). Si el producto no controla inventario y no tiene variantes, permitir libremente.
+        // 2. Revisar el stock disponible. Si el producto controla inventario por total (sin stock por variante),
+        //    permitimos caer al inventario total cuando la variante no tiene stock definido (>0).
         $stockDisponible = 0;
         if ($product->track_inventory === false) {
             // Inventario desactivado: permitir libremente (con o sin variante)
             $stockDisponible = PHP_INT_MAX;
         } else if ($variant) {
-            $stockDisponible = $variant->stock;
+            $stockVariante = (int) ($variant->stock ?? 0);
+            $stockDisponible = $stockVariante > 0 ? $stockVariante : (int) ($product->quantity ?? 0);
         } else {
             $stockDisponible = $product->quantity;
         }
@@ -117,11 +123,18 @@ class CartController extends Controller
                 'product_id' => (int) $request->product_id,
                 'product_variant_id' => $variant ? (int) $variant->id : null,
                 'quantity' => (int) $request->quantity,
+                // Guardamos explícitamente la tienda para filtrar sin consultas adicionales
+                'store_id' => (int) ($product->store_id ?? 0),
             ];
             $session->put('guest_cart', $cart);
         }
 
-        return back();
+        // Redirigir a la página del carrito para rehidratar cantidades actualizadas sin conservar estado previo
+        $storeSlug = $product->store->slug ?? null;
+        if ($storeSlug) {
+            return redirect()->route('cart.index', ['store' => $storeSlug]);
+        }
+        return redirect()->back();
     }
 
     /**

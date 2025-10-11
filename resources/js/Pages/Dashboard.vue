@@ -76,7 +76,7 @@ const copyUrl = async () => {
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
                             </span>
                             <div>
-                                <div class="text-xs uppercase tracking-wide text-gray-500">Órdenes de hoy</div>
+                                <div class="text-xs uppercase tracking-wide text-gray-500">Entregas de hoy</div>
                                 <div class="mt-1 text-2xl font-semibold text-gray-900">{{ metrics?.ordersToday || 0 }}</div>
                             </div>
                         </div>

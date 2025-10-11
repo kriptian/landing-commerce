@@ -8,13 +8,29 @@ const props = defineProps({
     store: Object,
 });
 
-// Calculamos el precio total (sigue igual)
-const totalPrice = computed(() => {
-    return props.cartItems.reduce((total, item) => {
-        const price = item.variant?.price ?? item.product.price;
-        return total + (price * item.quantity);
-    }, 0);
-});
+// Lógica de precio unitario: usar SIEMPRE el precio actual del producto
+const getBaseUnitPrice = (item) => Number(item?.product?.price ?? 0);
+
+// Promoción efectiva (prioridad tienda > producto)
+const promoPercent = (item) => {
+    try {
+        if (props.store?.promo_active && Number(props.store?.promo_discount_percent || 0) > 0) {
+            return Number(props.store.promo_discount_percent);
+        }
+        if (item?.product?.promo_active && Number(item?.product?.promo_discount_percent || 0) > 0) {
+            return Number(item.product.promo_discount_percent);
+        }
+        return 0;
+    } catch (e) { return 0; }
+};
+const getDisplayUnitPrice = (item) => {
+    const base = getBaseUnitPrice(item);
+    const percent = promoPercent(item);
+    return percent > 0 ? Math.round((base * (100 - percent)) / 100) : base;
+};
+
+// Calculamos el precio total con promoción si aplica
+const totalPrice = computed(() => props.cartItems.reduce((t, item) => t + (getDisplayUnitPrice(item) * item.quantity), 0));
 
 // Creamos el formulario (sigue igual)
 const form = useForm({
@@ -107,7 +123,7 @@ const submitOrder = () => {
                             </div>
                         </div>
                         <p class="font-semibold">
-                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format((item.variant?.price ?? item.product.price) * item.quantity) }}
+                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(getBaseUnitPrice(item) * item.quantity) }}
                         </p>
                     </div>
                 </div>

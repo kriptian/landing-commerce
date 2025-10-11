@@ -1,14 +1,36 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
+import { ref, watch } from 'vue';
 
-defineProps({
-    orders: Object, // Laravel nos manda un objeto de paginación
-    filters: Object, // <-- LA PROP NUEVA
+const props = defineProps({
+    orders: Object,
+    filters: Object,
 });
 
-// Función para formatear la fecha y que se vea más amigable
+// Buscador reactivo con debounce
+const q = ref(props.filters?.q || '');
+const start = ref(props.filters?.start || '');
+const end = ref(props.filters?.end || '');
+
+let t;
+const pushFilters = () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+        router.get(route('admin.orders.index'), {
+            status: props.filters?.status || undefined,
+            q: q.value || undefined,
+            start: start.value || undefined,
+            end: end.value || undefined,
+        }, { preserveState: true, replace: true, preserveScroll: true });
+    }, 350);
+};
+
+watch(q, pushFilters);
+watch([start, end], pushFilters);
+
+// Formateo fecha
 const formatDate = (datetime) => {
     const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     return new Date(datetime).toLocaleDateString('es-CO', options);
@@ -95,6 +117,29 @@ const formatDate = (datetime) => {
                             </div>
                         </div>
 
+                        <!-- Barra de búsqueda y rango de fechas (reactiva + responsive) -->
+                        <div class="mb-4">
+                            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
+                                <div class="md:col-span-2">
+                                    <div class="relative">
+                                        <input v-model="q" type="text" placeholder="Buscar por nombre o teléfono" class="w-full pl-10 pr-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                                        <svg class="absolute left-2 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2a8 8 0 105.293 14.707l3.5 3.5a1 1 0 001.414-1.414l-3.5-3.5A8 8 0 0010 2zm0 2a6 6 0 110 12A6 6 0 0110 4z"/></svg>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 md:col-span-2">
+                                    <input v-model="start" type="date" class="w-full border rounded-md text-sm py-2 px-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                                    <span class="text-gray-500 text-sm">a</span>
+                                    <input v-model="end" type="date" class="w-full border rounded-md text-sm py-2 px-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button @click.prevent="() => { q=''; start=''; end=''; pushFilters(); }" class="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium py-2 px-3 rounded-md w-full md:w-auto justify-center">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                        Limpiar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
 
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
@@ -102,6 +147,7 @@ const formatDate = (datetime) => {
                                     <tr>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Orden #</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
@@ -114,7 +160,8 @@ const formatDate = (datetime) => {
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     <tr v-for="order in orders.data" :key="order.id">
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ order.sequence_number || order.sequence_number === 0 ? order.sequence_number : order.id }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ order.customer_name }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{{ order.customer_name }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ order.customer_phone }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(order.created_at) }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ order.items_count }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$ {{ Number(order.total_price).toLocaleString('es-CO') }}</td>

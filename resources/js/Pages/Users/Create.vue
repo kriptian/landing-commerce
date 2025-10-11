@@ -49,7 +49,7 @@ const whatsappUrl = `https://wa.me/${superAdminPhone}?text=${encodeURIComponent(
 
     <AuthenticatedLayout>
         <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Crear Nuevo Usuario</h2>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Crear usuario</h2>
         </template>
 
         <div class="py-12">

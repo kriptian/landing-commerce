@@ -75,9 +75,11 @@ const onSelectAtLevel = async (levelIndex) => {
 const form = useForm({
     name: '',
     price: '',
+    purchase_price: null,
+    // wholesale_price eliminado
+    retail_price: null,
     track_inventory: true,
     quantity: 0,
-    minimum_stock: 0,
     alert: null,
     category_id: null, 
     short_description: '',
@@ -85,6 +87,7 @@ const form = useForm({
     specifications: '',
     gallery_files: [],
     variants: [], 
+    variant_attributes: [],
 });
 
 // --- Lógica de Variantes (Sigue igual) ---
@@ -92,8 +95,9 @@ const addVariant = () => {
     form.variants.push({ 
         options_text: '', 
         price: '', 
+        purchase_price: null,
+        retail_price: null,
         stock: 0,
-        minimum_stock: 1,
         alert: null,
     });
 };
@@ -101,6 +105,105 @@ const removeVariant = (index) => {
     form.variants.splice(index, 1);
 };
 // --- FIN Lógica Variantes ---
+
+// Sincronizar precio detal con precio principal cuando se controla inventario
+watch(() => form.track_inventory, (active) => {
+    if (active) {
+        form.retail_price = form.price;
+    }
+});
+watch(() => form.price, (newPrice) => {
+    if (form.track_inventory) {
+        form.retail_price = newPrice;
+    }
+});
+
+// Builder de Atributos (nombre + valores CSV) -> genera variantes
+const attributes = ref([{ name: '', valuesText: '', dependsOn: '', rules: {}, rulesSelected: {} }]);
+const addAttribute = () => { attributes.value.push({ name: '', valuesText: '', dependsOn: '', rules: {}, rulesSelected: {} }); };
+const removeAttribute = (idx) => { attributes.value.splice(idx, 1); };
+const parseCsv = (text) => String(text || '').split(',').map(s => s.trim()).filter(Boolean);
+const cartesian = (arrays) => arrays.reduce((a, b) => a.flatMap(x => b.map(y => x.concat([y]))), [[]]);
+// Helpers para selección múltiple segura en reglas
+function isRuleChecked(attr, pv, cv) {
+    const arr = (attr.rulesSelected && Array.isArray(attr.rulesSelected[pv])) ? attr.rulesSelected[pv] : [];
+    return arr.includes(cv);
+}
+function toggleRule(attr, pv, cv, event) {
+    const checked = !!event?.target?.checked;
+    if (!attr.rulesSelected) attr.rulesSelected = {};
+    const base = Array.isArray(attr.rulesSelected[pv]) ? [...attr.rulesSelected[pv]] : [];
+    const idx = base.indexOf(cv);
+    if (checked && idx === -1) base.push(cv);
+    if (!checked && idx !== -1) base.splice(idx, 1);
+    attr.rulesSelected[pv] = base;
+}
+const generateVariantsFromAttributes = () => {
+    const attrs = attributes.value.map(a => ({
+        name: String(a.name || '').trim(),
+        values: parseCsv(a.valuesText),
+        dependsOn: String(a.dependsOn || '').trim(),
+        rules: a.rules || {}, // { parentValue: 'a,c,d' }
+        rulesSelected: a.rulesSelected || {},
+    })).filter(a => a.name && a.values.length > 0);
+    if (attrs.length === 0) return;
+
+    // Mapa rápido por nombre
+    const nameToAttr = Object.fromEntries(attrs.map(a => [a.name, a]));
+
+    // Ordenar para que todo hijo quede después de su padre
+    const ordered = [];
+    const visited = new Set();
+    function visit(attr) {
+        if (visited.has(attr.name)) return;
+        if (attr.dependsOn && nameToAttr[attr.dependsOn]) visit(nameToAttr[attr.dependsOn]);
+        visited.add(attr.name);
+        ordered.push(attr);
+    }
+    attrs.forEach(visit);
+
+    // Generar recursivo respetando reglas
+    const results = [];
+    function backtrack(index, chosen) {
+        if (index === ordered.length) {
+            results.push({ ...chosen });
+            return;
+        }
+        const attr = ordered[index];
+        let allowed = attr.values;
+        if (attr.dependsOn) {
+            const parentVal = chosen[attr.dependsOn];
+            if (parentVal != null) {
+                const ruleRaw = attr.rulesSelected?.[parentVal] ?? attr.rules?.[parentVal] ?? [];
+                const ruleVals = Array.isArray(ruleRaw) ? ruleRaw : parseCsv(ruleRaw);
+                if (ruleVals.length > 0) {
+                    allowed = attr.values.filter(v => ruleVals.includes(v));
+                }
+            }
+        }
+        for (const val of allowed) {
+            chosen[attr.name] = val;
+            backtrack(index + 1, chosen);
+        }
+        delete chosen[attr.name];
+    }
+    backtrack(0, {});
+
+    // persistir definición para backend
+    form.variant_attributes = attrs;
+
+    form.variants = results.map(sel => {
+        const parts = ordered.map(a => `${a.name}:${sel[a.name]}`);
+        return {
+            options_text: parts.join(', '),
+            price: '',
+            purchase_price: null,
+            retail_price: null,
+            stock: 0,
+            alert: null,
+        };
+    });
+};
 
 
 // --- Lógica de Stock Total (Sigue igual) ---
@@ -115,15 +218,50 @@ watch(totalQuantity, (newTotal) => {
 
 
 // ===== LÓGICA NUEVA PARA SUMAR EL STOCK MÍNIMO =====
-const totalMinimumStock = computed(() => {
-    if (form.variants.length === 0) return Number(form.minimum_stock) || 0;
-    return form.variants.reduce((t, v) => t + (Number(v.minimum_stock) || 0), 0);
-});
+// Eliminado cálculo de mínimo: ahora no se usa
 
 // Quitamos la regla que limitaba stock actual <= stock mínimo
 
 
 const submit = () => {
+    // Derivar siempre variant_attributes desde la UI antes de enviar
+    try {
+        const attrs = attributes.value.map(a => ({
+            name: String(a.name || '').trim(),
+            values: parseCsv(a.valuesText),
+            dependsOn: String(a.dependsOn || '').trim(),
+            rules: a.rules || {},
+            rulesSelected: a.rulesSelected || {},
+        })).filter(a => a.name && a.values.length > 0);
+        form.variant_attributes = attrs;
+        // Regenerar variantes con dependencias para persistencia coherente
+        if (attrs.length > 0) {
+            const nameToAttr = Object.fromEntries(attrs.map(a => [a.name, a]));
+            const ordered = [];
+            const visited = new Set();
+            function visit(attr) { if (visited.has(attr.name)) return; if (attr.dependsOn && nameToAttr[attr.dependsOn]) visit(nameToAttr[attr.dependsOn]); visited.add(attr.name); ordered.push(attr); }
+            attrs.forEach(visit);
+            const results = [];
+            function backtrack(index, chosen) {
+                if (index === ordered.length) { results.push({ ...chosen }); return; }
+                const attr = ordered[index];
+                let allowed = attr.values;
+                if (attr.dependsOn) {
+                    const parentVal = chosen[attr.dependsOn];
+                    if (parentVal != null) {
+                        const ruleRaw = attr.rulesSelected?.[parentVal] ?? attr.rules?.[parentVal] ?? [];
+                        const ruleVals = Array.isArray(ruleRaw) ? ruleRaw : parseCsv(ruleRaw);
+                        if (ruleVals.length > 0) allowed = attr.values.filter(v => ruleVals.includes(v));
+                    }
+                }
+                for (const val of allowed) { chosen[attr.name] = val; backtrack(index + 1, chosen); }
+                delete chosen[attr.name];
+            }
+            backtrack(0, {});
+            form.variants = results.map(sel => ({ options_text: ordered.map(a => `${a.name}:${sel[a.name]}`).join(', '), price: '', purchase_price: null, stock: 0, alert: null }));
+        }
+    } catch (_) {}
+
     form.post(route('admin.products.store'), {
         preserveScroll: true,
         onError: async () => {
@@ -163,7 +301,7 @@ const submit = () => {
 
     <AuthenticatedLayout>
         <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Crear Nuevo Producto</h2>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Crear producto</h2>
         </template>
 
         <div class="py-12">
@@ -187,49 +325,47 @@ const submit = () => {
                                         <input type="checkbox" v-model="form.track_inventory" class="rounded">
                                         <span class="font-semibold">Controlar inventario</span>
                                     </label>
-                                    <h4 class="font-semibold text-gray-800 mb-2">Inventario General</h4>
-                                    <p class="text-xs text-gray-500 mb-4">
+                                    <h4 v-if="form.track_inventory" class="font-semibold text-gray-800 mb-2">Inventario y Precios</h4>
+                                    <p v-if="form.track_inventory" class="text-xs text-gray-500 mb-4">
                                         Si creas variantes, estos totales se calcularán solos.
                                     </p>
-                                    <div v-if="form.track_inventory && form.variants.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div v-if="form.track_inventory" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div>
-                                            <label for="quantity" class="block font-medium text-sm text-gray-700">Inventario (Total)</label>
+                                            <label for="quantity" class="block font-medium text-sm text-gray-700 flex items-center">Inventario (Total)
+                                                <InfoTip class="ml-1 md:hidden" text="Stock si no hay variantes. Con variantes, se suma automáticamente." />
+                                            </label>
                                             <input 
                                                 id="quantity" 
                                                 v-model="form.quantity" 
                                                 type="number" 
                                                 class="block mt-1 w-full rounded-md shadow-sm border-gray-300" 
                                                 :class="{ 'bg-gray-100': form.variants.length > 0 }"
-                                                :disabled="form.variants.length > 0"  
+                                                :disabled="form.track_inventory === false || form.variants.length > 0"  
+                                                title="Stock si no hay variantes. Con variantes, se suma automáticamente."
                                             />
                                             <p v-if="form.errors.quantity" class="mt-1 text-sm text-red-600">{{ form.errors.quantity }}</p>
-                                            <p v-else class="text-xs text-gray-500 mt-1">Stock si no hay variantes.</p>
                                         </div>
                                         <div>
-                                            <label for="minimum_stock" class="block font-medium text-sm text-gray-700">Mínimo en Stock</label>
-                                            <input 
-                                                id="minimum_stock" 
-                                                v-model="form.minimum_stock" 
-                                                type="number" 
-                                                class="block mt-1 w-full rounded-md shadow-sm border-gray-300"
-                                                :class="{ 'bg-gray-100': form.variants.length > 0 }"
-                                                :disabled="form.variants.length > 0"
-                                            />
-                                            <p v-if="form.errors.minimum_stock" class="mt-1 text-sm text-red-600">{{ form.errors.minimum_stock }}</p>
-                                            <p v-else class="text-xs text-gray-500 mt-1">Alerta de bajo stock (general).</p>
-                                        </div>
-                                        <div>
-                                            <label for="alert" class="block font-medium text-sm text-gray-700">Alerta (Opcional)</label>
+                                            <label for="alert" class="block font-medium text-sm text-gray-700 flex items-center">Alerta (Opcional)
+                                                <InfoTip class="ml-1 md:hidden" text="Se considera bajo stock cuando cantidad ≤ alerta." />
+                                            </label>
                                             <input 
                                                 id="alert" 
                                                 v-model="form.alert" 
                                                 type="number" 
                                                 class="block mt-1 w-full rounded-md shadow-sm border-gray-300"
-                                                :class="{ 'bg-gray-100': form.variants.length > 0 }"
-                                                :disabled="form.variants.length > 0"
+                                                :class="{ 'bg-gray-100': form.variants.length > 0 && form.track_inventory }"
+                                                :disabled="form.variants.length > 0 && form.track_inventory"
+                                                title="Se considera bajo stock cuando cantidad ≤ alerta."
                                             />
-                                            <p class="text-xs text-gray-500 mt-1">Para producto único. Con variantes, usá las alertas por variante.</p>
                                         </div>
+                                        <div>
+                                            <label for="purchase_price" class="block font-medium text-sm text-gray-700 flex items-center">Precio de compra
+                                                <InfoTip class="ml-1 md:hidden" text="Costo de adquisición del producto." />
+                                            </label>
+                                            <input id="purchase_price" v-model="form.purchase_price" type="number" step="0.01" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" />
+                                        </div>
+                                        
                                     </div>
                                 </div>
 
@@ -274,72 +410,68 @@ const submit = () => {
                                 <div class="md:col-span-2 mt-6 border-t pt-6">
                                 <h3 class="text-lg font-medium text-gray-900">Variantes del Producto</h3>
                                 <p class="text-sm text-gray-600 mb-4">
-                                    Añadí cada combinación como una variante separada.
+                                    Cada fila representa una combinación única. Si usás inventario, el stock total se suma automáticamente.
                                 </p>
-                                <div class="hidden md:grid grid-cols-6 gap-4 mb-2 text-sm font-medium text-gray-600">
-                                    <div class="col-span-2">Opciones (ej: Color:Rojo)</div>
-                                    <div>Precio (Opcional)</div>
-                                    <div v-if="form.track_inventory">Stock Actual</div>
-                                    <div v-if="form.track_inventory">Stock Mínimo</div>
-                                    <div v-if="form.track_inventory">Alerta (Opcional)</div>
-                                </div>
-                                <div v-for="(variant, index) in form.variants" :key="index" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-center mb-2">
-                                    <div class="md:col-span-2">
-                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Opciones</label>
-                                        <input 
-                                            type="text" 
-                                            v-model="variant.options_text" 
-                                            placeholder="Color:Rojo, Talla:M"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Precio (Opcional)</label>
-                                        <input 
-                                            type="number" 
-                                            step="0.01"
-                                            v-model="variant.price" 
-                                            placeholder="Usa precio principal"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
-                                    </div>
-                                    <div v-if="form.track_inventory">
-                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Stock Actual</label>
-                                        <input 
-                                            type="number" 
-                                            v-model="variant.stock"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
-                                        <p v-if="form.errors[`variants.${index}.stock`]" class="mt-1 text-sm text-red-600">{{ form.errors[`variants.${index}.stock`] }}</p>
+                                <!-- Atributos de variantes -->
+                                <div class="mb-4 p-4 border rounded-md bg-gray-50">
+                                    <h4 class="font-semibold text-gray-800 mb-2">Atributos de variantes</h4>
+                                    <p class="text-xs text-gray-500 mb-3">Ejemplos: Nombre "Color" y Valores "Rojo, Verde, Azul". Podés agregar más filas como "Talla" con "S, M, L".</p>
+                                    <div class="space-y-2">
+                                        <div v-for="(attr, ai) in attributes" :key="`attr-${ai}`" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
+                                            <div class="md:col-span-2">
+                                                <label class="block text-sm font-medium text-gray-700">Nombre</label>
+                                                <input v-model="attr.name" type="text" placeholder="Color" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                            </div>
+                                        <div class="md:col-span-3">
+                                                <label class="block text-sm font-medium text-gray-700">Valores (separados por coma)</label>
+                                                <input v-model="attr.valuesText" type="text" placeholder="Rojo, Verde, Azul" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                            </div>
+                                        <!-- Toggle dependencia para no saturar la vista -->
+                                        <div class="md:col-span-5">
+                                            <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" v-model="attr.__showDependency" class="rounded"><span>Configurar dependencia</span></label>
+                                        </div>
+                                        <div v-if="attr.__showDependency" class="md:col-span-5 grid grid-cols-1 md:grid-cols-5 gap-3 items-start">
+                                            <div class="md:col-span-2">
+                                                <label class="block text-sm font-medium text-gray-700">Depende de</label>
+                                                <select v-model="attr.dependsOn" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                                                    <option value="">(sin dependencia)</option>
+                                                    <option v-for="(other, oi) in attributes" :key="`dep-${ai}-${oi}`" :value="other.name" :disabled="other === attr || !other.name">{{ other.name || '(sin nombre)' }}</option>
+                                                </select>
+                                            </div>
+                                            <div v-if="attr.dependsOn" class="md:col-span-3">
+                                                <label class="block text-sm font-medium text-gray-700">Permitir valores del hijo según el valor del padre</label>
+                                                <div class="mt-2 space-y-3">
+                                                    <div v-for="pv in parseCsv((attributes.find(a => a.name === attr.dependsOn)?.valuesText) || '')" :key="`pv-${ai}-${pv}`" class="border rounded p-2">
+                                                        <div class="text-xs font-semibold text-gray-700 mb-2">{{ attr.dependsOn }} = <strong>{{ pv }}</strong></div>
+                                                        <div class="flex flex-wrap gap-3">
+                                                            <label v-for="cv in parseCsv(attr.valuesText)" :key="`cv-${ai}-${pv}-${cv}`" class="inline-flex items-center gap-1 text-sm">
+                                                                <input type="checkbox" :checked="isRuleChecked(attr, pv, cv)" @change="toggleRule(attr, pv, cv, $event)" class="rounded">
+                                                                <span>{{ cv }}</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-2">Si no seleccionas nada para un valor del padre, se permiten todos los valores del hijo.</p>
+                                            </div>
+                                        </div>
+                                            <div class="md:col-span-5 flex gap-2">
+                                                <button type="button" class="text-sm text-blue-600 hover:text-blue-800" @click="addAttribute">+ Añadir atributo</button>
+                                                <button v-if="attributes.length > 1" type="button" class="text-sm text-red-600 hover:text-red-800" @click="removeAttribute(ai)">Quitar</button>
+                                            </div>
+                                        </div>
                                     </div>
                                     
-                                    <div v-if="form.track_inventory">
-                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Stock Mínimo</label>
-                                        <input 
-                                            type="number" 
-                                            v-model="variant.minimum_stock" 
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
-                                        <p v-if="form.errors[`variants.${index}.minimum_stock`]" class="mt-1 text-sm text-red-600">{{ form.errors[`variants.${index}.minimum_stock`] }}</p>
-                                    </div>
+                                </div>
 
-                                    <div v-if="form.track_inventory">
-                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Alerta (Opcional)</label>
-                                        <input 
-                                            type="number" 
-                                            v-model="variant.alert" 
-                                            placeholder="Ej: 5"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
-                                    </div>
-                                    
-                                    <button @click="removeVariant(index)" type="button" class="text-red-600 hover:text-red-800 text-sm self-end pb-2 md:pb-0">
-                                        Quitar
-                                    </button>
-                                </div>
-                                <button @click="addVariant" type="button" class="mt-4 text-sm font-medium text-blue-600 hover:text-blue-800">
-                                    + Añadir Variante
-                                </button>
+                                
+                                
+                                
                             </div>
                             
                             <div class="md:col-span-2 flex items-center justify-end mt-6 border-t pt-6">
-                                <button type="submit" :disabled="form.processing" class="bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
-                                    Guardar Producto
+                                <button type="submit" :disabled="form.processing" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded shadow">
+                                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4a2 2 0 0 1 2-2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4zm9-1.5V7h4.5L13 2.5z"/><path d="M8 13h8v2H8zM8 9h5v2H8z"/></svg>
+                                    <span>Crear</span>
                                 </button>
                                 <span v-if="Object.keys(form.errors).length" class="ml-3 text-sm text-red-600">Por favor corrige los campos marcados.</span>
                             </div>

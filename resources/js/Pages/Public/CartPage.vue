@@ -20,9 +20,9 @@ const formatCurrency = (value) => new Intl.NumberFormat('es-CO', {
 }).format(value);
 
 const getItemKey = (item) => item.id ?? item.session_key;
-const getUnitPrice = (item) => item.variant?.price ?? item.product.price;
-// Helpers de precio con promoción (prioridad tienda > producto)
-const getBaseUnitPrice = (item) => Number(item.variant?.price ?? item.product.price);
+// Precio base: dejamos de usar precios por variante; usamos SIEMPRE el precio del producto (consistente con detalle)
+const getUnitPrice = (item) => Number(item?.product?.price ?? 0);
+const getBaseUnitPrice = getUnitPrice;
 const hasPromo = (item) => {
 	try {
 		return (props.store?.promo_active && props.store?.promo_discount_percent)
@@ -42,10 +42,25 @@ const getDisplayUnitPrice = (item) => {
 	return percent > 0 ? Math.round((base * (100 - percent)) / 100) : base;
 };
 const getMaxQty = (item) => {
-	if (item.product?.track_inventory === false) return 9999; // sin límite práctico
-	if (item.variant && typeof item.variant.stock === 'number') return Math.max(1, item.variant.stock);
-	if (typeof item.product?.quantity === 'number') return Math.max(1, item.product.quantity);
-	return 99;
+    if (item.product?.track_inventory === false) return 9999; // sin límite práctico
+    // Si existe variante pero no tiene stock (>0), caer al inventario total del producto
+    if (item.variant) {
+        const vs = Number(item.variant?.stock ?? 0);
+        const pq = Number(item.product?.quantity ?? 0);
+        return Math.max(1, vs > 0 ? vs : pq);
+    }
+    if (typeof item.product?.quantity === 'number') return Math.max(1, Number(item.product.quantity));
+    return 99;
+};
+
+// Badge por item (para mostrar en el título si es necesario)
+const getStockBadge = (item) => {
+    if (item.product?.track_inventory === false) return null;
+    const qty = typeof item.variant?.stock === 'number' && item.variant.stock > 0 ? item.variant.stock : Number(item.product?.quantity || 0);
+    const alert = Number(item.product?.alert || 0);
+    if (qty <= 0) return 'Agotado';
+    if (alert > 0 && qty <= alert) return '¡Pocas unidades!';
+    return null;
 };
 
 const totalPrice = computed(() => {
@@ -88,8 +103,12 @@ const submitQuantity = (item, quantity) => {
 	};
 	router.post(route('cart.store'), payload, {
 		preserveScroll: true,
-		preserveState: true,
-		onSuccess: () => toast.success('Cantidad actualizada'),
+		preserveState: false,
+		onSuccess: () => {
+			// Refrescar props de carrito para que la UI tome la nueva cantidad
+			router.reload({ only: ['cartItems'] });
+			try { toast.success('Cantidad actualizada'); } catch (e) {}
+		},
 		onError: () => toast.error('No se pudo actualizar la cantidad'),
 	});
 };

@@ -118,8 +118,9 @@ const initialVariants = props.product.variants.map(variant => {
         id: variant.id, 
         options_text: convertJsonToText(variant.options),
         price: variant.price ?? '', 
+        purchase_price: variant.purchase_price ?? null,
+        retail_price: variant.retail_price ?? null,
         stock: variant.stock,
-        minimum_stock: variant.minimum_stock, // <-- 1. CARGAMOS EL STOCK MÍNIMO EXISTENTE
         alert: variant.alert ?? null,
     };
 });
@@ -130,9 +131,10 @@ const form = useForm({
     _method: 'PUT', 
     name: props.product.name,
     price: props.product.price,
+    purchase_price: props.product.purchase_price ?? null,
+    // retail_price eliminado
     track_inventory: props.product.track_inventory ?? true,
     quantity: props.product.quantity,
-    minimum_stock: props.product.minimum_stock, // <-- 2. CAMPO NUEVO EN EL FORM
     alert: props.product.alert ?? null,
     category_id: props.product.category_id,
     short_description: props.product.short_description,
@@ -142,8 +144,144 @@ const form = useForm({
     images_to_delete: [],
     variants: initialVariants, 
     variants_to_delete: [], 
+    variant_attributes: [],
 });
 
+// Atributos de variantes (igual que en Crear)
+const attributes = ref([{ name: '', valuesText: '', dependsOn: '', rules: {}, rulesSelected: {} }]);
+const addAttribute = () => { attributes.value.push({ name: '', valuesText: '', dependsOn: '', rules: {}, rulesSelected: {} }); };
+const removeAttribute = (idx) => { attributes.value.splice(idx, 1); };
+const parseCsv = (text) => String(text || '').split(',').map(s => s.trim()).filter(Boolean);
+const cartesian = (arrays) => arrays.reduce((a, b) => a.flatMap(x => b.map(y => x.concat([y]))), [[]]);
+function isRuleChecked(attr, pv, cv) {
+    const arr = (attr.rulesSelected && Array.isArray(attr.rulesSelected[pv])) ? attr.rulesSelected[pv] : [];
+    return arr.includes(cv);
+}
+function toggleRule(attr, pv, cv, event) {
+    const checked = !!event?.target?.checked;
+    if (!attr.rulesSelected) attr.rulesSelected = {};
+    const base = Array.isArray(attr.rulesSelected[pv]) ? [...attr.rulesSelected[pv]] : [];
+    const idx = base.indexOf(cv);
+    if (checked && idx === -1) base.push(cv);
+    if (!checked && idx !== -1) base.splice(idx, 1);
+    attr.rulesSelected[pv] = base;
+}
+// Hidratar atributos desde variantes existentes
+const hydrateAttributesFromVariants = () => {
+    try {
+        const vs = Array.isArray(props.product.variants) ? props.product.variants : [];
+        if (vs.length === 0) return;
+        const keys = new Set();
+        vs.forEach(v => { Object.keys(v?.options || {}).forEach(k => keys.add(k)); });
+        const next = [];
+        keys.forEach((k) => {
+            const valuesSet = new Set();
+            vs.forEach(v => { const val = (v?.options || {})[k]; if (val != null && String(val).trim() !== '') valuesSet.add(String(val)); });
+            const valuesText = Array.from(valuesSet).join(', ');
+            next.push({ name: k, valuesText, dependsOn: '', rules: {}, rulesSelected: {} });
+        });
+        if (next.length > 0) attributes.value = next;
+    } catch (_) { /* noop */ }
+};
+
+// Preferir hidratar desde lo guardado en product.variant_attributes (fuente de verdad)
+const hydrateAttributesFromSaved = () => {
+    try {
+        const saved = props.product?.variant_attributes;
+        const arr = Array.isArray(saved) ? saved : [];
+        if (arr.length === 0) return false;
+        const next = arr.map(sa => {
+            const values = Array.isArray(sa?.values) ? sa.values : parseCsv(sa?.valuesText || '');
+            const dependsOn = String(sa?.dependsOn || '').trim();
+            const rulesSelected = typeof sa?.rulesSelected === 'object' && sa.rulesSelected ? sa.rulesSelected : {};
+            const rules = typeof sa?.rules === 'object' && sa.rules ? sa.rules : {};
+            const shouldShow = !!(dependsOn || Object.keys(rulesSelected).length || Object.keys(rules).length);
+            return {
+                name: String(sa?.name || ''),
+                valuesText: values.join(', '),
+                dependsOn,
+                rulesSelected,
+                rules,
+                __showDependency: shouldShow,
+            };
+        }).filter(a => a.name);
+        if (next.length > 0) {
+            attributes.value = next;
+            return true;
+        }
+    } catch (e) {}
+    return false;
+};
+
+// Hidratar dependencias guardadas
+const hydrateDependenciesFromProduct = () => {
+    try {
+        const saved = props.product?.variant_attributes || [];
+        if (!Array.isArray(saved) || saved.length === 0) return;
+        const map = Object.fromEntries(attributes.value.map(a => [a.name, a]));
+        for (const sa of saved) {
+            const local = map[sa.name];
+            if (!local) continue;
+            if (sa.dependsOn) {
+                local.dependsOn = sa.dependsOn;
+                local.__showDependency = true;
+            }
+            if (sa.rulesSelected && typeof sa.rulesSelected === 'object') {
+                local.rulesSelected = sa.rulesSelected;
+                if (Object.keys(local.rulesSelected || {}).length > 0) local.__showDependency = true;
+            } else if (sa.rules && typeof sa.rules === 'object') {
+                local.rules = sa.rules;
+                if (Object.keys(local.rules || {}).length > 0) local.__showDependency = true;
+            }
+        }
+    } catch (_) {}
+};
+// Generador: reemplaza variantes actuales con combinaciones nuevas
+const generateVariantsFromAttributes = () => {
+    const attrs = attributes.value.map(a => ({
+        name: String(a.name || '').trim(),
+        values: parseCsv(a.valuesText),
+        dependsOn: String(a.dependsOn || '').trim(),
+        rules: a.rules || {},
+        rulesSelected: a.rulesSelected || {},
+    })).filter(a => a.name && a.values.length > 0);
+    if (attrs.length === 0) return;
+    const nameToAttr = Object.fromEntries(attrs.map(a => [a.name, a]));
+    const ordered = [];
+    const visited = new Set();
+    function visit(attr) {
+        if (visited.has(attr.name)) return;
+        if (attr.dependsOn && nameToAttr[attr.dependsOn]) visit(nameToAttr[attr.dependsOn]);
+        visited.add(attr.name);
+        ordered.push(attr);
+    }
+    attrs.forEach(visit);
+    const results = [];
+    function backtrack(index, chosen) {
+        if (index === ordered.length) { results.push({ ...chosen }); return; }
+        const attr = ordered[index];
+        let allowed = attr.values;
+        if (attr.dependsOn) {
+            const parentVal = chosen[attr.dependsOn];
+            if (parentVal != null) {
+                const ruleRaw = attr.rulesSelected?.[parentVal] ?? attr.rules?.[parentVal] ?? [];
+                const ruleVals = Array.isArray(ruleRaw) ? ruleRaw : parseCsv(ruleRaw);
+                if (ruleVals.length > 0) allowed = attr.values.filter(v => ruleVals.includes(v));
+            }
+        }
+        for (const val of allowed) {
+            chosen[attr.name] = val;
+            backtrack(index + 1, chosen);
+        }
+        delete chosen[attr.name];
+    }
+    backtrack(0, {});
+    form.variant_attributes = attrs;
+    form.variants = results.map(sel => {
+        const parts = ordered.map(a => `${a.name}:${sel[a.name]}`);
+        return { id: null, options_text: parts.join(', '), price: '', purchase_price: null, stock: 0, alert: null };
+    });
+};
 // --- Lógica de Imágenes (sigue igual) ---
 const currentImages = ref([...props.product.images]);
 const markImageForDeletion = (image) => {
@@ -161,6 +299,12 @@ onMounted(() => {
     window.addEventListener('resize', updateIsMobile);
     // Preseleccionar la cadena de categorías del producto
     hydratePath();
+    // Hidratar atributos desde la definición guardada; si no hay, caer a variantes
+    const usedSaved = hydrateAttributesFromSaved();
+    if (!usedSaved) {
+        hydrateAttributesFromVariants();
+        hydrateDependenciesFromProduct();
+    }
 });
 onBeforeUnmount(() => window.removeEventListener('resize', updateIsMobile));
 
@@ -187,24 +331,7 @@ function setGalleryIndex(i) {
 }
 
 // --- Lógica de Añadir/Quitar Variantes (ajustada) ---
-const addVariant = () => {
-    form.variants.push({ 
-        id: null, 
-        options_text: '', 
-        price: '', 
-        stock: 0,
-        minimum_stock: 1, // <-- 3. CAMPO NUEVO AL AÑADIR VARIANTE
-        alert: null,
-    });
-};
-
-const removeVariant = (index) => {
-    const variant = form.variants[index];
-    if (variant.id) {
-        form.variants_to_delete.push(variant.id);
-    }
-    form.variants.splice(index, 1);
-};
+// (Se elimina la edición manual de variantes en esta vista)
 // --- FIN Lógica Variantes ---
 
 // --- Lógica de Stock Total (sigue igual) ---
@@ -226,18 +353,54 @@ watch(totalQuantity, (newTotal) => {
 });
 // --- FIN Lógica Stock ---
 
-// --- Lógica: mínimo general = suma de mínimos por variante ---
-const totalMinimumStock = computed(() => {
-    if (form.variants.length === 0) return Number(form.minimum_stock) || 0;
-    return form.variants.reduce((t, v) => t + (Number(v.minimum_stock) || 0), 0);
-});
+// Eliminado cálculo de stock mínimo
 
-// Mantener sincronizado el mínimo general cuando hay variantes
-watch(totalMinimumStock, (newTotal) => {
-    if (form.variants.length > 0) form.minimum_stock = newTotal;
-}, { immediate: true });
+// Sincronizar precio detal con precio principal cuando se controla inventario
+// (retail_price eliminado)
 
+// (retail por variante eliminado)
 const submit = () => {
+    // Siempre derivar variant_attributes desde el estado actual del builder (aunque no se toquen inputs)
+    try {
+        const attrs = attributes.value.map(a => ({
+            name: String(a.name || '').trim(),
+            values: parseCsv(a.valuesText),
+            dependsOn: String(a.dependsOn || '').trim(),
+            rules: a.rules || {},
+            rulesSelected: a.rulesSelected || {},
+        })).filter(a => a.name && a.values.length > 0);
+        form.variant_attributes = attrs;
+        // Regenerar variantes para mantener coherencia con la definición actual
+        if (attrs.length > 0) {
+            const nameToAttr = Object.fromEntries(attrs.map(a => [a.name, a]));
+            const ordered = [];
+            const visited = new Set();
+            function visit(attr) { if (visited.has(attr.name)) return; if (attr.dependsOn && nameToAttr[attr.dependsOn]) visit(nameToAttr[attr.dependsOn]); visited.add(attr.name); ordered.push(attr); }
+            attrs.forEach(visit);
+            const results = [];
+            function backtrack(index, chosen) {
+                if (index === ordered.length) { results.push({ ...chosen }); return; }
+                const attr = ordered[index];
+                let allowed = attr.values;
+                if (attr.dependsOn) {
+                    const parentVal = chosen[attr.dependsOn];
+                    if (parentVal != null) {
+                        const ruleRaw = attr.rulesSelected?.[parentVal] ?? attr.rules?.[parentVal] ?? [];
+                        const ruleVals = Array.isArray(ruleRaw) ? ruleRaw : parseCsv(ruleRaw);
+                        if (ruleVals.length > 0) allowed = attr.values.filter(v => ruleVals.includes(v));
+                    }
+                }
+                for (const val of allowed) { chosen[attr.name] = val; backtrack(index + 1, chosen); }
+                delete chosen[attr.name];
+            }
+            backtrack(0, {});
+            form.variants = results.map(sel => ({
+                id: null,
+                options_text: ordered.map(a => `${a.name}:${sel[a.name]}`).join(', '),
+                price: '', purchase_price: null, stock: 0, alert: null,
+            }));
+        }
+    } catch (_) {}
     confirmingSave.value = true;
 };
 
@@ -294,7 +457,7 @@ const confirmSave = () => {
                                         <input type="checkbox" v-model="form.track_inventory" class="rounded">
                                         <span class="font-semibold">Controlar inventario</span>
                                     </label>
-                                    <div v-if="form.track_inventory && form.variants.length === 0" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                    <div v-if="form.track_inventory" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                          <div>
                                              <label for="quantity" class="block font-medium text-sm text-gray-700">Inventario (Total)</label>
                                              <input 
@@ -302,35 +465,29 @@ const confirmSave = () => {
                                                  v-model="form.quantity" 
                                                  type="number" 
                                                  class="block mt-1 w-full rounded-md shadow-sm border-gray-300" 
-                                                 :class="{ 'bg-gray-100': form.variants.length > 0 }"
-                                                 :disabled="form.variants.length > 0" 
-                                                 required>
-                                             <p v-if="form.variants.length > 0" class="text-xs text-gray-500 mt-1">Suma automática de variantes.</p>
-                                             <p v-else class="text-xs text-gray-500 mt-1">Stock si no hay variantes.</p>
+                                                 :class="{ 'bg-gray-100': form.track_inventory === false }"
+                                                 :disabled="form.track_inventory === false" 
+                                                 required
+                                                 title="Stock si no hay variantes. Con variantes, se suma automáticamente.">
                                          </div>
-                                         <div>
-                                             <label for="minimum_stock" class="block font-medium text-sm text-gray-700">Inventario Mínimo</label>
-                                             <input 
-                                                 id="minimum_stock" 
-                                                 v-model="form.minimum_stock" 
-                                                 type="number" 
-                                                 class="block mt-1 w-full rounded-md shadow-sm border-gray-300"
-                                                 :class="{ 'bg-gray-100': form.variants.length > 0 }"
-                                                 :disabled="form.variants.length > 0"
-                                             />
-                                             <p class="text-xs text-gray-500 mt-1">Alerta de bajo stock (general).</p>
-                                             </div>
-                                         <div>
+                                          <div>
                                              <label for="alert_general" class="block font-medium text-sm text-gray-700">Alerta (Opcional)</label>
                                              <input 
                                                  id="alert_general" 
                                                  v-model="form.alert" 
                                                  type="number" 
                                                  class="block mt-1 w-full rounded-md shadow-sm border-gray-300"
-                                                 :class="{ 'bg-gray-100': form.variants.length > 0 }"
-                                                 :disabled="form.variants.length > 0"
+                                                 :class="{ 'bg-gray-100': form.track_inventory === false }"
+                                                 :disabled="form.track_inventory === false"
+                                                 title="Se considera bajo stock cuando cantidad ≤ alerta."
                                              />
                                          </div>
+                                         <div>
+                                             <label for="purchase_price" class="block font-medium text-sm text-gray-700">Precio de compra</label>
+                                             <input id="purchase_price" v-model="form.purchase_price" type="number" step="0.01" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" />
+                                         </div>
+                                         
+                                         
                                      </div>
                                     
                                     <div class="mb-2">
@@ -366,72 +523,59 @@ const confirmSave = () => {
                                 </div>
                             </div>
                             
+                        <!-- Atributos de variantes (generador) -->
                             <div class="md:col-span-2 mt-6 border-t pt-6">
-                                <h3 class="text-lg font-medium text-gray-900">Variantes del Producto</h3>
-                                <p class="text-sm text-gray-600 mb-4">
-                                    Editá, añadí o eliminá las combinaciones de variantes.
-                                </p>
-
-                                <div class="hidden md:grid grid-cols-6 gap-4 mb-2 text-sm font-medium text-gray-600">
-                                    <div class="col-span-2">Opciones (ej: Color:Rojo)</div>
-                                    <div>Precio (Opcional)</div>
-                                    <div>Stock Actual</div>
-                                    <div>Stock Mínimo</div>
-                                    <div>Alerta (Opcional)</div>
+                            <h3 class="text-lg font-medium text-gray-900">Atributos de variantes</h3>
+                            <p class="text-sm text-gray-600 mb-4">Definí atributos como "Color" y "Talla" y sus valores separados por comas. Podés regenerar combinaciones.</p>
+                            <div class="mb-4 p-4 border rounded-md bg-gray-50">
+                                <div class="space-y-2">
+                                    <div v-for="(attr, ai) in attributes" :key="`attr-${ai}`" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
+                                        <div class="md:col-span-2">
+                                            <label class="block text-sm font-medium text-gray-700">Nombre</label>
+                                            <input v-model="attr.name" type="text" placeholder="Color" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                        </div>
+                                        <div class="md:col-span-3">
+                                            <label class="block text-sm font-medium text-gray-700">Valores (separados por coma)</label>
+                                            <input v-model="attr.valuesText" type="text" placeholder="Rojo, Verde, Azul" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                        </div>
+                                        <!-- Toggle dependencia para no saturar la vista -->
+                                        <div class="md:col-span-5">
+                                            <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" v-model="attr.__showDependency" class="rounded"><span>Configurar dependencia</span></label>
                                 </div>
-
-                                <div v-for="(variant, index) in form.variants" :key="index" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-center mb-2">
+                                        <div v-if="attr.__showDependency" class="md:col-span-5 grid grid-cols-1 md:grid-cols-5 gap-3 items-start">
                                     <div class="md:col-span-2">
-                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Opciones</label>
-                                        <input 
-                                            type="text" 
-                                            v-model="variant.options_text" 
-                                            placeholder="Color:Rojo, Talla:M"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                                <label class="block text-sm font-medium text-gray-700">Depende de</label>
+                                                <select v-model="attr.dependsOn" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                                                    <option value="">(sin dependencia)</option>
+                                                    <option v-for="(other, oi) in attributes" :key="`dep-${ai}-${oi}`" :value="other.name" :disabled="other === attr || !other.name">{{ other.name || '(sin nombre)' }}</option>
+                                                </select>
                                     </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Precio (Opcional)</label>
-                                        <input 
-                                            type="number" 
-                                            step="0.01"
-                                            v-model="variant.price" 
-                                            placeholder="Usa precio principal"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                            <div v-if="attr.dependsOn" class="md:col-span-3">
+                                                <label class="block text-sm font-medium text-gray-700">Permitir valores del hijo según el valor del padre</label>
+                                                <div class="mt-2 space-y-3">
+                                                    <div v-for="pv in parseCsv((attributes.find(a => a.name === attr.dependsOn)?.valuesText) || '')" :key="`pv-${ai}-${pv}`" class="border rounded p-2">
+                                                        <div class="text-xs font-semibold text-gray-700 mb-2">{{ attr.dependsOn }} = <strong>{{ pv }}</strong></div>
+                                                        <div class="flex flex-wrap gap-3">
+                                                            <label v-for="cv in parseCsv(attr.valuesText)" :key="`cv-${ai}-${pv}-${cv}`" class="inline-flex items-center gap-1 text-sm">
+                                                                <input type="checkbox" :checked="isRuleChecked(attr, pv, cv)" @change="toggleRule(attr, pv, cv, $event)" class="rounded">
+                                                                <span>{{ cv }}</span>
+                                        </label>
+                                                        </div>
+                                                    </div>
                                     </div>
-
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Stock Actual</label>
-                                        <input 
-                                            type="number" 
-                                            v-model="variant.stock"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                                <p class="text-xs text-gray-500 mt-2">Si no seleccionas nada para un valor del padre, se permiten todos los valores del hijo.</p>
                                     </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Stock Mínimo</label>
-                                        <input 
-                                            type="number" 
-                                            v-model="variant.minimum_stock" 
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
                                     </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 md:hidden">Alerta (Opcional)</label>
-                                        <input 
-                                            type="number" 
-                                            v-model="variant.alert" 
-                                            placeholder="Ej: 5"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+                                        <div class="md:col-span-5 flex gap-2">
+                                            <button type="button" class="text-sm text-blue-600 hover:text-blue-800" @click="addAttribute">+ Añadir atributo</button>
+                                            <button v-if="attributes.length > 1" type="button" class="text-sm text-red-600 hover:text-red-800" @click="removeAttribute(ai)">Quitar</button>
                                     </div>
-                                    <button @click="removeVariant(index)" type="button" class="text-red-600 hover:text-red-800 text-sm self-end pb-2 md:pb-0">
-                                        Quitar
-                                    </button>
+                                    </div>
                                 </div>
 
-                                <button @click="addVariant" type="button" class="mt-4 text-sm font-medium text-blue-600 hover:text-blue-800">
-                                    + Añadir Variante
-                                </button>
                             </div>
+                        </div>
+                            
                             <div class="mt-6 border-t pt-6">
                                 <div class="p-4 border rounded-md bg-gray-50 col-span-2">
                                     <div class="flex items-center justify-between mb-2">
