@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { ref } from 'vue'; // <-- Importamos ref
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'; // <-- Importamos ref
 // --- 1. IMPORTAMOS LOS COMPONENTES DEL MODAL ---
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -65,6 +65,28 @@ const applyFilters = () => {
     router.get(route('admin.products.index'), { search: search.value, category: selectedCategory.value, status: selectedStatus.value }, { preserveState: true, replace: true, preserveScroll: true });
 };
 // ---------------------------------------------
+
+// Scroll lateral + degradados + header sticky + filas cebra
+const scrollBoxRef = ref(null);
+const showLeftFade = ref(false);
+const showRightFade = ref(false);
+const updateFades = () => {
+    const el = scrollBoxRef.value;
+    if (!el) return;
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+    const left = el.scrollLeft || 0;
+    showLeftFade.value = left > 0;
+    showRightFade.value = left < (maxScrollLeft - 1);
+};
+onMounted(() => {
+    nextTick(() => updateFades());
+    scrollBoxRef.value?.addEventListener('scroll', updateFades, { passive: true });
+    window.addEventListener('resize', updateFades);
+});
+onBeforeUnmount(() => {
+    scrollBoxRef.value?.removeEventListener('scroll', updateFades);
+    window.removeEventListener('resize', updateFades);
+});
 </script>
 
 <template>
@@ -108,25 +130,27 @@ const applyFilters = () => {
                             </div>
                         </div>
 
-                        <div class="overflow-x-auto">
+                        <div ref="scrollBoxRef" class="relative overflow-x-auto">
+                            <div v-show="showLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
+                            <div v-show="showRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>
                             <table class="min-w-[900px] w-full divide-y divide-gray-200 table-auto">
-                                <thead class="bg-gray-50">
+                                <thead class="sticky top-0 z-10 bg-gray-50">
                                     <tr>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Cantidad</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoría</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Activo</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Promoción</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                                        <th class="sticky left-0 z-20 bg-gray-50 px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Nombre</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Precio</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Cantidad</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Categoría</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Activo</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Promoción</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     <tr v-if="products.length === 0">
                                         <td colspan="6" class="px-3 py-3 sm:px-6 sm:py-4 text-center text-gray-500">No hay productos creados.</td>
                                     </tr>
-                                    <tr v-for="product in products" :key="product.id">
-                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
+                                    <tr v-for="(product, idx) in products" :key="product.id" class="odd:bg-white even:bg-gray-100">
+                                        <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap border-r" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">
                                             <span>{{ product.name }}</span>
                                             <span v-if="!product.is_active" class="ml-2 inline-flex items-center rounded bg-gray-200 text-gray-700 text-xs font-semibold px-2 py-0.5">Inactivo</span>
                                         </td>

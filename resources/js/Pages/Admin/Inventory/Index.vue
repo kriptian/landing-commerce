@@ -2,7 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
-import { ref, watch, nextTick, computed } from 'vue';
+import { ref, watch, nextTick, computed, onMounted, onBeforeUnmount } from 'vue';
 import { safeRoute } from '@/utils/safeRoute';
 
 const props = defineProps({
@@ -130,6 +130,28 @@ const profit = (buy, sell) => {
 const formatVariantOptions = (options) => {
     return Object.entries(options).map(([key, value]) => `${key}: ${value}`).join(', ');
 };
+
+// Indicadores de scroll lateral (degradados) para mobile
+const scrollBoxRef = ref(null);
+const showLeftFade = ref(false);
+const showRightFade = ref(false);
+const updateFades = () => {
+    const el = scrollBoxRef.value;
+    if (!el) return;
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+    const left = el.scrollLeft || 0;
+    showLeftFade.value = left > 0;
+    showRightFade.value = left < (maxScrollLeft - 1);
+};
+onMounted(() => {
+    nextTick(() => updateFades());
+    scrollBoxRef.value?.addEventListener('scroll', updateFades, { passive: true });
+    window.addEventListener('resize', updateFades);
+});
+onBeforeUnmount(() => {
+    scrollBoxRef.value?.removeEventListener('scroll', updateFades);
+    window.removeEventListener('resize', updateFades);
+});
 </script>
 
 <template>
@@ -195,26 +217,29 @@ const formatVariantOptions = (options) => {
                             </div>
                         </div>
 
-                        <div class="overflow-x-visible">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
+                        <div ref="scrollBoxRef" class="relative overflow-x-auto w-full">
+                            <!-- Fades laterales como hint de scroll -->
+                            <div v-show="showLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
+                            <div v-show="showRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>
+                            <table class="min-w-[920px] sm:min-w-full divide-y divide-gray-200">
+                                <thead class="sticky top-0 z-10 bg-gray-50">
                                     <tr>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Producto / Variante</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">STOCK ACTUAL</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">$ COMPRA</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">$ VENTA</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">% Gan.</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">$ Gan.</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
+                                        <th class="sticky left-0 z-20 bg-gray-50 px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Producto / Variante</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">STOCK ACTUAL</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">$ COMPRA</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">$ VENTA</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">% Gan.</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">$ Gan.</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Estado</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap w-12">
                                             <span class="sr-only">Acciones</span>
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <template v-for="product in products.data" :key="product.id">
-                                        <tr v-if="matchesProductStatus(product)">
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ product.name }}</td>
+                                    <template v-for="(product, idx) in products.data" :key="product.id">
+                                        <tr v-if="matchesProductStatus(product)" class="odd:bg-white even:bg-gray-100">
+                                            <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ product.name }}</td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-800 font-bold">{{ product.quantity }}</td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700">{{ fmt(product.purchase_price) }}</td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700">{{ fmt(product.price) }}</td>
@@ -240,7 +265,7 @@ const formatVariantOptions = (options) => {
                                         </tr>
                                     </template>
                                     <tr v-if="products.data.length === 0">
-                                        <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                                        <td colspan="8" class="px-6 py-4 text-center text-gray-500">
                                             No hay productos para mostrar.
                                         </td>
                                     </tr>

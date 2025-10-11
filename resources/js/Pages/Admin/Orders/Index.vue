@@ -2,7 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
-import { ref, watch } from 'vue';
+import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 
 const props = defineProps({
     orders: Object,
@@ -35,6 +35,28 @@ const formatDate = (datetime) => {
     const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     return new Date(datetime).toLocaleDateString('es-CO', options);
 };
+
+// Scroll lateral + degradados + header sticky + filas cebra
+const scrollBoxRef = ref(null);
+const showLeftFade = ref(false);
+const showRightFade = ref(false);
+const updateFades = () => {
+    const el = scrollBoxRef.value;
+    if (!el) return;
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+    const left = el.scrollLeft || 0;
+    showLeftFade.value = left > 0;
+    showRightFade.value = left < (maxScrollLeft - 1);
+};
+onMounted(() => {
+    nextTick(() => updateFades());
+    scrollBoxRef.value?.addEventListener('scroll', updateFades, { passive: true });
+    window.addEventListener('resize', updateFades);
+});
+onBeforeUnmount(() => {
+    scrollBoxRef.value?.removeEventListener('scroll', updateFades);
+    window.removeEventListener('resize', updateFades);
+});
 </script>
 
 <template>
@@ -141,25 +163,27 @@ const formatDate = (datetime) => {
                         </div>
 
 
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
+                        <div ref="scrollBoxRef" class="relative overflow-x-auto">
+                            <div v-show="showLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
+                            <div v-show="showRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>
+                            <table class="min-w-[920px] sm:min-w-full divide-y divide-gray-200">
+                                <thead class="sticky top-0 z-10 bg-gray-50">
                                     <tr>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Orden #</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                                        <th scope="col" class="sticky left-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Orden #</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Cliente</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Teléfono</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Fecha</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Items</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Total</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Estado</th>
                                         <th scope="col" class="relative px-6 py-3">
                                             <span class="sr-only">Ver</span>
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="order in orders.data" :key="order.id">
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ order.sequence_number || order.sequence_number === 0 ? order.sequence_number : order.id }}</td>
+                                    <tr v-for="(order, idx) in orders.data" :key="order.id" class="odd:bg-white even:bg-gray-100">
+                                        <td class="sticky left-0 z-10 px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ order.sequence_number || order.sequence_number === 0 ? order.sequence_number : order.id }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{{ order.customer_name }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ order.customer_phone }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(order.created_at) }}</td>
@@ -182,7 +206,7 @@ const formatDate = (datetime) => {
                                         </td>
                                     </tr>
                                     <tr v-if="orders.data.length === 0">
-                                        <td colspan="7" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                        <td colspan="8" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
                                             No se encontraron órdenes con este filtro.
                                         </td>
                                     </tr>

@@ -6,13 +6,28 @@
 
         <title inertia>{{ config('app.name', 'Ondigitalsolution') }}</title>
         @php
-            $isStorePublicRoute = request()->routeIs('catalogo.*') || request()->routeIs('cart.*') || request()->routeIs('checkout.*');
+            $defaultFavicon = '/images/New_Logo_ondgtl.png?v=5';
+            $favicon = $defaultFavicon;
+            // Para catálogo público usar el logo de la tienda
+            if (request()->routeIs('catalogo.*') || request()->routeIs('cart.*') || request()->routeIs('checkout.*')) {
+                try {
+                    $slug = request()->route('store');
+                    if ($slug) {
+                        $store = \App\Models\Store::query()->where('slug', $slug)->first(['logo_url']);
+                        if ($store && $store->logo_url) {
+                            $favicon = $store->logo_url;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Silencioso: si falla, usamos el por defecto
+                }
+            }
         @endphp
-        @unless($isStorePublicRoute)
-            <link rel="icon" type="image/png" href="/images/New_Logo_ondgtl.png?v=5">
-            <link rel="shortcut icon" type="image/png" href="/images/New_Logo_ondgtl.png?v=5">
-            <link rel="apple-touch-icon" href="/images/New_Logo_ondgtl.png?v=5">
-        @endunless
+        <!-- Favicon/Íconos -->
+        <link rel="icon" type="image/png" sizes="32x32" href="{{ $favicon }}">
+        <link rel="icon" type="image/png" sizes="16x16" href="{{ $favicon }}">
+        <link rel="shortcut icon" type="image/png" href="{{ $favicon }}">
+        <link rel="apple-touch-icon" sizes="180x180" href="{{ $favicon }}">
 
         <!-- Primary Meta Tags -->
         <meta name="title" content="{{ config('app.name', 'Ondigitalsolution') }}">
@@ -35,6 +50,17 @@
         <meta property="twitter:title" content="{{ config('app.name', 'Ondigitalsolution') }}">
         <meta property="twitter:description" content="Tu tienda online en {{ parse_url(config('app.url'), PHP_URL_HOST) ?? 'ondigitalsolution.com' }}">
         <meta property="twitter:image" content="{{ config('app.url') }}/images/New_Logo_ondgtl.png?v=5">
+
+        <!-- Structured Data: Organization (logo para Google) -->
+        <script type="application/ld+json">
+        {!! json_encode([
+            '@context' => 'https://schema.org',
+            '@type' => 'Organization',
+            'name' => config('app.name', 'Ondigitalsolution'),
+            'url' => config('app.url'),
+            'logo' => config('app.url') . '/images/New_Logo_ondgtl.png?v=5',
+        ], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE) !!}
+        </script>
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

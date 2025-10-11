@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
 import BarChart from '@/Components/BarChart.vue';
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
 
 const props = defineProps({
     orders: Object,
@@ -149,6 +149,28 @@ const formatCurrency = (value) => {
         maximumFractionDigits: 0,
     }).format(value);
 };
+
+// Scroll lateral con degradados para la tabla de órdenes
+const scrollBoxRef = ref(null);
+const showLeftFade = ref(false);
+const showRightFade = ref(false);
+const updateFades = () => {
+    const el = scrollBoxRef.value;
+    if (!el) return;
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+    const left = el.scrollLeft || 0;
+    showLeftFade.value = left > 0;
+    showRightFade.value = left < (maxScrollLeft - 1);
+};
+onMounted(() => {
+    nextTick(() => updateFades());
+    scrollBoxRef.value?.addEventListener('scroll', updateFades, { passive: true });
+    window.addEventListener('resize', updateFades);
+});
+onBeforeUnmount(() => {
+    scrollBoxRef.value?.removeEventListener('scroll', updateFades);
+    window.removeEventListener('resize', updateFades);
+});
 </script>
 
 <template>
@@ -246,23 +268,25 @@ const formatCurrency = (value) => {
                                     Exportar a Excel
                                 </a>
                             </div>
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-200">
-                                    <thead class="bg-gray-50">
+                            <div ref="scrollBoxRef" class="relative overflow-x-auto">
+                                <div v-show="showLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
+                                <div v-show="showRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>
+                                <table class="min-w-[920px] sm:min-w-full divide-y divide-gray-200">
+                                    <thead class="sticky top-0 z-10 bg-gray-50">
                                         <tr>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Orden #</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Productos</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cantidades</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">P. Unitario</th>
+                                            <th class="sticky left-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Orden #</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Cliente</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Fecha</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Estado</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Total</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Productos</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Cantidades</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">P. Unitario</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
-                                        <tr v-for="order in orders.data" :key="order.id">
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:underline">
+                                        <tr v-for="(order, idx) in orders.data" :key="order.id" class="odd:bg-white even:bg-gray-100">
+                                            <td class="sticky left-0 z-10 px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:underline border-r" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">
                                                 <Link :href="route('admin.orders.show', order.id)">{{ order.sequence_number || order.sequence_number === 0 ? order.sequence_number : order.id }}</Link>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ order.customer_name }}</td>
@@ -298,7 +322,7 @@ const formatCurrency = (value) => {
                                             </td>
                                         </tr>
                                         <tr v-if="orders.data.length === 0">
-                                            <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">
                                                 No hay órdenes para mostrar en este período.
                                             </td>
                                         </tr>
