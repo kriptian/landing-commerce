@@ -24,8 +24,8 @@ const whatsappUpgradeHref = () => {
     const storeName = store?.name || 'Mi tienda';
     const text = `Hola, soy la tienda ${storeName} y deseo mejorar mi plan.`;
     const encoded = encodeURIComponent(text);
-    return `https://wa.me/573208204198?text=${encoded}`;
-  } catch (e) { return `https://wa.me/573208204198`; }
+    return `https://wa.me/573024061771?text=${encoded}`;
+  } catch (e) { return `https://wa.me/573024061771`; }
 };
 
 // Permitir que otras vistas abran el flujo de upgrade (p.ej., cards del Dashboard)

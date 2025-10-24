@@ -1,5 +1,60 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
+
+const open = ref(false);
+const form = useForm({
+    name: '',
+    store_name: '',
+    email: '',
+    password: '',
+    password_confirmation: '',
+    // Extras opcionales para auto-configuración básica
+    phone: '',
+    plan: 'emprendedor',
+    plan_cycle: 'mensual',
+    max_users: 3,
+});
+
+const submit = () => {
+    form.post(route('register'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            // Cerrar el slide-over; el modal se abrirá si viene el flash de store_created
+            open.value = false;
+            showSuccess.value = true;
+        },
+    });
+};
+
+const planDescription = computed(() => {
+    if (form.plan === 'negociante') {
+        return [
+            'Todo lo del plan Emprendedor, MÁS:',
+            'Gestión de órdenes avanzada: estados como recibido, despachado, entregado y notificaciones por WhatsApp a tus clientes.',
+            'Gestión de inventario inteligente: alertas por stock mínimo o agotado.',
+            'Control de usuarios y roles: da acceso a tu equipo (ej. vendedor).',
+            'Reportes de ventas y gráficos para analizar tu negocio.',
+            'Exportar órdenes a Excel.',
+        ];
+    }
+    // Emprendedor
+    return [
+        'Catálogo online profesional con tu logo y nombre.',
+        'Productos ilimitados.',
+        'Variantes de productos (tallas, colores, etc.).',
+        'Gestión de categorías.',
+        'Checkout a WhatsApp: pedidos directos a tu celular.',
+        '0% de comisión por venta.',
+    ];
+});
+
+const showSuccess = ref(false);
+const page = usePage();
+// Mostrar modal si el backend dejó flash en la redirección
+watch(() => page.props.flash?.store_created, (v) => {
+    if (v) showSuccess.value = true;
+}, { immediate: true });
 </script>
 
 <template>
@@ -24,6 +79,13 @@ import { Head, Link } from '@inertiajs/vue3';
                             <li class="flex gap-3"><span class="mt-1 h-2 w-2 rounded-full bg-white"></span>Promociones, reportes y roles para tu equipo</li>
                         </ul>
                         <div class="mt-8 flex flex-col sm:flex-row gap-3">
+                            <button
+                                type="button"
+                                @click="open = true"
+                                class="inline-flex items-center justify-center px-5 py-3 bg-yellow-300 text-blue-900 font-bold rounded-lg shadow hover:bg-yellow-200 border border-white/60"
+                            >
+                                ¡Crear mi tienda gratis!
+                            </button>
                             <a
                                 href="https://wa.me/573024061771?text=Hola%20quiero%20crear%20mi%20tienda%20online%20con%20Ondigitalsolution"
                                 target="_blank"
@@ -53,6 +115,90 @@ import { Head, Link } from '@inertiajs/vue3';
                 </div>
             </div>
         </section>
+
+        <!-- Slide-over de creación de tienda -->
+        <div class="fixed inset-0 z-40" v-show="open">
+            <transition name="backdrop-fade">
+                <div v-show="open" class="absolute inset-0 bg-black/40" @click="open = false"></div>
+            </transition>
+            <transition name="slideover">
+                <div v-show="open" class="absolute inset-y-0 right-0 w-full sm:max-w-md bg-white shadow-xl flex flex-col">
+                <div class="px-4 py-4 border-b flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900">Crear mi tienda</h3>
+                    <button class="text-gray-500 hover:text-gray-700" @click="open = false">✕</button>
+                </div>
+                <div class="p-4 overflow-y-auto">
+                    <form @submit.prevent="submit" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Nombre de tu Tienda</label>
+                            <input v-model="form.store_name" type="text" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" required />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Tu Nombre</label>
+                            <input v-model="form.name" type="text" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" required />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Tu Email</label>
+                            <input v-model="form.email" type="email" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" required />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Teléfono (WhatsApp)</label>
+                            <input v-model="form.phone" placeholder="57xxxxxxxxxx" type="tel" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" />
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Contraseña</label>
+                                <input v-model="form.password" type="password" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" required />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Confirmar contraseña</label>
+                                <input v-model="form.password_confirmation" type="password" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" required />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Plan</label>
+                            <select v-model="form.plan" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                                <option value="emprendedor">Emprendedor</option>
+                                <option value="negociante">Negociante (recomendado)</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="w-full py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50" :disabled="form.processing">
+                            {{ form.processing ? 'Creando...' : 'Crear tienda' }}
+                        </button>
+                        <transition name="slide-up" mode="out-in">
+                            <div :key="form.plan" class="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-sm text-blue-900">
+                                <p class="font-semibold mb-1">Incluye en tu plan {{ form.plan === 'negociante' ? 'Negociante' : 'Emprendedor' }}:</p>
+                                <ul class="list-disc ms-5 space-y-1">
+                                    <li v-for="(item, i) in planDescription" :key="i">{{ item }}</li>
+                                </ul>
+                            </div>
+                        </transition>
+                        <p v-if="form.hasErrors" class="text-sm text-red-600">Por favor corrige los campos marcados.</p>
+                    </form>
+                </div>
+                </div>
+            </transition>
+        </div>
+
+        <!-- Modal de éxito -->
+        <transition name="backdrop-fade">
+            <div v-show="showSuccess" class="fixed inset-0 z-50 flex items-center justify-center">
+                <div class="absolute inset-0 bg-black/40" @click="showSuccess = false"></div>
+                <div class="relative z-10 w-[92%] sm:w-full sm:max-w-md rounded-2xl bg-white shadow-2xl p-6">
+                    <div class="flex items-start gap-3">
+                        <div class="shrink-0 rounded-full bg-green-100 text-green-700 w-10 h-10 flex items-center justify-center">✓</div>
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900">¡Tienda creada con éxito!</h4>
+                            <p class="mt-1 text-sm text-gray-700">Ingresá con tu correo y la contraseña que acabás de definir.</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex items-center justify-end gap-3">
+                        <Link :href="route('login')" class="inline-flex items-center justify-center rounded-md bg-blue-600 text-white px-4 py-2 font-semibold hover:bg-blue-700">Ir a iniciar sesión</Link>
+                    </div>
+                </div>
+            </div>
+        </transition>
 
         <!-- Sección informativa estática y legible -->
         <section class="max-w-7xl mx-auto px-6 py-14">
@@ -132,4 +278,41 @@ import { Head, Link } from '@inertiajs/vue3';
     </div>
 </template>
 
+<style>
+/* Animación slide-up para el cambio de plan */
+.slide-up-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.slide-up-enter-active {
+  transition: all .18s ease-out;
+}
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.slide-up-leave-active {
+  transition: all .14s ease-in;
+}
 
+/* Backdrop fade */
+.backdrop-fade-enter-from,
+.backdrop-fade-leave-to {
+  opacity: 0;
+}
+.backdrop-fade-enter-active,
+.backdrop-fade-leave-active {
+  transition: opacity .18s ease;
+}
+
+/* Panel slide from right */
+.slideover-enter-from,
+.slideover-leave-to {
+  transform: translateX(100%);
+  opacity: 0.9;
+}
+.slideover-enter-active,
+.slideover-leave-active {
+  transition: all .22s cubic-bezier(.22,.61,.36,1);
+}
+</style>

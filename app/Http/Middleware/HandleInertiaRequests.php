@@ -51,6 +51,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'store_created' => fn () => $request->session()->get('store_created'),
             ],
             'cart' => [
                 'count' => (function () use ($request) {
