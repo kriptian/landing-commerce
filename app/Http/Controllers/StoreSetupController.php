@@ -31,6 +31,8 @@ class StoreSetupController extends Controller
             'facebook_url' => 'nullable|url|max:255',
             'instagram_url' => 'nullable|url|max:255',
             'tiktok_url' => 'nullable|url|max:255',
+            'plan' => 'required|in:emprendedor,negociante',
+            'plan_cycle' => 'nullable|in:mensual,anual',
         ]);
 
         $store = $request->user()->store;
@@ -40,6 +42,10 @@ class StoreSetupController extends Controller
             $validated['logo_url'] = '/storage/' . $path;
         }
 
+        // Si se cambia plan, marcamos fechas básicas
+        if (isset($validated['plan']) && $validated['plan'] !== $store->plan) {
+            $validated['plan_started_at'] = now();
+        }
         $store->update($validated);
 
         return Redirect::route('dashboard');

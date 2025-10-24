@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm, Link } from '@inertiajs/vue3';
+import { Head, useForm, Link, router } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -15,8 +16,8 @@ const form = useForm({
     name: props.store.name,
     max_users: props.store.max_users,
     phone: props.store.phone || '',
-    promo_active: props.store.promo_active || false,
-    promo_discount_percent: props.store.promo_discount_percent || 0,
+    plan: props.store.plan || 'emprendedor',
+    plan_cycle: props.store.plan_cycle || 'mensual',
     owner_name: props.store.owner?.name || '',
     owner_email: props.store.owner?.email || '',
     owner_password: '',
@@ -24,8 +25,13 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post(route('super.stores.update', props.store.id));
+    form.submit('put', route('super.stores.update', props.store.id), {
+        preserveScroll: true,
+        onSuccess: () => router.visit(route('super.stores.index')),
+    });
 };
+
+const hasErrors = computed(() => Object.keys(form.errors || {}).length > 0);
 </script>
 
 <template>
@@ -44,6 +50,11 @@ const submit = () => {
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
                         <form @submit.prevent="submit" class="space-y-4">
+                            <div v-if="hasErrors" class="p-3 rounded bg-red-50 text-red-700 text-sm">
+                                <ul class="list-disc ml-5">
+                                    <li v-for="(msg, key) in form.errors" :key="key">{{ msg }}</li>
+                                </ul>
+                            </div>
                             <div>
                                 <InputLabel for="name" value="Nombre de la Tienda" />
                                 <TextInput id="name" class="mt-1 block w-full" v-model="form.name" />
@@ -54,18 +65,26 @@ const submit = () => {
                                 <TextInput id="phone" class="mt-1 block w-full" v-model="form.phone" placeholder="57xxxxxxxxxx" />
                                 <InputError :message="form.errors.phone" class="mt-2" />
                             </div>
-                            <div>
-                                <InputLabel for="promo" value="Promoción Global" />
-                                <div class="mt-1 flex items-center gap-4">
-                                    <label class="inline-flex items-center gap-2">
-                                        <input id="promo" type="checkbox" v-model="form.promo_active" class="rounded border-gray-300">
-                                        Activa
-                                    </label>
-                                    <TextInput type="number" min="1" max="90" class="w-24" v-model.number="form.promo_discount_percent" placeholder="%" />
-                                    <span class="text-sm text-gray-500">Se aplicará a todos los productos sin promo propia.</span>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <InputLabel value="Plan" />
+                                    <select v-model="form.plan" class="mt-1 w-full rounded-md border-gray-300">
+                                        <option value="emprendedor">Emprendedor</option>
+                                        <option value="negociante">Negociante (recomendado)</option>
+                                    </select>
+                                    <InputError :message="form.errors.plan" class="mt-2" />
                                 </div>
-                                <InputError :message="form.errors.promo_discount_percent" class="mt-2" />
+                                <div>
+                                    <InputLabel value="Ciclo" />
+                                    <select v-model="form.plan_cycle" class="mt-1 w-full rounded-md border-gray-300">
+                                        <option value="mensual">Mensual</option>
+                                        <option value="anual">Anual</option>
+                                    </select>
+                                    <InputError :message="form.errors.plan_cycle" class="mt-2" />
+                                </div>
                             </div>
+                            
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <InputLabel for="owner_name" value="Nombre del Dueño" />
@@ -82,10 +101,12 @@ const submit = () => {
                                 <div>
                                     <InputLabel for="owner_password" value="Nueva Contraseña (opcional)" />
                                     <TextInput id="owner_password" type="password" class="mt-1 block w-full" v-model="form.owner_password" />
+                                    <InputError :message="form.errors.owner_password" class="mt-2" />
                                 </div>
                                 <div>
                                     <InputLabel for="owner_password_confirmation" value="Confirmación" />
                                     <TextInput id="owner_password_confirmation" type="password" class="mt-1 block w-full" v-model="form.owner_password_confirmation" />
+                                    <InputError :message="form.errors.owner_password_confirmation" class="mt-2" />
                                 </div>
                             </div>
                             <div>
@@ -93,7 +114,9 @@ const submit = () => {
                                 <TextInput id="max_users" type="number" min="1" class="mt-1 block w-full" v-model.number="form.max_users" />
                                 <InputError :message="form.errors.max_users" class="mt-2" />
                             </div>
-                            <PrimaryButton :disabled="form.processing">Guardar</PrimaryButton>
+                            <button type="button" @click="submit" :disabled="form.processing" class="inline-flex items-center rounded-md border border-transparent bg-gray-800 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition duration-150 ease-in-out hover:bg-gray-700 focus:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:bg-gray-900">
+                                Guardar
+                            </button>
                         </form>
                     </div>
                 </div>

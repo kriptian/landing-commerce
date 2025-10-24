@@ -35,6 +35,8 @@ class StoreController extends Controller
             'owner_email' => 'required|email|max:255|unique:users,email',
             'owner_password' => 'required|string|min:8|confirmed',
             'max_users' => 'required|integer|min:1',
+            'plan' => 'required|in:emprendedor,negociante',
+            'plan_cycle' => 'nullable|in:mensual,anual',
         ]);
 
         // Crear usuario propietario (admin de la tienda)
@@ -51,6 +53,9 @@ class StoreController extends Controller
             'user_id' => $owner->id,
             'phone' => $validated['phone'],
             'max_users' => $validated['max_users'],
+            'plan' => $validated['plan'],
+            'plan_cycle' => $validated['plan_cycle'] ?? 'mensual',
+            'plan_started_at' => now(),
         ]);
 
         // Asignar store_id al propietario
@@ -87,11 +92,12 @@ class StoreController extends Controller
             'name' => 'required|string|max:255',
             'max_users' => 'required|integer|min:1',
             'phone' => 'required|string|max:20',
-            'promo_active' => 'sometimes|boolean',
-            'promo_discount_percent' => 'sometimes|nullable|integer|min:1|max:90',
+            // Promoción global ya no se edita aquí
             'owner_name' => 'required|string|max:255',
             'owner_email' => 'required|email|max:255|unique:users,email,' . $store->user_id,
             'owner_password' => 'nullable|string|min:8|confirmed',
+            'plan' => 'required|in:emprendedor,negociante',
+            'plan_cycle' => 'nullable|in:mensual,anual',
         ]);
 
         DB::transaction(function () use ($store, $validated) {
@@ -99,8 +105,8 @@ class StoreController extends Controller
                 'name' => $validated['name'],
                 'max_users' => $validated['max_users'],
                 'phone' => $validated['phone'],
-                'promo_active' => $validated['promo_active'] ?? $store->promo_active,
-                'promo_discount_percent' => $validated['promo_discount_percent'] ?? $store->promo_discount_percent,
+                'plan' => $validated['plan'],
+                'plan_cycle' => $validated['plan_cycle'] ?? $store->plan_cycle,
             ]);
 
             $owner = User::find($store->user_id);

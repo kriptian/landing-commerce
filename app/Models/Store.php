@@ -24,6 +24,10 @@ class Store extends Model
         'custom_domain',
         'promo_active',
         'promo_discount_percent',
+        'plan',
+        'plan_cycle',
+        'plan_started_at',
+        'plan_renews_at',
     ];
 
     /**

@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 
@@ -66,6 +66,94 @@ const updateStatus = () => {
     });
 };
 // --- FIN Lógica de Estado ---
+
+// --- Notificar estado actual por WhatsApp ---
+const page = usePage();
+const storeName = computed(() => page?.props?.auth?.user?.store?.name || 'nuestra tienda');
+const storeUrl = computed(() => {
+    const s = page?.props?.auth?.user?.store;
+    if (!s) return '#';
+    if (s.custom_domain) {
+        const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:';
+        return `${protocol}//${s.custom_domain}`;
+    }
+    return route('catalogo.index', { store: s.slug });
+});
+
+// Resumen breve de ítems comprados
+const buildItemsSummary = () => {
+    try {
+        const items = Array.isArray(props.order?.items) ? props.order.items : [];
+        if (!items.length) return '';
+        const lines = items.map((it) => {
+            const qty = Number(it.quantity || 0);
+            let opts = '';
+            if (it.variant_options) {
+                try {
+                    const parts = Object.entries(it.variant_options).map(([k, v]) => `${k}: ${v}`);
+                    opts = parts.length ? ` (${parts.join(', ')})` : '';
+                } catch (e) { /* noop */ }
+            }
+            return ` - ${qty} x ${it.product_name}${opts}`;
+        });
+        return `\nTu orden incluye:\n${lines.join('\n')}`;
+    } catch (e) {
+        return '';
+    }
+};
+
+const buildStatusMessage = () => {
+    const orderNumber = props.order.sequence_number ?? props.order.id;
+    const dateText = formatDate(props.order.created_at);
+    const totalText = `$ ${Number(props.order.total_price).toLocaleString('es-CO')}`;
+    const name = (props.order?.customer_name || '').trim();
+    const greeting = name ? `Hola ${name},` : 'Hola,';
+    const address = (props.order?.customer_address || '').trim();
+    const itemsBlock = buildItemsSummary();
+
+    switch (props.order.status) {
+        case 'recibido':
+            return `${greeting}\n\n¡Gracias por comprar en ${storeName.value}!\n\nTu pedido No. ${orderNumber} fue recibido correctamente.${itemsBlock ? `\n${itemsBlock}` : ''}\n\nFecha del pedido: ${dateText}.\nTotal del pedido: ${totalText}${address ? `\nDirección: ${address}` : ''}\n\nTe avisaremos cuando esté en preparación.`;
+        case 'en_preparacion':
+            return `${greeting}\n\nEstamos preparando tu pedido No. ${orderNumber} en ${storeName.value}.${itemsBlock ? `\n${itemsBlock}` : ''}\n\nFecha del pedido: ${dateText}.\nTotal del pedido: ${totalText}${address ? `\nDirección: ${address}` : ''}\n\nTe notificaremos cuando salga a despacho.`;
+        case 'despachado':
+            return `${greeting}\n\nTu pedido No. ${orderNumber} fue despachado desde ${storeName.value}.${itemsBlock ? `\n${itemsBlock}` : ''}\n\nTotal del pedido: ${totalText}${address ? `\nDirección de entrega: ${address}` : ''}\n\nSi necesitas coordinar algo de la entrega, responde este mensaje.`;
+        case 'entregado':
+            return `${greeting}\n\n¡Qué alegría! Ya entregamos tu pedido No. ${orderNumber}.${itemsBlock ? `\n${itemsBlock}` : ''}\n\nTotal del pedido: ${totalText}\n\nEsperamos que lo disfrutes. Si quieres descubrir más productos, visita nuestro catálogo: ${storeUrl.value}`;
+        case 'cancelado':
+            return `${greeting}\n\nTu pedido No. ${orderNumber} fue cancelado. Si no fuiste tú quien lo solicitó, por favor contáctanos para ayudarte.${itemsBlock ? `\n${itemsBlock}` : ''}\n\nCuando desees, puedes volver a comprar aquí: ${storeUrl.value}`;
+        default:
+            return `${greeting}\n\nEstado actual de tu pedido No. ${orderNumber}: ${statusInfo.value?.text ?? props.order.status}.`;
+    }
+};
+
+const notifyCurrentStatus = () => {
+    try {
+        const rawPhone = (props.order?.customer_phone ?? '').toString();
+        const phone = rawPhone.replace(/[^0-9]/g, '');
+        if (!phone) {
+            infoType.value = 'error';
+            infoTitle.value = 'Sin teléfono del cliente';
+            infoMessage.value = 'No encontramos un número de WhatsApp válido para el cliente.';
+            showInfo.value = true;
+            return;
+        }
+
+        const message = buildStatusMessage();
+
+        const encoded = encodeURIComponent(message);
+        const waUrl = `https://wa.me/${phone}?text=${encoded}`;
+        if (typeof window !== 'undefined') {
+            window.open(waUrl, '_blank');
+        }
+    } catch (e) {
+        infoType.value = 'error';
+        infoTitle.value = 'No se pudo abrir WhatsApp';
+        infoMessage.value = 'Intenta nuevamente en unos segundos.';
+        showInfo.value = true;
+    }
+};
+// --- FIN Notificar estado ---
 
 </script>
 
@@ -166,6 +254,12 @@ const updateStatus = () => {
                                         :disabled="statusForm.processing"
                                         class="mt-4 w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50">
                                         Actualizar Estado
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="notifyCurrentStatus"
+                                        class="mt-3 w-full bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700">
+                                        Notificar estado actual
                                     </button>
                                 </div>
                             </form>

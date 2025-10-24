@@ -70,26 +70,37 @@ Route::get('/tiendas', function () {
 // Rutas Privadas (que requieren autenticación)
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', function (Request $request) {
-        $store = $request->user()->store;
+        $user = $request->user();
+        $store = $user?->store; // Puede ser null
 
-        $todayStart = now()->startOfDay();
-        $todayEnd = now()->endOfDay();
+        $metrics = [
+            'salesToday' => 0,
+            'ordersToday' => 0,
+            'avgTicketToday' => 0,
+        ];
 
-        $deliveredToday = $store->orders()
-            ->whereBetween('created_at', [$todayStart, $todayEnd])
-            ->where('status', 'entregado');
+        if ($store) {
+            $todayStart = now()->startOfDay();
+            $todayEnd = now()->endOfDay();
 
-        $salesToday = (clone $deliveredToday)->sum('total_price');
-        $ordersToday = (clone $deliveredToday)->count();
-        $avgTicketToday = $ordersToday > 0 ? $salesToday / $ordersToday : 0;
+            $deliveredToday = $store->orders()
+                ->whereBetween('created_at', [$todayStart, $todayEnd])
+                ->where('status', 'entregado');
 
-        return Inertia::render('Dashboard', [
-            'store' => $store,
-            'metrics' => [
+            $salesToday = (clone $deliveredToday)->sum('total_price');
+            $ordersToday = (clone $deliveredToday)->count();
+            $avgTicketToday = $ordersToday > 0 ? $salesToday / $ordersToday : 0;
+
+            $metrics = [
                 'salesToday' => $salesToday,
                 'ordersToday' => $ordersToday,
                 'avgTicketToday' => $avgTicketToday,
-            ],
+            ];
+        }
+
+        return Inertia::render('Dashboard', [
+            'store' => $store,
+            'metrics' => $metrics,
         ]);
     })->name('dashboard');
 
@@ -106,20 +117,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Panel de Administración (acceso según permisos por tienda)
     Route::prefix('admin')->name('admin.')->group(function () {
-        // ===== ESTAS SON LAS RUTAS QUE CORREGIMOS =====
+        // ===== RUTAS BASE (todos los planes) =====
         Route::resource('categories', CategoryController::class);
         Route::post('categories/{parentCategory}/subcategories', [CategoryController::class, 'storeSubcategory'])->name('categories.storeSubcategory');
         Route::get('categories/{category}/children', [CategoryController::class, 'children'])->name('categories.children');
         Route::resource('products', AdminProductController::class);
         Route::put('products-store/promo', [AdminProductController::class, 'updateStorePromo'])->name('products.store_promo');
-        Route::resource('users', UserController::class);
-        Route::resource('roles', RoleController::class);
-        Route::resource('orders', OrderController::class);
-        Route::post('orders/{order}/confirm', [OrderController::class, 'confirm'])->name('orders.confirm');
-        Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
-        Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
-        Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
-        Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
+
+        // ===== RUTAS AVANZADAS (solo plan negociantes) =====
+        Route::middleware('plan:negociante')->group(function () {
+            Route::resource('users', UserController::class);
+            Route::resource('roles', RoleController::class);
+            Route::resource('orders', OrderController::class);
+            Route::post('orders/{order}/confirm', [OrderController::class, 'confirm'])->name('orders.confirm');
+            Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+            Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
+            Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
+            Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
+        });
     });
 
     // Rutas exclusivas de Súper Admin

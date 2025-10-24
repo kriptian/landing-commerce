@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
+import AlertModal from '@/Components/AlertModal.vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
@@ -10,6 +11,31 @@ import { Link, usePage } from '@inertiajs/vue3';
 const showingNavigationDropdown = ref(false);
 
 const store = usePage().props.auth.user.store;
+const plan = (store && store.plan) ? store.plan : 'emprendedor';
+const isNegociante = plan === 'negociante' || (usePage().props.auth?.isSuperAdmin === true);
+const showUpgradeStep1 = ref(false);
+const showUpgradeStep2 = ref(false);
+
+const openUpgrade = () => { showUpgradeStep1.value = true; };
+const toStep2 = () => { showUpgradeStep1.value = false; showUpgradeStep2.value = true; };
+const cancelUpgrade = () => { showUpgradeStep1.value = false; showUpgradeStep2.value = false; };
+const whatsappUpgradeHref = () => {
+  try {
+    const storeName = store?.name || 'Mi tienda';
+    const text = `Hola, soy la tienda ${storeName} y deseo mejorar mi plan.`;
+    const encoded = encodeURIComponent(text);
+    return `https://wa.me/573208204198?text=${encoded}`;
+  } catch (e) { return `https://wa.me/573208204198`; }
+};
+
+// Permitir que otras vistas abran el flujo de upgrade (p.ej., cards del Dashboard)
+const handleExternalUpgrade = () => openUpgrade();
+onMounted(() => {
+  try { window.addEventListener('open-upgrade-plan', handleExternalUpgrade); } catch (e) {}
+});
+onBeforeUnmount(() => {
+  try { window.removeEventListener('open-upgrade-plan', handleExternalUpgrade); } catch (e) {}
+});
 const can = (perm) => {
   const p = usePage().props.auth?.permissions || [];
   const roles = usePage().props.auth?.roles || [];
@@ -39,7 +65,7 @@ const can = (perm) => {
                                     Dashboard
                                 </NavLink>
                                 
-                                <NavLink v-if="can('ver ordenes') || can('gestionar ordenes')" :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
+                                <NavLink v-if="isNegociante && (can('ver ordenes') || can('gestionar ordenes'))" :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
                                     <div class="relative flex items-center">
                                         <span>Órdenes</span>
                                         <span v-if="$page.props.adminNotifications.newOrdersCount > 0" 
@@ -48,14 +74,19 @@ const can = (perm) => {
                                         </span>
                                     </div>
                                 </NavLink>
+                                <button v-else type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500 cursor-pointer">
+                                    Órdenes
+                                </button>
 
-                                <NavLink v-if="can('ver reportes')" :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">
-                                    Reportes
-                                </NavLink>
+                                <NavLink v-if="isNegociante && can('ver reportes')" :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">Reportes</NavLink>
+                                <button v-else type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500">Reportes</button>
                                 
-                                <NavLink v-if="can('ver inventario')" :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">
-                                    Inventario
-                                </NavLink>
+                                <NavLink v-if="isNegociante && can('ver inventario')" :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">Inventario</NavLink>
+                                <button v-else type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500">Inventario</button>
+                                <button v-if="!isNegociante" type="button" @click="openUpgrade" class="inline-flex items-center gap-2 text-green-700 hover:text-green-800">
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                                    Mejorar plan
+                                </button>
                                 <NavLink v-if="$page.props.auth?.isSuperAdmin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">
                                     SuperStores
                                 </NavLink>
@@ -164,7 +195,7 @@ const can = (perm) => {
                             Dashboard
                         </ResponsiveNavLink>
 
-                        <ResponsiveNavLink :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
+                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
                             <div class="relative flex items-center">
                                 <span>Órdenes</span>
                                 <span v-if="$page.props.adminNotifications.newOrdersCount > 0" 
@@ -173,14 +204,14 @@ const can = (perm) => {
                                 </span>
                             </div>
                         </ResponsiveNavLink>
+                        <button v-else type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Órdenes</button>
 
-                        <ResponsiveNavLink :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">
-                            Reportes
-                        </ResponsiveNavLink>
+                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">Reportes</ResponsiveNavLink>
+                        <button v-else type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Reportes</button>
 
-                        <ResponsiveNavLink :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">
-                            Inventario
-                        </ResponsiveNavLink>
+                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">Inventario</ResponsiveNavLink>
+                        <button v-else type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Inventario</button>
+                        <button v-if="!isNegociante" type="button" class="w-full text-left px-3 py-2 text-green-700 hover:text-green-800" @click="openUpgrade">Mejorar plan</button>
                         <ResponsiveNavLink v-if="$page.props.auth?.isSuperAdmin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">
                             SuperStores
                         </ResponsiveNavLink>
@@ -228,6 +259,9 @@ const can = (perm) => {
             <main>
                 <slot />
             </main>
+            <!-- Modales de mejora de plan (dentro del template principal) -->
+            <AlertModal :show="showUpgradeStep1" type="warning" title="Activar funcionalidades avanzadas" message="Hacer uso de estas funcionalidades puede tener costo extra. ¿Deseas activarlo?" primary-text="Sí, continuar" secondary-text="Cancelar" @primary="toStep2" @secondary="cancelUpgrade" @close="cancelUpgrade" />
+            <AlertModal :show="showUpgradeStep2" type="warning" title="Confirmación final" message="Estás a punto de activar funcionalidades avanzadas. Esto tiene un costo adicional." primary-text="Contactar por WhatsApp" secondary-text="Volver" :primary-href="whatsappUpgradeHref()" @primary="cancelUpgrade" @secondary="() => { showUpgradeStep2 = false; showUpgradeStep1 = true; }" @close="cancelUpgrade" />
         </div>
     </div>
 </template>

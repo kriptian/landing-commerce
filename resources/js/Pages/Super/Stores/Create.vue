@@ -14,6 +14,8 @@ const form = useForm({
     owner_password: '',
     owner_password_confirmation: '',
     max_users: 3,
+    plan: 'negociante',
+    plan_cycle: 'mensual',
 });
 
 const submit = () => {
@@ -66,6 +68,24 @@ const submit = () => {
                                 <div>
                                     <InputLabel for="owner_password_confirmation" value="Confirmar Contraseña" />
                                     <TextInput id="owner_password_confirmation" type="password" class="mt-1 block w-full" v-model="form.owner_password_confirmation" />
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <InputLabel value="Plan" />
+                                    <select v-model="form.plan" class="mt-1 w-full rounded-md border-gray-300">
+                                        <option value="emprendedor">Emprendedor</option>
+                                        <option value="negociante">Negociante (recomendado)</option>
+                                    </select>
+                                    <InputError :message="form.errors.plan" class="mt-2" />
+                                </div>
+                                <div>
+                                    <InputLabel value="Ciclo" />
+                                    <select v-model="form.plan_cycle" class="mt-1 w-full rounded-md border-gray-300">
+                                        <option value="mensual">Mensual</option>
+                                        <option value="anual">Anual</option>
+                                    </select>
+                                    <InputError :message="form.errors.plan_cycle" class="mt-2" />
                                 </div>
                             </div>
                             <div>

@@ -13,6 +13,8 @@ const form = useForm({
     facebook_url: props.store.facebook_url,
     instagram_url: props.store.instagram_url,
     tiktok_url: props.store.tiktok_url, // <-- 1. CAMPO NUEVO EN EL FORMULARIO
+    plan: props.store.plan || 'emprendedor',
+    plan_cycle: props.store.plan_cycle || 'mensual',
 });
 
 const submit = () => {
@@ -51,6 +53,30 @@ const submit = () => {
                 <div class="mb-4">
                     <label for="address" class="block font-medium text-sm text-gray-700">Dirección</label>
                     <input id="address" v-model="form.address" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                </div>
+
+                <div class="mb-4">
+                    <label class="block font-medium text-sm text-gray-700">Plan</label>
+                    <select v-model="form.plan" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                        <option value="emprendedor">Emprendedor</option>
+                        <option value="negociante">Negociante (recomendado)</option>
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block font-medium text-sm text-gray-700">Ciclo</label>
+                    <select v-model="form.plan_cycle" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                        <option value="mensual">Mensual</option>
+                        <option value="anual">Anual</option>
+                    </select>
+                </div>
+
+                <div class="mb-4 p-3 rounded border bg-gray-50 text-sm">
+                    <p class="font-semibold mb-1">Resumen del plan seleccionado</p>
+                    <ul class="list-disc ml-5 text-gray-700">
+                        <li v-if="form.plan==='emprendedor'">Catálogo, productos ilimitados, variantes, categorías, checkout a WhatsApp, 0% comisión.</li>
+                        <li v-else>Incluye todo lo del Emprendedor + órdenes avanzadas, inventario, usuarios/roles, reportes y exportar a Excel.</li>
+                    </ul>
                 </div>
 
                 <div class="mb-4">

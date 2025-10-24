@@ -130,6 +130,28 @@ class ProductController extends Controller
         }
 
         $product->load('images', 'category', 'variants', 'store');
+        // Productos relacionados: misma tienda, misma categoría si existe, activos, excluyendo el actual
+        $related = $store->products()
+            ->where('is_active', true)
+            ->where('id', '!=', $product->id)
+            ->when($product->category_id, function ($q) use ($product) {
+                $q->where('category_id', $product->category_id);
+            })
+            ->latest()
+            ->take(12)
+            ->get(['id','name','price','promo_active','promo_discount_percent','quantity','alert','track_inventory','main_image_url']);
+
+        // Te puede interesar: otros productos de la tienda, preferiblemente de otra categoría y sin duplicar los relacionados
+        $excludeIds = $related->pluck('id')->push($product->id)->all();
+        $youMayLike = $store->products()
+            ->where('is_active', true)
+            ->whereNotIn('id', $excludeIds)
+            ->when($product->category_id, function ($q) use ($product) {
+                $q->where('category_id', '!=', $product->category_id);
+            })
+            ->inRandomOrder()
+            ->take(12)
+            ->get(['id','name','price','promo_active','promo_discount_percent','quantity','alert','track_inventory','main_image_url']);
         // Crawler: OG por producto
         if ($this->isCrawler(request())) {
             $title = $product->name . ' · ' . $store->name;
@@ -150,6 +172,8 @@ class ProductController extends Controller
         return inertia('Public/ProductPage', [
             'product' => $product,
             'store' => $store,
+            'related' => $related,
+            'suggested' => $youMayLike,
         ]);
     }
 

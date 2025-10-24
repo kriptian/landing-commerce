@@ -7,6 +7,9 @@ import { useToast } from 'vue-toastification';
 
 const props = defineProps({
     product: Object,
+    store: Object,
+    related: Array,
+    suggested: Array,
 });
 
 import { ref as vref } from 'vue';
@@ -132,6 +135,40 @@ const visibleVariants = computed(() => showAllVariants.value ? props.product.var
 const hiddenVariantsCount = computed(() => Math.max(0, (props.product.variants?.length || 0) - visibleCount.value));
 
 const store = computed(() => props.product.store);
+// URL pública del producto para compartir (compatible con OG/preview)
+const productUrl = computed(() => route('catalogo.show', { store: (store.value || {}).slug, product: props.product.id }));
+
+const shareViaWhatsApp = () => {
+    try {
+        const text = `${props.product.name} — ${productUrl.value}`;
+        const encoded = encodeURIComponent(text);
+        const waUrl = `https://wa.me/?text=${encoded}`;
+        if (typeof window !== 'undefined') window.open(waUrl, '_blank');
+    } catch (e) {}
+};
+
+const copyProductLink = async () => {
+    try {
+        await navigator.clipboard.writeText(productUrl.value);
+        try { toast.success('Enlace copiado'); } catch (e) {}
+    } catch (e) {}
+};
+
+const shareProduct = async () => {
+    const title = `${props.product.name} · ${store.value?.name ?? ''}`.trim();
+    const text = props.product.short_description || 'Mirá este producto';
+    const url = productUrl.value;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+        try {
+            await navigator.share({ title, text, url });
+            return;
+        } catch (err) {
+            // Usuario canceló o no se pudo abrir el share sheet: caemos a WhatsApp
+        }
+    }
+    // Fallback: abrir WhatsApp con vista previa y, si falla, copiar
+    try { shareViaWhatsApp(); } catch (e) { copyProductLink(); }
+};
 const showSocialFab = ref(false);
 const socialLinks = computed(() => {
     const links = [];
@@ -349,7 +386,23 @@ const getVariantDisplayPrices = (variant) => {
         
         
         <section class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-start">
-            <div class="gallery">
+            <div class="gallery relative">
+                <button
+                    type="button"
+                    @click="shareProduct"
+                    aria-label="Compartir producto"
+                    v-if="isMobile"
+                    class="absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-white/90 ring-1 ring-gray-300 text-gray-700 hover:bg-white hover:text-gray-900 shadow flex items-center justify-center md:hidden"
+                    title="Compartir"
+                >
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="18" cy="5" r="2.5"></circle>
+                        <circle cx="6" cy="12" r="2.5"></circle>
+                        <circle cx="18" cy="19" r="2.5"></circle>
+                        <path d="M8.6 11.3 L15.4 6.7"></path>
+                        <path d="M8.6 12.7 L15.4 17.3"></path>
+                    </svg>
+                </button>
                 <ProductGallery 
                     :main-image-url="product.main_image_url"
                     :images="product.images"
@@ -432,6 +485,64 @@ const getVariantDisplayPrices = (variant) => {
             <h2 class="text-2xl font-bold mb-4">Descripción</h2>
             <div class="prose max-w-none text-gray-600">
                 <p>{{ product.long_description }}</p> 
+            </div>
+        </section>
+
+        <!-- Productos relacionados (carrusel horizontal) -->
+        <section v-if="Array.isArray(related) && related.length" class="mt-12 md:mt-16 border-t pt-8">
+            <h2 class="text-2xl font-bold mb-4">Productos relacionados</h2>
+            <div class="flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
+                <Link v-for="rp in related" :key="rp.id" :href="route('catalogo.show', { store: store.slug, product: rp.id })" class="group block border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition shrink-0 snap-start min-w-[160px] sm:min-w-[190px] md:min-w-[220px]">
+                    <div class="relative">
+                        <img v-if="rp.main_image_url" :src="rp.main_image_url" alt="Imagen del producto" class="w-full h-36 sm:h-44 md:h-48 object-cover transform group-hover:scale-105 transition duration-300">
+                        <span v-if="(rp.track_inventory !== false) && Number(rp.quantity || 0) <= 0" class="absolute top-3 left-3 bg-red-600 text-white text-[10px] font-semibold px-2 py-1 rounded">Agotado</span>
+                    </div>
+                    <div class="p-3 sm:p-4 flex flex-col gap-2">
+                        <h3 class="text-sm sm:text-base font-semibold text-gray-900 line-clamp-2">{{ rp.name }}</h3>
+                        <div class="flex items-center gap-2">
+                            <p class="text-sm sm:text-lg text-gray-900 font-extrabold">
+                                {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
+                                    rp.promo_active && Number(rp.promo_discount_percent||0) > 0 ? Math.round(Number(rp.price) * (100 - Number(rp.promo_discount_percent)) / 100) : Number(rp.price)
+                                ) }}
+                            </p>
+                            <span v-if="rp.promo_active && Number(rp.promo_discount_percent||0) > 0" class="inline-flex items-center rounded bg-red-600 text-white font-bold px-1.5 py-0.5 text-[10px] sm:text-xs">
+                                -{{ rp.promo_discount_percent }}%
+                            </span>
+                        </div>
+                        <p v-if="rp.promo_active && Number(rp.promo_discount_percent||0) > 0" class="text-[11px] sm:text-xs text-gray-400 line-through">
+                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(rp.price)) }}
+                        </p>
+                    </div>
+                </Link>
+            </div>
+        </section>
+
+        <!-- Te puede interesar (carrusel horizontal) -->
+        <section v-if="Array.isArray(suggested) && suggested.length" class="mt-12 md:mt-16 border-t pt-8">
+            <h2 class="text-2xl font-bold mb-4">Te puede interesar</h2>
+            <div class="flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
+                <Link v-for="sp in suggested" :key="sp.id" :href="route('catalogo.show', { store: store.slug, product: sp.id })" class="group block border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition shrink-0 snap-start min-w-[160px] sm:min-w-[190px] md:min-w-[220px]">
+                    <div class="relative">
+                        <img v-if="sp.main_image_url" :src="sp.main_image_url" alt="Imagen del producto" class="w-full h-36 sm:h-44 md:h-48 object-cover transform group-hover:scale-105 transition duration-300">
+                        <span v-if="(sp.track_inventory !== false) && Number(sp.quantity || 0) <= 0" class="absolute top-3 left-3 bg-red-600 text-white text-[10px] font-semibold px-2 py-1 rounded">Agotado</span>
+                    </div>
+                    <div class="p-3 sm:p-4 flex flex-col gap-2">
+                        <h3 class="text-sm sm:text-base font-semibold text-gray-900 line-clamp-2">{{ sp.name }}</h3>
+                        <div class="flex items-center gap-2">
+                            <p class="text-sm sm:text-lg text-gray-900 font-extrabold">
+                                {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
+                                    sp.promo_active && Number(sp.promo_discount_percent||0) > 0 ? Math.round(Number(sp.price) * (100 - Number(sp.promo_discount_percent)) / 100) : Number(sp.price)
+                                ) }}
+                            </p>
+                            <span v-if="sp.promo_active && Number(sp.promo_discount_percent||0) > 0" class="inline-flex items-center rounded bg-red-600 text-white font-bold px-1.5 py-0.5 text-[10px] sm:text-xs">
+                                -{{ sp.promo_discount_percent }}%
+                            </span>
+                        </div>
+                        <p v-if="sp.promo_active && Number(sp.promo_discount_percent||0) > 0" class="text-[11px] sm:text-xs text-gray-400 line-through">
+                            {{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Number(sp.price)) }}
+                        </p>
+                    </div>
+                </Link>
             </div>
         </section>
 
@@ -522,3 +633,8 @@ const getVariantDisplayPrices = (variant) => {
         </div>
     </footer>
 </template>
+
+<style>
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>

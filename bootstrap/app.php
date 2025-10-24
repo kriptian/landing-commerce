@@ -17,7 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        //
+        // Aliases de middlewares de la app
+        $middleware->alias([
+            'plan' => \App\Http\Middleware\RequirePlan::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

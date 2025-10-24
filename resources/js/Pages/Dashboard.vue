@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 // Le decimos al componente que va a recibir la información de la tienda
@@ -28,6 +28,12 @@ const copyUrl = async () => {
         // Silencioso: algunos navegadores pueden bloquear clipboard sin HTTPS
     }
 };
+
+// Plan y CTA de upgrade para cards
+const page = usePage();
+const plan = computed(() => page.props.auth?.user?.store?.plan || 'emprendedor');
+const isNegociante = computed(() => plan.value === 'negociante' || page.props.auth?.isSuperAdmin === true);
+const openUpgrade = () => { try { window.dispatchEvent(new CustomEvent('open-upgrade-plan')); } catch(e) {} };
 </script>
 
 <template>
@@ -145,7 +151,7 @@ const copyUrl = async () => {
                         </Link>
                     </div>
                     
-                    <div class="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-md transition group">
+                    <div class="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-md transition group" :class="{ 'opacity-60': !isNegociante }">
                         <div class="flex items-center gap-3 mb-4">
                             <div class="p-2 rounded-lg bg-purple-50 text-purple-600">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0z"/><path d="M3.75 20.25a8.25 8.25 0 1116.5 0v.75H3.75v-.75z"/></svg>
@@ -153,10 +159,18 @@ const copyUrl = async () => {
                             <h3 class="text-lg font-semibold">Gestionar Usuarios</h3>
                         </div>
                         <p class="text-gray-600 mb-4">Administrá los usuarios y sus roles en el sistema.</p>
-                        <Link :href="route('admin.users.index')" class="inline-flex items-center gap-2 text-sm font-semibold text-purple-700 hover:text-purple-800">
-                            Ir a Usuarios
-                            <span aria-hidden>→</span>
-                        </Link>
+                        <template v-if="isNegociante">
+                            <Link :href="route('admin.users.index')" class="inline-flex items-center gap-2 text-sm font-semibold text-purple-700 hover:text-purple-800">
+                                Ir a Usuarios
+                                <span aria-hidden>→</span>
+                            </Link>
+                        </template>
+                        <template v-else>
+                            <button type="button" @click="openUpgrade" class="inline-flex items-center gap-2 text-sm font-semibold text-purple-400 hover:text-purple-500">
+                                Ir a Usuarios
+                                <span aria-hidden>→</span>
+                            </button>
+                        </template>
                     </div>
                 </div>
             </div>
