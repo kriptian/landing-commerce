@@ -13,21 +13,24 @@ class SuperAdminSeeder extends Seeder
      */
     public function run(): void
     {
-        $email = env('SUPER_ADMIN_EMAIL', 'cristian.ospinagarcia@gmail.com');
+        $primary = env('SUPER_ADMIN_EMAIL', 'cristian.ospinagarcia@gmail.com');
+        $extra = array_values(array_filter(array_map('trim', explode(',', (string) env('SUPER_ADMIN_EMAILS', '')))));
+        $all = collect([$primary])->filter()->merge($extra)->unique()->values();
 
-        $user = User::firstOrCreate(
-            ['email' => $email],
-            [
-                'name' => 'Cristian Ospina', // <-- AJUSTE 1: Tu nombre
-                'password' => Hash::make('CrisDeveloper25**'), // <-- AJUSTE 2: Contraseña
-                'is_admin' => true,
-            ]
-        );
+        foreach ($all as $email) {
+            $user = User::firstOrCreate(
+                ['email' => $email],
+                [
+                    'name' => 'Super Admin',
+                    'password' => Hash::make(str()->random(16)),
+                    'is_admin' => true,
+                ]
+            );
 
-        // Esta parte que ya tenías está perfecta, se asegura de que seas admin sí o sí
-        if (! $user->is_admin) {
-            $user->is_admin = true;
-            $user->save();
+            if (! $user->is_admin) {
+                $user->is_admin = true;
+                $user->save();
+            }
         }
     }
 }

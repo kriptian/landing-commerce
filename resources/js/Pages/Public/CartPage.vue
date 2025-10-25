@@ -20,8 +20,15 @@ const formatCurrency = (value) => new Intl.NumberFormat('es-CO', {
 }).format(value);
 
 const getItemKey = (item) => item.id ?? item.session_key;
-// Precio base: dejamos de usar precios por variante; usamos SIEMPRE el precio del producto (consistente con detalle)
-const getUnitPrice = (item) => Number(item?.product?.price ?? 0);
+// Precio base UNIFICADO (variante > producto): retail_price > price
+const getUnitPrice = (item) => {
+    const v = item?.variant || null;
+    const p = item?.product || null;
+    if (v && v.retail_price != null && v.retail_price !== '') return Number(v.retail_price);
+    if (v && v.price != null && v.price !== '') return Number(v.price);
+    if (p && p.retail_price != null && p.retail_price !== '') return Number(p.retail_price);
+    return Number(p?.price ?? 0);
+};
 const getBaseUnitPrice = getUnitPrice;
 const hasPromo = (item) => {
 	try {

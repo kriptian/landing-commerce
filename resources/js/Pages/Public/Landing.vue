@@ -24,6 +24,12 @@ const submit = () => {
             open.value = false;
             showSuccess.value = true;
         },
+        onError: () => {
+            // Si el email ya existe, mostramos un modal amigable
+            if (form.errors?.email) {
+                showEmailExists.value = true;
+            }
+        },
     });
 };
 
@@ -55,6 +61,8 @@ const page = usePage();
 watch(() => page.props.flash?.store_created, (v) => {
     if (v) showSuccess.value = true;
 }, { immediate: true });
+
+const showEmailExists = ref(false);
 </script>
 
 <template>
@@ -195,6 +203,26 @@ watch(() => page.props.flash?.store_created, (v) => {
                     </div>
                     <div class="mt-4 flex items-center justify-end gap-3">
                         <Link :href="route('login')" class="inline-flex items-center justify-center rounded-md bg-blue-600 text-white px-4 py-2 font-semibold hover:bg-blue-700">Ir a iniciar sesión</Link>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- Modal: email ya existe -->
+        <transition name="backdrop-fade">
+            <div v-show="showEmailExists" class="fixed inset-0 z-50 flex items-center justify-center">
+                <div class="absolute inset-0 bg-black/40" @click="showEmailExists = false"></div>
+                <div class="relative z-10 w-[92%] sm:w-full sm:max-w-md rounded-2xl bg-white shadow-2xl p-6">
+                    <div class="flex items-start gap-3">
+                        <div class="shrink-0 rounded-full bg-red-100 text-red-700 w-10 h-10 flex items-center justify-center">!</div>
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-900">Este correo ya está registrado</h4>
+                            <p class="mt-1 text-sm text-gray-700">Si ya tenés cuenta, iniciá sesión o recuperá tu contraseña.</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex items-center justify-end gap-3">
+                        <Link :href="route('password.request')" class="inline-flex items-center justify-center rounded-md border border-gray-200 text-gray-700 px-4 py-2 font-semibold hover:bg-gray-50">Recuperar contraseña</Link>
+                        <Link :href="route('login')" class="inline-flex items-center justify-center rounded-md bg-blue-600 text-white px-4 py-2 font-semibold hover:bg-blue-700">Iniciar sesión</Link>
                     </div>
                 </div>
             </div>

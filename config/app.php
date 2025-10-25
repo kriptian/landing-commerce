@@ -10,8 +10,9 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
-    // Correo del Súper Admin utilizado para habilitar la pestaña "SuperStores"
-    'super_admin_email' => env('SUPER_ADMIN_EMAIL'),
+    // Correo(s) del Súper Admin utilizado(s) para habilitar "SuperStores"
+    'super_admin_email' => env('SUPER_ADMIN_EMAIL'), // compatibilidad hacia atrás (uno solo)
+    'super_admin_emails' => array_values(array_filter(array_map(static fn($e) => trim($e), explode(',', (string) env('SUPER_ADMIN_EMAILS', ''))))),
 
     'timezone' => env('APP_TIMEZONE', 'America/Bogota'),
 

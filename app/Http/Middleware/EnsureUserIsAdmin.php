@@ -16,9 +16,12 @@ class EnsureUserIsAdmin
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
-        // Solo el súper admin real puede acceder (por email de entorno)
-        $superEmail = config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
-        if (! $user || strcasecmp($user->email, (string) $superEmail) !== 0) {
+        // Soporta múltiples súper admins por email
+        $single = (string) config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
+        $list = (array) config('app.super_admin_emails', []);
+        $allowed = collect([$single])->filter()->merge($list)->map(fn($e) => strtolower(trim($e)))->unique()->all();
+
+        if (! $user || ! in_array(strtolower($user->email), $allowed, true)) {
             abort(403, 'Acción no autorizada.');
         }
 

@@ -557,15 +557,15 @@ const confirmSave = () => {
                                                 <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M5 12a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/></svg>
                                             </button>
                                             <span class="text-xs text-blue-600 md:hidden" v-text="attr.__showDependency ? 'Ocultar' : 'Depend.'"></span>
-                                </div>
+                                        </div>
                                         <div v-if="attr.__showDependency" class="md:col-span-5 grid grid-cols-1 md:grid-cols-5 gap-3 items-start">
-                                    <div class="md:col-span-2">
+                                            <div class="md:col-span-2">
                                                 <label class="block text-sm font-medium text-gray-700">Depende de</label>
                                                 <select v-model="attr.dependsOn" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
                                                     <option value="">(sin dependencia)</option>
                                                     <option v-for="(other, oi) in attributes" :key="`dep-${ai}-${oi}`" :value="other.name" :disabled="other === attr || !other.name">{{ other.name || '(sin nombre)' }}</option>
                                                 </select>
-                                    </div>
+                                            </div>
                                             <div v-if="attr.dependsOn" class="md:col-span-3">
                                                 <label class="block text-sm font-medium text-gray-700">Permitir valores del hijo según el valor del padre</label>
                                                 <div class="mt-2 space-y-3">
@@ -575,37 +575,36 @@ const confirmSave = () => {
                                                             <label v-for="cv in parseCsv(attr.valuesText)" :key="`cv-${ai}-${pv}-${cv}`" class="inline-flex items-center gap-1 text-sm">
                                                                 <input type="checkbox" :checked="isRuleChecked(attr, pv, cv)" @change="toggleRule(attr, pv, cv, $event)" class="rounded">
                                                                 <span>{{ cv }}</span>
-                                        </label>
+                                                            </label>
                                                         </div>
                                                     </div>
-                                    </div>
-                                                <p class="text-xs text-gray-500 mt-2">Si no seleccionas nada para un valor del padre, se permiten todos los valores del hijo.</p>
-                                    </div>
-                                    </div>
-                                        <div class="md:col-span-5 flex items-center gap-4">
-                                            <div class="flex items-center gap-2">
-                                                <button type="button" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300" @click="addAttribute" title="Añadir atributo" aria-label="Añadir atributo">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/></svg>
-                                                </button>
-                                                <span class="text-xs md:hidden">Añadir</span>
-                                            </div>
-                                            <div class="flex items-center gap-2">
-                                                <button type="button" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300" @click="removeAttribute(ai)" title="Quitar atributo" aria-label="Quitar atributo">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M7 7h10l-1 12a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2L7 7zm9-3a1 1 0 0 1 1 1v1H7V5a1 1 0 0 1 1-1h8zM9 5V4a3 3 0 0 1 3-3 3 3 0 0 1 3 3v1H9z"/></svg>
-                                                </button>
-                                                <span class="text-xs md:hidden">Quitar</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-
+                                <div class="md:col-span-5 flex items-center gap-4 mt-3">
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300" @click="addAttribute" title="Añadir atributo" aria-label="Añadir atributo">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/></svg>
+                                        </button>
+                                        <span class="text-xs md:hidden">Añadir</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300" @click="removeAttribute(attributes.length - 1)" title="Quitar atributo" aria-label="Quitar atributo">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M5 12a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/></svg>
+                                        </button>
+                                        <span class="text-xs md:hidden">Quitar</span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                            </div>
                             
-                            <div class="mt-6 border-t pt-6">
-                                <div class="p-4 border rounded-md bg-gray-50 col-span-2">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <label class="block font-medium text-sm text-gray-700">Imágenes actuales</label>
+ 
+                             <div class="mt-6 border-t pt-6">
+                                 <div class="p-4 border rounded-md bg-gray-50 col-span-2">
+                                     <div class="flex items-center justify-between mb-2">
+                                         <label class="block font-medium text-sm text-gray-700">Imágenes actuales</label>
                                         <span class="text-xs text-gray-500">{{ currentImages.length }} imagen(es)</span>
                                     </div>
                                     <div v-if="currentImages.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -652,9 +651,10 @@ const confirmSave = () => {
                                 </div>
                             </div>
 
-                            <div class="flex items-center justify-end mt-6 border-t pt-6">
-                                <button type="submit" :disabled="form.processing" class="bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
-                                    Actualizar Producto
+                            <div class="md:col-span-2 flex items-center justify-end mt-6 border-t pt-6">
+                                <button type="submit" :disabled="form.processing" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded shadow">
+                                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4a2 2 0 0 1 2-2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4zm9-1.5V7h4.5L13 2.5z"/><path d="M8 13h8v2H8zM8 9h5v2H8z"/></svg>
+                                    <span>Guardar</span>
                                 </button>
                             </div>
                         </form>

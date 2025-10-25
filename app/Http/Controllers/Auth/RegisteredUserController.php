@@ -82,10 +82,12 @@ class RegisteredUserController extends Controller
 
         // Notificar al súper admin y vía WhatsApp opcional
         try {
-            $superEmail = config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
-            if ($superEmail) {
-                $admin = \App\Models\User::where('email', $superEmail)->first();
-                if ($admin) {
+            $single = (string) config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
+            $list = (array) config('app.super_admin_emails', []);
+            $emails = collect([$single])->filter()->merge($list)->map(fn($e) => strtolower(trim($e)))->unique();
+            if ($emails->isNotEmpty()) {
+                $admins = \App\Models\User::whereIn(\DB::raw('LOWER(email)'), $emails->all())->get();
+                foreach ($admins as $admin) {
                     $admin->notify(new NewStoreCreated($store));
                 }
             }

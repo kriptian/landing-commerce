@@ -59,7 +59,8 @@ class OrdersExport implements FromCollection, WithHeadings
                 ]);
             }
         }
-        return $rows;
+        // Si no hay ítems (p.ej., una sola orden sin ítems o filtro vacío), devolvemos una fila vacía
+        return $rows->isEmpty() ? collect([[null,null,null,null,null,null,null,null,null,null,null,null]]) : $rows;
     }
 
     /**

@@ -33,6 +33,7 @@ const form = useForm({
     instagram_url: store?.instagram_url || '',
     tiktok_url: store?.tiktok_url || '',
     custom_domain: store?.custom_domain || '',
+    phone: store?.phone || '',
 });
 
 const logoPreview = ref(null);
@@ -119,6 +120,18 @@ const updateProfileInformation = () => {
             </div>
             
             <div v-if="$page.props.auth.user.store" class="space-y-6 border-t pt-6">
+                <div>
+                    <InputLabel for="phone" value="WhatsApp de la tienda" />
+                    <TextInput
+                        id="phone"
+                        type="tel"
+                        class="mt-1 block w-full"
+                        v-model="form.phone"
+                        autocomplete="tel"
+                        placeholder="57xxxxxxxxxx"
+                    />
+                    <InputError class="mt-2" :message="form.errors.phone" />
+                </div>
                 <div>
                     <InputLabel for="store_name" value="Nombre de la Tienda" />
                     <TextInput

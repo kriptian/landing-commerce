@@ -51,6 +51,7 @@ class ProfileController extends Controller
                 'instagram_url' => 'nullable|url|max:255',
                 'tiktok_url' => 'nullable|url|max:255',
                 'custom_domain' => ['nullable','string','max:255', Rule::unique('stores','custom_domain')->ignore($store->id)],
+                'phone' => ['nullable','string','max:20'],
             ]);
 
             // Renombramos 'store_name' a 'name' para que coincida con la columna de la base de datos

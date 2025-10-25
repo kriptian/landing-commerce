@@ -92,9 +92,20 @@ class CheckoutController extends Controller
             return redirect()->route('catalogo.index', ['store' => $store->slug])->withErrors('Tu carrito está vacío.');
         }
 
-        // Lógica de precio: usar SIEMPRE el precio actual del producto (alineado con Carrito y Checkout frontend)
+        // Lógica de precio UNIFICADA (variante > producto): retail_price > price
         $computeBaseUnit = function ($item) {
-            return (float) ($item->product->price ?? 0);
+            $variant = $item->variant ?? null;
+            $product = $item->product ?? null;
+            if ($variant && $variant->retail_price !== null && $variant->retail_price !== '') {
+                return (float) $variant->retail_price;
+            }
+            if ($variant && $variant->price !== null && $variant->price !== '') {
+                return (float) $variant->price;
+            }
+            if ($product && $product->retail_price !== null && $product->retail_price !== '') {
+                return (float) $product->retail_price;
+            }
+            return (float) ($product->price ?? 0);
         };
 
         $totalPrice = $cartItems->reduce(function ($total, $item) use ($store, $computeBaseUnit) {

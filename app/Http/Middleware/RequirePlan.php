@@ -14,8 +14,10 @@ class RequirePlan
         $storePlan = $user?->store?->plan ?? 'emprendedor';
 
         // Súper admin siempre pasa
-        $superEmail = config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
-        if ($user && strcasecmp($user->email, (string) $superEmail) === 0) {
+        $single = (string) config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
+        $list = (array) config('app.super_admin_emails', []);
+        $allowed = collect([$single])->filter()->merge($list)->map(fn($e) => strtolower(trim($e)))->unique()->all();
+        if ($user && in_array(strtolower($user->email), $allowed, true)) {
             return $next($request);
         }
 

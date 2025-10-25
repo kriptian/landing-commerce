@@ -37,7 +37,8 @@ class InventoryExport implements FromCollection, WithHeadings
                 $profit,
             ]);
         }
-        return $rows;
+        // Evitar archivo sin filas: si no hay datos, devolvemos al menos una fila vacía
+        return $rows->isEmpty() ? collect([['', '', '', '', '', '']]) : $rows;
     }
 
     public function headings(): array

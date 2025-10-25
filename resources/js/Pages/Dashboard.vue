@@ -47,8 +47,11 @@ const openUpgrade = () => { try { window.dispatchEvent(new CustomEvent('open-upg
         <template #header>
             <div class="flex items-center justify-between">
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dashboard</h2>
-                <div v-if="store" class="hidden md:flex items-center gap-2 text-sm text-gray-500">
+                <div v-if="store" class="hidden md:flex items-center gap-3 text-sm text-gray-600">
                     <span class="inline-flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Tienda activa</span>
+                    <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2.5 py-0.5 font-medium">
+                        Plan: {{ plan === 'negociante' ? 'Negociante' : 'Emprendedor' }}
+                    </span>
                 </div>
             </div>
         </template>

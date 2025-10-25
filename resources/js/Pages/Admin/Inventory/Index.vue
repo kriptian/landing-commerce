@@ -232,13 +232,13 @@ const startResize = (e) => {
                                     Exportar a Excel
                                 </a>
                                 <!-- Dropdown de estado (estilizado) -->
-                            <div class="relative">
+                            <div class="relative z-30">
                                 <button type="button" @click="showStatusMenu = !showStatusMenu" class="inline-flex items-center gap-2 px-3 py-2 border rounded-md shadow-sm hover:bg-gray-50">
                                     <span>{{ statusLabel }}</span>
                                     <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
                                 </button>
                                 <transition name="fade-slide">
-                                    <ul v-if="showStatusMenu" class="absolute right-0 mt-2 w-40 bg-white border rounded-md shadow-lg z-10">
+                                    <ul v-if="showStatusMenu" class="absolute right-0 mt-2 w-40 bg-white border rounded-md shadow-lg z-50">
                                         <li v-for="opt in statuses" :key="opt.value">
                                             <button type="button" @click="selectStatus(opt.value)" class="w-full text-left px-3 py-2 hover:bg-gray-100" :class="{ 'font-semibold text-indigo-600': opt.value === status }">
                                                 {{ opt.label }}
@@ -250,7 +250,7 @@ const startResize = (e) => {
                             </div>
                         </div>
 
-                        <div ref="scrollBoxRef" class="relative overflow-x-auto w-full">
+                        <div ref="scrollBoxRef" class="relative overflow-x-auto w-full z-0">
                             <!-- Fades laterales como hint de scroll -->
                             <div v-show="showLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
                             <div v-show="showRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>

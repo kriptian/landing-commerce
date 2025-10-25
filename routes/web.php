@@ -107,6 +107,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Configuración de la tienda
     Route::get('/store/setup', [StoreSetupController::class, 'create'])->name('store.setup');
     Route::post('/store/setup', [StoreSetupController::class, 'store'])->name('store.save');
+    // Upgrade de plan (auto-servicio)
+    Route::post('/store/upgrade', [\App\Http\Controllers\StorePlanController::class, 'upgrade'])->name('store.upgrade');
 
     // Perfil del Usuario
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

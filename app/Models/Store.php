@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class Store extends Model
 {
@@ -75,5 +76,17 @@ class Store extends Model
     public function orders()
     {
         return $this->hasMany(\App\Models\Order::class);
+    }
+
+    /**
+     * Devuelve el logo de la tienda o, si no existe, el logo principal de la app.
+     */
+    protected function logoUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function ($value) {
+                return $value ?: '/images/New_Logo_ondgtl.png?v=5';
+            }
+        );
     }
 }

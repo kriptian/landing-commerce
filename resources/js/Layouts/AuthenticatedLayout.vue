@@ -1,18 +1,18 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
-import { Link, usePage } from '@inertiajs/vue3';
+import { Link, usePage, router } from '@inertiajs/vue3';
 
 const showingNavigationDropdown = ref(false);
 
 const store = usePage().props.auth.user.store;
-const plan = (store && store.plan) ? store.plan : 'emprendedor';
-const isNegociante = plan === 'negociante' || (usePage().props.auth?.isSuperAdmin === true);
+const plan = ref((store && store.plan) ? store.plan : 'emprendedor');
+const isNegociante = computed(() => plan.value === 'negociante' || (usePage().props.auth?.isSuperAdmin === true));
 const showUpgradeStep1 = ref(false);
 const showUpgradeStep2 = ref(false);
 
@@ -42,6 +42,26 @@ const can = (perm) => {
   const isStoreAdmin = Array.isArray(roles) && roles.includes('Administrador');
   if (isStoreAdmin) return true; // Rol Administrador ve todo (excepto SuperStores que depende de is_admin)
   return Array.isArray(p) && p.includes(perm);
+};
+
+// Toast de confirmación
+const showToast = ref(false);
+const toastMessage = ref('');
+const confirmUpgrade = () => {
+  try {
+    router.post(route('store.upgrade'), {}, {
+      preserveScroll: true,
+      onSuccess: () => {
+        plan.value = 'negociante';
+        toastMessage.value = 'Tu plan fue actualizado a Negociante';
+        showToast.value = true;
+        try { setTimeout(() => { showToast.value = false; }, 4000); } catch (e) {}
+        try { router.reload({ only: ['auth'] }); } catch (e) {}
+      },
+    });
+  } finally {
+    cancelUpgrade();
+  }
 };
 </script>
 
@@ -87,6 +107,7 @@ const can = (perm) => {
                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                                     Mejorar plan
                                 </button>
+                                
                                 <NavLink v-if="$page.props.auth?.isSuperAdmin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">
                                     SuperStores
                                 </NavLink>
@@ -261,7 +282,22 @@ const can = (perm) => {
             </main>
             <!-- Modales de mejora de plan (dentro del template principal) -->
             <AlertModal :show="showUpgradeStep1" type="warning" title="Activar funcionalidades avanzadas" message="Hacer uso de estas funcionalidades puede tener costo extra. ¿Deseas activarlo?" primary-text="Sí, continuar" secondary-text="Cancelar" @primary="toStep2" @secondary="cancelUpgrade" @close="cancelUpgrade" />
-            <AlertModal :show="showUpgradeStep2" type="warning" title="Confirmación final" message="Estás a punto de activar funcionalidades avanzadas. Esto tiene un costo adicional." primary-text="Contactar por WhatsApp" secondary-text="Volver" :primary-href="whatsappUpgradeHref()" @primary="cancelUpgrade" @secondary="() => { showUpgradeStep2 = false; showUpgradeStep1 = true; }" @close="cancelUpgrade" />
+            <AlertModal :show="showUpgradeStep2" type="warning" title="Confirmación final" message="Estás a punto de activar funcionalidades avanzadas. Esto tiene un costo adicional. ¿Deseas continuar?" primary-text="Sí, activar plan" secondary-text="Volver" :primary-href="null" @primary="confirmUpgrade" @secondary="() => { showUpgradeStep2 = false; showUpgradeStep1 = true; }" @close="cancelUpgrade" />
+            
+            <!-- Toast de confirmación -->
+            <transition 
+                enter-active-class="transition ease-out duration-200" 
+                enter-from-class="translate-y-2 opacity-0" 
+                enter-to-class="translate-y-0 opacity-100" 
+                leave-active-class="transition ease-in duration-150" 
+                leave-from-class="opacity-100" 
+                leave-to-class="opacity-0 translate-y-2">
+                <div v-if="showToast" class="fixed top-6 right-6 z-[60]">
+                    <div class="rounded-lg bg-white shadow-lg border border-green-200 text-green-800 px-4 py-3 text-sm">
+                        {{ toastMessage }}
+                    </div>
+                </div>
+            </transition>
         </div>
     </div>
 </template>

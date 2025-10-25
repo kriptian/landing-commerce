@@ -8,8 +8,15 @@ const props = defineProps({
     store: Object,
 });
 
-// Lógica de precio unitario: usar SIEMPRE el precio actual del producto
-const getBaseUnitPrice = (item) => Number(item?.product?.price ?? 0);
+// Lógica de precio unitario UNIFICADA (variante > producto): retail_price > price
+const getBaseUnitPrice = (item) => {
+    const v = item?.variant || null;
+    const p = item?.product || null;
+    if (v && v.retail_price != null && v.retail_price !== '') return Number(v.retail_price);
+    if (v && v.price != null && v.price !== '') return Number(v.price);
+    if (p && p.retail_price != null && p.retail_price !== '') return Number(p.retail_price);
+    return Number(p?.price ?? 0);
+};
 
 // Promoción efectiva (prioridad tienda > producto)
 const promoPercent = (item) => {
