@@ -3,6 +3,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
 import BarChart from '@/Components/BarChart.vue';
+import SectionTour from '@/Components/SectionTour.vue';
+import { useSectionTour } from '@/utils/useSectionTour.js';
 import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
 
 const props = defineProps({
@@ -11,6 +13,9 @@ const props = defineProps({
     filters: Object,
     chartData: Object,
 });
+
+// Tour de la sección de reportes
+const { showTour, steps, handleTourComplete } = useSectionTour('reports');
 
 const activeTab = ref('chart');
 
@@ -374,5 +379,13 @@ const startResize = (e) => {
 
             </div>
         </div>
+        
+        <!-- Tour de la sección de reportes -->
+        <SectionTour 
+            :show="showTour" 
+            section="reports" 
+            :steps="steps" 
+            @complete="handleTourComplete" 
+        />
     </AuthenticatedLayout>
 </template>

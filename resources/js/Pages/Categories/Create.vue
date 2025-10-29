@@ -3,11 +3,16 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
+import SectionTour from '@/Components/SectionTour.vue';
+import { useSectionTour } from '@/utils/useSectionTour.js';
 
 const form = useForm({
     name: '', // El nombre de la categoría principal
     subcategories: [], // [{ name: string, children?: [{ name: string }] }]
 });
+
+// Tour de sección para crear categorías
+const { showTour, steps, handleTourComplete } = useSectionTour('categories-create');
 
 // Función para añadir un nuevo campo de subcategoría
 const addSubcategory = () => {
@@ -129,5 +134,13 @@ const submit = () => {
         primary-text="Entendido"
         @primary="showSaved=false; form.reset()"
         @close="showSaved=false; form.reset()"
+    />
+
+    <!-- Tour de sección para crear categorías -->
+    <SectionTour 
+        :show="showTour" 
+        section="categories-create"
+        :steps="steps"
+        @complete="handleTourComplete"
     />
 </template>

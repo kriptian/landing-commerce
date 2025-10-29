@@ -27,6 +27,11 @@ class User extends Authenticatable
         'area',
         'is_admin',
         'store_id', // <-- ESTA ERA LA LÍNEA QUE FALTABA
+        'first_login',
+        'tour_completed_at',
+        'completed_tours',
+        'remind_later_tours',
+        'never_show_tours',
     ];
 
     /**
@@ -50,6 +55,11 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'first_login' => 'boolean',
+            'tour_completed_at' => 'datetime',
+            'completed_tours' => 'array',
+            'remind_later_tours' => 'array',
+            'never_show_tours' => 'array',
         ];
     }
 

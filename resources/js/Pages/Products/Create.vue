@@ -3,6 +3,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { nextTick, ref, computed, watch } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
+import SectionTour from '@/Components/SectionTour.vue';
+import { useSectionTour } from '@/utils/useSectionTour.js';
 
 const props = defineProps({
     categories: Array, 
@@ -13,6 +15,9 @@ const page = usePage();
 const showSaved = ref(page?.props?.flash?.success ? true : false);
 const showErrors = ref(false);
 const errorMessages = ref([]);
+
+// Tour de sección para crear productos
+const { showTour, steps, handleTourComplete } = useSectionTour('products-create');
 
 // Validación previa en el navegador
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -523,5 +528,13 @@ const submit = () => {
         primary-text="Entendido"
         @primary="showErrors=false"
         @close="showErrors=false"
+    />
+
+    <!-- Tour de sección para crear productos -->
+    <SectionTour 
+        :show="showTour" 
+        section="products-create"
+        :steps="steps"
+        @complete="handleTourComplete"
     />
 </template>

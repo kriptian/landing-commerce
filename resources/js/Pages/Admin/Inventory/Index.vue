@@ -2,6 +2,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
+import SectionTour from '@/Components/SectionTour.vue';
+import { useSectionTour } from '@/utils/useSectionTour.js';
 import { ref, watch, nextTick, computed, onMounted, onBeforeUnmount } from 'vue';
 import { safeRoute } from '@/utils/safeRoute';
 
@@ -9,6 +11,9 @@ const props = defineProps({
     products: Object, // Objeto de paginación con los productos y sus variantes
     filters: Object,
 });
+
+// Tour de la sección de inventario
+const { showTour, steps, handleTourComplete } = useSectionTour('inventory');
 
 // Estado UI del buscador
 const showSearch = ref(Boolean(props.filters?.search));
@@ -317,6 +322,14 @@ const startResize = (e) => {
                 </div>
             </div>
         </div>
+        
+        <!-- Tour de la sección de inventario -->
+        <SectionTour 
+            :show="showTour" 
+            section="inventory" 
+            :steps="steps" 
+            @complete="handleTourComplete" 
+        />
     </AuthenticatedLayout>
 </template>
 

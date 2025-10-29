@@ -101,6 +101,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return Inertia::render('Dashboard', [
             'store' => $store,
             'metrics' => $metrics,
+            'show_tour' => $request->get('show_tour', false),
         ]);
     })->name('dashboard');
 
@@ -114,6 +115,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Tour del Usuario
+    Route::post('/tour/complete', [\App\Http\Controllers\TourController::class, 'complete'])->name('tour.complete');
+    Route::post('/tour/remind-later', [\App\Http\Controllers\TourController::class, 'remindLater'])->name('tour.remind-later');
+    Route::post('/tour/never-show', [\App\Http\Controllers\TourController::class, 'neverShow'])->name('tour.never-show');
+    Route::get('/tour/status', [\App\Http\Controllers\TourController::class, 'status'])->name('tour.status');
+    Route::get('/tour/debug', [\App\Http\Controllers\TourController::class, 'debug'])->name('tour.debug');
 
     // (Checkout quedó público)
 

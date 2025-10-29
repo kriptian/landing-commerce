@@ -33,7 +33,43 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        // Detectar si es el primer login del usuario
+        $user = Auth::user();
+        
+        // Verificar si debe mostrar el tour
+        $showTour = false;
+        $toursToShow = [];
+        
+        if ($user) {
+            $neverShowTours = $user->never_show_tours ?? [];
+            $completedTours = $user->completed_tours ?? [];
+            
+            // Si el usuario seleccionó "No volver a mostrar" para el tour principal, NO mostrar NINGÚN tour
+            if (in_array('main', $neverShowTours)) {
+                $showTour = false;
+            } else {
+                // Si el tour principal ya está completado, NO mostrar
+                if (in_array('main', $completedTours)) {
+                    $showTour = false;
+                } else {
+                    // Si es el primer login, mostrar tour
+                    if ($user->first_login ?? true) {
+                        $showTour = true;
+                    } else {
+                        // Si no es primer login, verificar si hay tours programados para recordar
+                        $remindLaterTours = $user->remind_later_tours ?? [];
+                        if (!empty($remindLaterTours)) {
+                            $showTour = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return redirect()->intended(route('dashboard', [
+            'show_tour' => (bool) $showTour,
+            'tours_to_show' => $toursToShow
+        ]));
     }
 
     /**

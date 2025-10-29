@@ -7,6 +7,7 @@ import { computed, ref } from 'vue';
 const props = defineProps({
     store: Object,
     metrics: Object,
+    show_tour: Boolean,
 });
 
 // URL pública de la tienda y acción de copiar
@@ -34,6 +35,11 @@ const page = usePage();
 const plan = computed(() => page.props.auth?.user?.store?.plan || 'emprendedor');
 const isNegociante = computed(() => plan.value === 'negociante' || page.props.auth?.isSuperAdmin === true);
 const openUpgrade = () => { try { window.dispatchEvent(new CustomEvent('open-upgrade-plan')); } catch(e) {} };
+
+// Debug: Log para verificar la prop show_tour (solo en desarrollo)
+if (import.meta.env.DEV) {
+  console.log('Dashboard - props.show_tour:', props.show_tour);
+}
 </script>
 
 <template>
@@ -43,7 +49,7 @@ const openUpgrade = () => { try { window.dispatchEvent(new CustomEvent('open-upg
         </template>
     </Head>
 
-    <AuthenticatedLayout>
+    <AuthenticatedLayout :show_tour="show_tour">
         <template #header>
             <div class="flex items-center justify-between">
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dashboard</h2>
@@ -58,7 +64,7 @@ const openUpgrade = () => { try { window.dispatchEvent(new CustomEvent('open-upg
 
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="relative overflow-hidden bg-gradient-to-br from-blue-800 via-blue-700 to-cyan-600 text-white shadow-md sm:rounded-2xl">
+                <div id="dashboard-welcome" class="relative overflow-hidden bg-gradient-to-br from-blue-800 via-blue-700 to-cyan-600 text-white shadow-md sm:rounded-2xl">
                     <div class="relative z-10 p-6 md:p-8">
                         <h3 class="text-lg md:text-xl font-semibold">¡Bienvenido a tu panel de administración!</h3>
                         <div class="h-1 w-14 bg-orange-400 rounded-full mt-2"></div>

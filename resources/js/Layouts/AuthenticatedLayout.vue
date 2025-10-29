@@ -6,13 +6,39 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
+import UserTour from '@/Components/UserTour.vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
+
+const props = defineProps({
+    show_tour: {
+        type: Boolean,
+        default: false
+    }
+});
 
 const showingNavigationDropdown = ref(false);
 
 const store = usePage().props.auth.user.store;
 const plan = ref((store && store.plan) ? store.plan : 'emprendedor');
 const isNegociante = computed(() => plan.value === 'negociante' || (usePage().props.auth?.isSuperAdmin === true));
+
+// Tour del usuario
+const page = usePage();
+const showTour = computed(() => {
+  const value = page.props.show_tour;
+  // Convertir string "1" a boolean true, string "0" a boolean false
+  if (typeof value === 'string') {
+    return value === '1' || value === 'true';
+  }
+  return Boolean(value);
+});
+
+// Debug: Log para verificar el estado del tour (solo en desarrollo)
+if (import.meta.env.DEV) {
+  console.log('AuthenticatedLayout - props.show_tour:', props.show_tour);
+  console.log('AuthenticatedLayout - page.props.show_tour:', page.props.show_tour);
+  console.log('AuthenticatedLayout - showTour.value:', showTour.value);
+}
 const showUpgradeStep1 = ref(false);
 const showUpgradeStep2 = ref(false);
 
@@ -62,6 +88,12 @@ const confirmUpgrade = () => {
   } finally {
     cancelUpgrade();
   }
+};
+
+// Manejar finalización del tour
+const handleTourComplete = () => {
+  // El tour se cierra automáticamente cuando page.props.show_tour cambia
+  // No necesitamos hacer nada aquí, el computed se actualiza automáticamente
 };
 </script>
 
@@ -298,6 +330,12 @@ const confirmUpgrade = () => {
                     </div>
                 </div>
             </transition>
+            
+            <!-- Tour del usuario -->
+            <UserTour 
+                :show="showTour" 
+                @complete="handleTourComplete"
+            />
         </div>
     </div>
 </template>

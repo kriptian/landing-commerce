@@ -7,6 +7,8 @@ import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import AlertModal from '@/Components/AlertModal.vue';
+import SectionTour from '@/Components/SectionTour.vue';
+import { useSectionTour } from '@/utils/useSectionTour.js';
 
 const props = defineProps({
     users: Array,
@@ -18,6 +20,9 @@ const page = usePage();
 const activeTab = ref(page?.props?.ziggy?.query?.tab === 'roles' ? 'roles' : 'users');
 const showSuccess = ref(!!page.props.flash?.success);
 const successMessage = ref(page.props.flash?.success || '');
+
+// Tour de sección para usuarios
+const { showTour, steps, handleTourComplete } = useSectionTour('users');
 
 // --- Lógica para eliminar USUARIOS (la que ya tenías) ---
 const confirmingUserDeletion = ref(false);
@@ -295,5 +300,13 @@ const startResizeRoles = (e) => { target='roles'; startX = e.touches ? e.touches
         primary-text="Entendido"
         @primary="showSuccess=false"
         @close="showSuccess=false"
+    />
+
+    <!-- Tour de sección para usuarios -->
+    <SectionTour 
+        :show="showTour" 
+        section="users"
+        :steps="steps"
+        @complete="handleTourComplete"
     />
 </template>
