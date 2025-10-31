@@ -13,23 +13,91 @@ class CheckoutController extends Controller
 {
     public function index(Request $request, Store $store)
     {
+        // Forzar recarga de store desde DB para obtener promociones actualizadas
+        $store = $store->fresh();
+        
         if ($request->user()) {
             $cartItems = $request->user()->cart()
                                 ->whereRelation('product', 'store_id', $store->id)
-                                ->with('product', 'variant') 
                                 ->get();
+            
+            // Recargar productos y variantes directamente desde DB para obtener precios actualizados
+            // IMPORTANTE: Forzamos que se seleccionen TODOS los campos de precio explícitamente
+            foreach ($cartItems as $item) {
+                if ($item->product_id) {
+                    // Forzar consulta directa desde DB sin usar identity map
+                    // Seleccionamos explícitamente todos los campos de precio para asegurar datos frescos
+                    $freshProduct = Product::query()
+                        ->where('id', $item->product_id)
+                        ->select([
+                            'id', 'name', 'price', 'retail_price', 'wholesale_price', 'purchase_price',
+                            'promo_active', 'promo_discount_percent', 'track_inventory', 'quantity',
+                            'alert', 'category_id', 'store_id', 'short_description', 'long_description',
+                            'specifications', 'is_featured', 'is_active', 'variant_attributes'
+                        ])
+                        ->with('images')
+                        ->first();
+                    // Forzar recarga de atributos desde DB
+                    if ($freshProduct) {
+                        $freshProduct->refresh();
+                    }
+                    $item->setRelation('product', $freshProduct);
+                } else {
+                    $item->setRelation('product', null);
+                }
+                if ($item->product_variant_id) {
+                    // Forzar consulta directa desde DB sin usar identity map
+                    $freshVariant = ProductVariant::query()
+                        ->where('id', $item->product_variant_id)
+                        ->select([
+                            'id', 'product_id', 'options', 'price', 'retail_price', 
+                            'wholesale_price', 'purchase_price', 'stock', 'alert', 'sku'
+                        ])
+                        ->first();
+                    // Forzar recarga de atributos desde DB
+                    if ($freshVariant) {
+                        $freshVariant->refresh();
+                    }
+                    $item->setRelation('variant', $freshVariant);
+                } else {
+                    $item->setRelation('variant', null);
+                }
+            }
         } else {
             // Invitado: componer items desde sesión
             $sessionCart = $request->session()->get('guest_cart', []);
             $cartItems = collect();
             foreach ($sessionCart as $row) {
-                $product = Product::with('images')->find($row['product_id'] ?? null);
+                // Obtener producto directamente desde DB usando select explícito para evitar identity map cache
+                $product = Product::query()
+                    ->where('id', $row['product_id'] ?? null)
+                    ->select([
+                        'id', 'name', 'price', 'retail_price', 'wholesale_price', 'purchase_price',
+                        'promo_active', 'promo_discount_percent', 'track_inventory', 'quantity',
+                        'alert', 'category_id', 'store_id', 'short_description', 'long_description',
+                        'specifications', 'is_featured', 'is_active', 'variant_attributes'
+                    ])
+                    ->with('images')
+                    ->first();
                 if (! $product || (int) $product->store_id !== (int) $store->id) {
                     continue;
                 }
+                // Forzar recarga desde DB
+                $product->refresh();
                 $variant = null;
                 if (!empty($row['product_variant_id'])) {
-                    $variant = ProductVariant::find($row['product_variant_id']);
+                    // Forzar consulta directa desde DB sin usar identity map
+                    $variant = ProductVariant::query()
+                        ->where('id', $row['product_variant_id'])
+                        ->select([
+                            'id', 'product_id', 'options', 'price', 'retail_price', 
+                            'wholesale_price', 'purchase_price', 'stock', 'alert', 'sku'
+                        ])
+                        ->first();
+                    // Forzar recarga desde DB
+                    if ($variant) {
+                        $variant->refresh();
+                    }
                 }
                 $cartItems->push((object) [
                     'product_id' => $product->id,
@@ -61,22 +129,88 @@ class CheckoutController extends Controller
             'customer_address' => 'required|string|max:1000',
         ]);
 
+        // Forzar recarga de store desde DB para obtener promociones actualizadas
+        $store = $store->fresh();
+        
         if ($request->user()) {
             $cartItems = $request->user()->cart()
                                 ->whereRelation('product', 'store_id', $store->id)
-                                ->with('product', 'variant')
                                 ->get();
+            
+            // Recargar productos y variantes directamente desde DB para obtener precios actualizados
+            // IMPORTANTE: Forzamos que se seleccionen TODOS los campos de precio explícitamente
+            foreach ($cartItems as $item) {
+                if ($item->product_id) {
+                    // Forzar consulta directa desde DB sin usar identity map
+                    // Seleccionamos explícitamente todos los campos de precio para asegurar datos frescos
+                    $freshProduct = Product::query()
+                        ->where('id', $item->product_id)
+                        ->select([
+                            'id', 'name', 'price', 'retail_price', 'wholesale_price', 'purchase_price',
+                            'promo_active', 'promo_discount_percent', 'track_inventory', 'quantity',
+                            'alert', 'category_id', 'store_id', 'short_description', 'long_description',
+                            'specifications', 'is_featured', 'is_active', 'variant_attributes'
+                        ])
+                        ->first();
+                    // Forzar recarga de atributos desde DB
+                    if ($freshProduct) {
+                        $freshProduct->refresh();
+                    }
+                    $item->setRelation('product', $freshProduct);
+                } else {
+                    $item->setRelation('product', null);
+                }
+                if ($item->product_variant_id) {
+                    // Forzar consulta directa desde DB sin usar identity map
+                    $freshVariant = ProductVariant::query()
+                        ->where('id', $item->product_variant_id)
+                        ->select([
+                            'id', 'product_id', 'options', 'price', 'retail_price', 
+                            'wholesale_price', 'purchase_price', 'stock', 'alert', 'sku'
+                        ])
+                        ->first();
+                    // Forzar recarga de atributos desde DB
+                    if ($freshVariant) {
+                        $freshVariant->refresh();
+                    }
+                    $item->setRelation('variant', $freshVariant);
+                } else {
+                    $item->setRelation('variant', null);
+                }
+            }
         } else {
             $sessionCart = $request->session()->get('guest_cart', []);
             $cartItems = collect();
             foreach ($sessionCart as $row) {
-                $product = Product::find($row['product_id'] ?? null);
+                // Obtener producto directamente desde DB usando select explícito para evitar identity map cache
+                $product = Product::query()
+                    ->where('id', $row['product_id'] ?? null)
+                    ->select([
+                        'id', 'name', 'price', 'retail_price', 'wholesale_price', 'purchase_price',
+                        'promo_active', 'promo_discount_percent', 'track_inventory', 'quantity',
+                        'alert', 'category_id', 'store_id', 'short_description', 'long_description',
+                        'specifications', 'is_featured', 'is_active', 'variant_attributes'
+                    ])
+                    ->first();
                 if (! $product || (int) $product->store_id !== (int) $store->id) {
                     continue;
                 }
+                // Forzar recarga desde DB
+                $product->refresh();
                 $variant = null;
                 if (!empty($row['product_variant_id'])) {
-                    $variant = ProductVariant::find($row['product_variant_id']);
+                    // Forzar consulta directa desde DB sin usar identity map
+                    $variant = ProductVariant::query()
+                        ->where('id', $row['product_variant_id'])
+                        ->select([
+                            'id', 'product_id', 'options', 'price', 'retail_price', 
+                            'wholesale_price', 'purchase_price', 'stock', 'alert', 'sku'
+                        ])
+                        ->first();
+                    // Forzar recarga desde DB
+                    if ($variant) {
+                        $variant->refresh();
+                    }
                 }
                 $cartItems->push((object) [
                     'product_id' => $product->id,
@@ -92,20 +226,27 @@ class CheckoutController extends Controller
             return redirect()->route('catalogo.index', ['store' => $store->slug])->withErrors('Tu carrito está vacío.');
         }
 
-        // Lógica de precio UNIFICADA (variante > producto): retail_price > price
+        // Lógica de precio simplificada: igual que en ProductList y ProductPage
+        // Siempre priorizamos el campo 'price' principal del producto para mantener consistencia
         $computeBaseUnit = function ($item) {
             $variant = $item->variant ?? null;
             $product = $item->product ?? null;
-            if ($variant && $variant->retail_price !== null && $variant->retail_price !== '') {
-                return (float) $variant->retail_price;
+            
+            // Si hay variante seleccionada y el producto tiene inventario activo, usar precio de variante
+            if ($variant && $product && $product->track_inventory !== false) {
+                // Con inventario activo: usar precio de variante si existe y no es null/vacío
+                if ($variant->price !== null && $variant->price !== '') {
+                    return (float) $variant->price;
+                }
             }
-            if ($variant && $variant->price !== null && $variant->price !== '') {
-                return (float) $variant->price;
+            
+            // En todos los demás casos: usar directamente el precio principal del producto
+            // Esto es consistente con ProductList y ProductPage que usan product.price directamente
+            if ($product && $product->price !== null) {
+                return (float) $product->price;
             }
-            if ($product && $product->retail_price !== null && $product->retail_price !== '') {
-                return (float) $product->retail_price;
-            }
-            return (float) ($product->price ?? 0);
+            
+            return 0.0;
         };
 
         $totalPrice = $cartItems->reduce(function ($total, $item) use ($store, $computeBaseUnit) {
@@ -120,7 +261,7 @@ class CheckoutController extends Controller
             return $total + ($unit * $item->quantity);
         }, 0);
 
-        $store->refresh();
+        // Store ya se recargó arriba con fresh(), no es necesario volver a recargarlo
         $nextSequence = ((int) ($store->order_sequence ?? 0)) + 1;
         $order = $store->orders()->create([
             'sequence_number' => $nextSequence,

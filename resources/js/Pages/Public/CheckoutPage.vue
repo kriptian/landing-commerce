@@ -8,14 +8,29 @@ const props = defineProps({
     store: Object,
 });
 
-// Lógica de precio unitario UNIFICADA (variante > producto): retail_price > price
+// Precio base: Simplificamos para usar la misma lógica que el catálogo y detalle del producto
+// Siempre priorizamos el campo 'price' principal del producto, igual que en ProductList y ProductPage
 const getBaseUnitPrice = (item) => {
     const v = item?.variant || null;
     const p = item?.product || null;
-    if (v && v.retail_price != null && v.retail_price !== '') return Number(v.retail_price);
-    if (v && v.price != null && v.price !== '') return Number(v.price);
-    if (p && p.retail_price != null && p.retail_price !== '') return Number(p.retail_price);
-    return Number(p?.price ?? 0);
+    
+    // Si hay variante seleccionada y tiene precio, usamos el precio de la variante
+    // PERO solo si el producto tiene track_inventory activo (lógica del ProductPage)
+    if (v && p && p.track_inventory !== false) {
+        // Con inventario activo: usar precio de variante si existe, sino precio del producto
+        const variantPrice = v.price != null && v.price !== '' ? Number(v.price) : null;
+        if (variantPrice !== null) {
+            return variantPrice;
+        }
+    }
+    
+    // En todos los demás casos (sin variante, inventario desactivado, o variante sin precio):
+    // Usar directamente el precio principal del producto (igual que ProductList y ProductPage)
+    if (p && p.price != null) {
+        return Number(p.price);
+    }
+    
+    return 0;
 };
 
 // Promoción efectiva (prioridad tienda > producto)
