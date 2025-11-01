@@ -1,4 +1,10 @@
 <script setup>
+import { Head, Link, router } from '@inertiajs/vue3';
+import { ref, watch, nextTick, computed, h, onMounted, onBeforeUnmount } from 'vue';
+import Dropdown from '@/Components/Dropdown.vue';
+import DropdownLink from '@/Components/DropdownLink.vue';
+import Pagination from '@/Components/Pagination.vue';
+
 // Navegación por niveles: cache de hijos y pila de navegación
 const childrenCache = ref(new Map()); // parentId -> items
 const menuStack = ref([]); // [{ id, name }]
@@ -21,11 +27,6 @@ const openNode = async (cat) => {
   }
 };
 const goBack = () => { if (menuStack.value.length) menuStack.value.pop(); };
-import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, watch, nextTick, computed, h } from 'vue';
-import Dropdown from '@/Components/Dropdown.vue';
-import DropdownLink from '@/Components/DropdownLink.vue';
-import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
     products: Object,
@@ -71,6 +72,12 @@ const toggleSearch = () => {
     } else {
         // Si cerramos la búsqueda, limpiamos el filtro
         search.value = '';
+    }
+};
+
+const handleSearchBlur = () => {
+    if (!search.value) {
+        toggleSearch();
     }
 };
 // --- FIN LÓGICA ---
@@ -131,11 +138,38 @@ const isLoading = ref(false);
 router.on('start', () => { isLoading.value = true; });
 router.on('finish', () => { isLoading.value = false; });
 
-// Al abrir el drawer, reiniciar navegación al nivel raíz
+// Al abrir el drawer, reiniciar navegación al nivel raíz y forzar re-render para animación
+const drawerItemsKey = ref(0);
+const showMenuItems = ref(false);
+
 watch(drawerOpen, (open) => {
     if (open) {
         menuStack.value = [];
         isLevelLoading.value = false;
+        showMenuItems.value = false;
+        // Forzar re-render y luego mostrar items con animación
+        drawerItemsKey.value++;
+        nextTick(() => {
+            // Pequeño delay para que el DOM esté listo
+            setTimeout(() => {
+                showMenuItems.value = true;
+            }, 50);
+        });
+    } else {
+        showMenuItems.value = false;
+    }
+});
+
+watch(currentItems, () => {
+    // Cada vez que cambian los items (navegación entre niveles), forzar re-render
+    if (drawerOpen.value) {
+        showMenuItems.value = false;
+        drawerItemsKey.value++;
+        nextTick(() => {
+            setTimeout(() => {
+                showMenuItems.value = true;
+            }, 50);
+        });
     }
 });
 
@@ -194,6 +228,151 @@ const fabItems = computed(() => {
         style: `transform: translate(0, -${spacing * (i + 1)}px)`,
     }));
 });
+
+// Galería de productos destacados con transición
+const featuredProducts = computed(() => {
+    const allProducts = props.products?.data || [];
+    // Tomamos los primeros 5 productos o los que tienen promoción
+    const featured = allProducts.filter(p => hasPromo(p)).slice(0, 5);
+    // Si no hay suficientes con promoción, completamos con los primeros productos
+    if (featured.length < 5) {
+        const remaining = allProducts.filter(p => !featured.some(fp => fp.id === p.id)).slice(0, 5 - featured.length);
+        return [...featured, ...remaining];
+    }
+    return featured.slice(0, 5);
+});
+
+const currentSlide = ref(0);
+const autoPlayInterval = ref(null);
+
+// Estado para el swipe/drag manual
+const galleryContainer = ref(null);
+const isDragging = ref(false);
+const dragStart = ref(0);
+const dragCurrent = ref(0);
+const dragOffset = ref(0);
+
+const nextSlide = () => {
+    if (featuredProducts.value.length > 0 && !isDragging.value) {
+        currentSlide.value = (currentSlide.value + 1) % featuredProducts.value.length;
+    }
+};
+
+const prevSlide = () => {
+    if (featuredProducts.value.length > 0 && !isDragging.value) {
+        currentSlide.value = currentSlide.value === 0 ? featuredProducts.value.length - 1 : currentSlide.value - 1;
+    }
+};
+
+const goToSlide = (index) => {
+    currentSlide.value = index;
+    resetAutoPlay();
+};
+
+const resetAutoPlay = () => {
+    if (autoPlayInterval.value) {
+        clearInterval(autoPlayInterval.value);
+    }
+    if (featuredProducts.value.length > 1 && !isDragging.value) {
+        autoPlayInterval.value = setInterval(nextSlide, 3000); // Cambia cada 3 segundos
+    }
+};
+
+// Funciones para el swipe/drag manual
+const handleDragStart = (e) => {
+    // Ignorar si es un clic en el botón (excepto en móvil donde sí queremos arrastrar)
+    if (e.target.closest('button') && window.innerWidth >= 768) return;
+    
+    isDragging.value = true;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    dragStart.value = clientX;
+    dragCurrent.value = clientX;
+    dragOffset.value = 0;
+    
+    // Pausar autoplay mientras se arrastra
+    if (autoPlayInterval.value) {
+        clearInterval(autoPlayInterval.value);
+    }
+};
+
+const handleDragMove = (e) => {
+    if (!isDragging.value) return;
+    
+    e.preventDefault();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    dragCurrent.value = clientX;
+    dragOffset.value = dragCurrent.value - dragStart.value;
+};
+
+const handleDragEnd = (e) => {
+    if (!isDragging.value) return;
+    
+    // Ignorar si fue un clic (no hubo movimiento significativo)
+    if (Math.abs(dragOffset.value) < 5) {
+        isDragging.value = false;
+        dragStart.value = 0;
+        dragCurrent.value = 0;
+        dragOffset.value = 0;
+        resetAutoPlay();
+        return;
+    }
+    
+    const threshold = 50; // Mínimo de píxeles para cambiar de slide
+    const offset = dragOffset.value;
+    
+    if (Math.abs(offset) > threshold) {
+        if (offset > 0) {
+            // Arrastró hacia la derecha, ir al slide anterior
+            prevSlide();
+        } else {
+            // Arrastró hacia la izquierda, ir al slide siguiente
+            nextSlide();
+        }
+    }
+    
+    // Resetear estado
+    isDragging.value = false;
+    dragStart.value = 0;
+    dragCurrent.value = 0;
+    dragOffset.value = 0;
+    
+    // Reanudar autoplay después de un pequeño delay
+    setTimeout(() => {
+        resetAutoPlay();
+    }, 300);
+};
+
+const buyNowFromGallery = (product) => {
+    router.post(route('cart.store'), {
+        product_id: product.id,
+        product_variant_id: null,
+        quantity: 1,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            // Redirigir directamente al checkout después de agregar al carrito
+            router.visit(route('checkout.index', { store: props.store.slug }), {
+                preserveScroll: false,
+            });
+        }
+    });
+};
+
+// Iniciar autoplay al montar
+onMounted(() => {
+    resetAutoPlay();
+});
+
+onBeforeUnmount(() => {
+    if (autoPlayInterval.value) {
+        clearInterval(autoPlayInterval.value);
+    }
+});
+
+// Reset autoplay cuando cambian los productos destacados
+watch(featuredProducts, () => {
+    resetAutoPlay();
+});
 </script>
 
 <template>
@@ -205,49 +384,26 @@ const fabItems = computed(() => {
         </template>
     </Head>
 
-    <header class="bg-white shadow-sm sticky top-0 z-50">
-        <nav class="container mx-auto px-6 py-4 flex items-center justify-between gap-2">
-            <div class="flex items-center gap-3 min-w-0 flex-1">
-                <img v-if="store.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-10 w-10 rounded-full object-cover">
-                <h1 class="truncate text-lg sm:text-2xl font-bold text-gray-900" :class="{'text-base': store.name && store.name.length > 22, 'text-sm': store.name && store.name.length > 32}">{{ store.name }}</h1>
-            </div>
-            <div class="flex items-center space-x-3 shrink-0">
-            </div>
-        </nav>
-    </header>
-    <main class="container mx-auto px-6 py-12">
-        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight mb-4 bg-clip-text text-transparent bg-gradient-to-b from-gray-900 to-gray-600" style="font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;">Nuestro Catálogo</h2>
-
-        <div class="mb-4 flex items-center justify-between">
-            <button @click="drawerOpen = true" class="p-2 rounded border hover:bg-gray-100" aria-label="Abrir filtros">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/></svg>
-            </button>
-            <div class="flex items-center gap-2">
-                <input ref="searchInput" v-model="search" type="text" placeholder="Buscar..." class="border rounded px-3 py-2 text-sm" />
-                <button @click="applySearch" class="px-3 py-2 rounded border hover:bg-gray-100">Buscar</button>
-            </div>
-        </div>
-
-		<!-- Cinta de ofertas (animada) -->
-		<div v-if="hasAnyPromoGlobally" class="mb-4">
-			<button @click="goToPromo" class="promo-ribbon w-full rounded-xl py-3 shadow-lg ring-1 ring-red-400/40 hover:ring-red-300 transition">
+    <!-- Cinta de ofertas arriba del todo (fixed) -->
+    <div v-if="hasAnyPromoGlobally" class="fixed top-0 left-0 right-0 z-[60] bg-red-600/60 backdrop-blur-sm">
+        <button @click="goToPromo" class="w-full py-2 sm:py-3 shadow-lg hover:bg-red-600/70 transition-all">
 				<div class="marquee">
-					<div class="marquee__inner text-white font-extrabold uppercase tracking-wider text-sm sm:text-base">
-						<span class="flex items-center gap-2">
+                <div class="marquee__inner text-white font-extrabold uppercase tracking-wider text-xs sm:text-sm">
+                    <span class="flex items-center gap-2 whitespace-nowrap">
 							<span class="blink">🔥</span>
 							Ofertas hasta {{ maxPromoPercent }}%
 							<span aria-hidden="true">•</span>
 							Toca para ver
 							<span aria-hidden="true">↗</span>
 						</span>
-						<span class="flex items-center gap-2">
+                    <span class="flex items-center gap-2 whitespace-nowrap">
 							<span class="blink">🔥</span>
 							Ofertas hasta {{ maxPromoPercent }}%
 							<span aria-hidden="true">•</span>
 							Toca para ver
 							<span aria-hidden="true">↗</span>
 						</span>
-						<span class="flex items-center gap-2">
+                    <span class="flex items-center gap-2 whitespace-nowrap">
 							<span class="blink">🔥</span>
 							Ofertas hasta {{ maxPromoPercent }}%
 							<span aria-hidden="true">•</span>
@@ -259,15 +415,177 @@ const fabItems = computed(() => {
 			</button>
 		</div>
 
-        <transition name="fade-slide">
-            <div v-if="drawerOpen" class="fixed inset-0 z-50 flex">
-                <div class="relative w-80 max-w-[90%] bg-white h-full shadow-2xl">
-                    <div class="sticky top-0 z-10 bg-white/95 backdrop-blur border-b px-4 py-3 flex items-center justify-between">
+    <header class="bg-white shadow-sm sticky z-50" :class="hasAnyPromoGlobally ? 'top-[44px] sm:top-[52px]' : 'top-0'">
+        <nav class="container mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-2 relative">
+            <!-- Menú hamburguesa - siempre visible -->
+            <button @click="drawerOpen = true" class="p-2 rounded-lg hover:bg-gray-100 transition-colors z-10 flex-shrink-0" aria-label="Abrir menú">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6 text-gray-700">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/>
+                </svg>
+            </button>
+
+            <!-- Logo centrado -->
+            <div class="absolute left-1/2 flex items-center justify-center z-10 transition-all duration-300 ease-out" :class="isSearchActive ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100 pointer-events-auto'" :style="isSearchActive ? 'transform: translate(-50%, 0) translateX(-100px)' : 'transform: translate(-50%, 0)'">
+                <img v-if="store.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-full object-cover ring-2 ring-gray-100 shadow-sm">
+            </div>
+
+            <!-- Lupa / Búsqueda expandible -->
+            <div class="flex items-center justify-end flex-shrink-0 z-10">
+                <transition name="search-expand">
+                    <div v-if="!isSearchActive" class="flex items-center">
+                        <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6 text-gray-700">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div v-else class="flex items-center gap-2 min-w-[200px] sm:min-w-[280px]">
+                        <input 
+                            ref="searchInput" 
+                            v-model="search" 
+                            type="text" 
+                            placeholder="Buscar..." 
+                            @blur="handleSearchBlur"
+                            class="border border-gray-300 rounded-lg px-4 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300" 
+                        />
+                        <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" aria-label="Cerrar búsqueda">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-500">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </transition>
+            </div>
+        </nav>
+    </header>
+    <main class="container mx-auto px-6 py-12" :class="hasAnyPromoGlobally ? 'pt-16 sm:pt-20' : 'pt-12'">
+
+		<!-- Galería de productos destacados con transición -->
+		<div 
+			v-if="featuredProducts.length > 0" 
+			ref="galleryContainer"
+			class="mb-8 relative overflow-hidden rounded-2xl shadow-xl md:cursor-default cursor-grab active:cursor-grabbing"
+			@touchstart="handleDragStart"
+			@touchmove="handleDragMove"
+			@touchend="handleDragEnd"
+			@mousedown="handleDragStart"
+			@mousemove="handleDragMove"
+			@mouseup="handleDragEnd"
+			@mouseleave="handleDragEnd"
+		>
+			<!-- Flechas de navegación solo para desktop -->
+			<button 
+				v-if="featuredProducts.length > 1"
+				@click="prevSlide"
+				class="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-800 p-3 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-110 active:scale-95"
+				aria-label="Anterior"
+			>
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+				</svg>
+			</button>
+			<button 
+				v-if="featuredProducts.length > 1"
+				@click="nextSlide"
+				class="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-800 p-3 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-110 active:scale-95"
+				aria-label="Siguiente"
+			>
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+				</svg>
+			</button>
+			<div class="relative h-[300px] sm:h-[400px] md:h-[500px]">
+				<!-- Slides -->
+				<div class="relative h-full overflow-hidden">
+					<transition name="slide-fade" mode="out-in">
+						<div 
+							v-if="featuredProducts[currentSlide]"
+							:key="`${featuredProducts[currentSlide].id}-${currentSlide}`"
+							class="absolute inset-0 gallery-slide"
+							:style="isDragging ? { 
+								transform: `translateX(${dragOffset}px)`,
+								transition: 'none'
+							} : {}"
+						>
+						<div v-if="featuredProducts[currentSlide]" class="relative h-full bg-white/90 backdrop-blur-sm overflow-hidden">
+							<!-- Imagen del producto -->
+							<div class="absolute inset-0 flex items-center justify-center p-4 sm:p-6 md:p-8">
+								<img 
+									v-if="featuredProducts[currentSlide].main_image_url" 
+									:src="featuredProducts[currentSlide].main_image_url" 
+									:alt="featuredProducts[currentSlide].name"
+									class="w-full h-full object-cover object-center"
+								>
+							</div>
+							
+							<!-- Overlay con información y botón -->
+							<div class="absolute inset-0 flex flex-col justify-between p-4 sm:p-6 md:p-8 pointer-events-none">
+								<!-- Título del producto -->
+								<div class="text-gray-900 bg-white/70 backdrop-blur-sm rounded-lg px-4 py-3 max-w-full pointer-events-auto">
+									<h3 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2 truncate">{{ featuredProducts[currentSlide].name }}</h3>
+									<div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+										<p class="text-lg sm:text-xl md:text-2xl font-extrabold whitespace-nowrap">
+											{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
+												hasPromo(featuredProducts[currentSlide]) ? Math.round(featuredProducts[currentSlide].price * (100 - promoPercent(featuredProducts[currentSlide])) / 100) : featuredProducts[currentSlide].price
+											) }}
+										</p>
+										<span v-if="hasPromo(featuredProducts[currentSlide])" class="inline-flex items-center rounded bg-red-600 text-white font-bold px-2 sm:px-3 py-1 text-xs sm:text-sm whitespace-nowrap">
+											-{{ promoPercent(featuredProducts[currentSlide]) }}%
+										</span>
+									</div>
+								</div>
+								
+								<!-- Botón comprar -->
+								<div class="flex justify-center pointer-events-auto mb-8 sm:mb-12 md:mb-16">
+									<button 
+										@click="buyNowFromGallery(featuredProducts[currentSlide])"
+										class="bg-white/80 backdrop-blur-sm text-gray-900 font-bold py-3 px-6 sm:px-8 rounded-full shadow-2xl hover:bg-white/90 transition-all transform hover:scale-105 active:scale-95 text-base sm:text-lg md:text-xl border-2 border-gray-200"
+									>
+										COMPRAR
+									</button>
+								</div>
+							</div>
+							
+						</div>
+						</div>
+					</transition>
+				</div>
+				
+				<!-- Indicadores de paginación -->
+				<div v-if="featuredProducts.length > 1" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
+					<button 
+						v-for="(product, index) in featuredProducts" 
+						:key="product.id"
+						@click="goToSlide(index)"
+						:class="currentSlide === index ? 'bg-white w-8' : 'bg-white/50 w-2'"
+						class="h-2 rounded-full transition-all duration-300"
+						:aria-label="`Ir a slide ${index + 1}`"
+					></button>
+				</div>
+			</div>
+		</div>
+
+        <transition name="drawer">
+            <div v-if="drawerOpen" class="fixed inset-0 z-[70] flex">
+                <!-- Overlay con efecto cortina translúcida -->
+                <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="drawerOpen=false"></div>
+                
+                <!-- Panel del menú -->
+                <div class="relative w-80 max-w-[90%] bg-white/95 backdrop-blur-md h-full shadow-2xl">
+                    <div class="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b px-4 py-3 flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <button v-if="menuStack.length" @click="goBack" class="p-2 rounded hover:bg-gray-100" aria-label="Volver">‹</button>
+                            <button v-if="menuStack.length" @click="goBack" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Volver">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-700">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+                                </svg>
+                            </button>
                             <h3 class="font-semibold text-gray-900">{{ currentTitle }}</h3>
                         </div>
-                        <button @click="drawerOpen=false" class="p-2 rounded hover:bg-gray-100" aria-label="Cerrar">✖</button>
+                        <button @click="drawerOpen=false" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Cerrar">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-700">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
                     </div>
                     <div class="px-2 py-2 overflow-y-auto h-[calc(100%-56px)]">
                         <div class="px-3 pb-2 flex items-center justify-between">
@@ -282,18 +600,21 @@ const fabItems = computed(() => {
                             </button>
                         </div>
                         <div v-if="isLevelLoading" class="px-2 py-2 text-sm text-gray-500">Cargando...</div>
-                        <div v-for="cat in currentItems" :key="cat.id" class="mb-1">
-                            <button class="w-full flex items-center justify-between rounded-lg px-3 py-2 hover:bg-gray-50 active:scale-[.99] transition" @click="cat.has_children_with_products ? openNode(cat) : applyImmediate(cat.id)">
+                        <div v-show="showMenuItems">
+                            <transition-group name="menu-item" tag="div" :key="drawerItemsKey">
+                                <div v-for="(cat, index) in currentItems" :key="`${cat.id}-${drawerItemsKey}`" class="menu-item-wrapper" :style="{ '--i': index }">
+                                    <button class="w-full flex items-center justify-between rounded-lg px-3 py-2 hover:bg-gray-50 active:scale-[.99] transition-all duration-200" @click="cat.has_children_with_products ? openNode(cat) : applyImmediate(cat.id)">
                                 <span class="font-medium text-gray-800">{{ cat.name }}</span>
                                 <div class="flex items-center gap-3">
                                     <span class="text-xs bg-gray-100 text-gray-700 rounded-full px-2 py-0.5">{{ cat.products_count }}</span>
                                     <span v-if="cat.has_children_with_products" class="w-4 h-4 inline-flex items-center justify-center">›</span>
                                 </div>
                             </button>
+                                </div>
+                            </transition-group>
                         </div>
                     </div>
                 </div>
-                <div class="flex-1 bg-black/40" @click="drawerOpen=false"></div>
             </div>
         </transition>
 
@@ -434,4 +755,138 @@ const fabItems = computed(() => {
 /* Parpadeo suave para el ícono */
 .blink { animation: blink 1.2s ease-in-out infinite; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* Transiciones para el drawer (cortina translúcida) */
+.drawer-enter-active {
+    transition: opacity 0.3s ease;
+}
+
+.drawer-leave-active {
+    transition: opacity 0.3s ease;
+}
+
+.drawer-enter-from {
+    opacity: 0;
+}
+
+.drawer-leave-to {
+    opacity: 0;
+}
+
+.drawer-enter-active > div:last-child {
+    animation: slideInLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.drawer-leave-active > div:last-child {
+    animation: slideOutLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideOutLeft {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-100%);
+    }
+}
+
+/* Transiciones para búsqueda expandible */
+.search-expand-enter-active,
+.search-expand-leave-active {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-expand-enter-from {
+    opacity: 0;
+    transform: scale(0.9) translateX(10px);
+}
+
+.search-expand-leave-to {
+    opacity: 0;
+    transform: scale(0.9) translateX(10px);
+}
+
+.search-expand-enter-to,
+.search-expand-leave-from {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+}
+
+/* Transiciones para la galería de productos - desplazamiento automático hacia la izquierda */
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+    transition: all 0.5s ease-in-out;
+}
+
+.slide-fade-enter-from {
+    opacity: 0;
+    transform: translateX(100%);
+}
+
+.slide-fade-leave-to {
+    opacity: 0;
+    transform: translateX(-100%);
+}
+
+.slide-fade-enter-to,
+.slide-fade-leave-from {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Estilos para la galería con arrastre manual */
+.gallery-slide {
+    will-change: transform;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Efecto de menú hamburguesa estilo chalochalo.co - entrada progresiva desde la izquierda */
+.menu-item-wrapper {
+    margin-bottom: 0.25rem;
+}
+
+.menu-item-enter-active {
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: calc(var(--i) * 80ms);
+}
+
+.menu-item-enter-from {
+    opacity: 0;
+    transform: translateX(-60px);
+}
+
+.menu-item-enter-to {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.menu-item-leave-active {
+    transition: all 0.3s ease-in-out;
+}
+
+.menu-item-leave-from {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.menu-item-leave-to {
+    opacity: 0;
+    transform: translateX(-30px);
+}
+
+.menu-item-move {
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
 </style>

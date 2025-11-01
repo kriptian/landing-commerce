@@ -305,6 +305,34 @@ const addToCart = () => {
     });
 };
 
+const buyNow = () => {
+    // Exigir selección completa cuando hay variantes con múltiples atributos
+    if (props.product.variants.length > 0 && !selectedVariant.value) {
+        showVariantAlert.value = true;
+        return;
+    }
+
+    const variantId = props.product.variants.length > 0 ? selectedVariant.value?.id ?? null : null;
+    const qty = selectedQuantity.value;
+
+    router.post(route('cart.store'), {
+        product_id: props.product.id,
+        product_variant_id: variantId,
+        quantity: qty,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            // Redirigir directamente al checkout después de agregar al carrito
+            router.visit(route('checkout.index', { store: store.value.slug }), {
+                preserveScroll: false,
+            });
+        },
+        onError: () => {
+            try { toast.error('Error al agregar el producto'); } catch (e) {}
+        }
+    });
+};
+
 // Badge de stock: 'Agotado' o '¡Pocas unidades!'
 const stockBadge = computed(() => {
     if (!isInventoryTracked.value) return null;
@@ -467,8 +495,15 @@ const getVariantDisplayPrices = (variant) => {
                     <button 
                         @click="addToCart"
                         :disabled="(product.variants.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
-                        class="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:bg-blue-700">
+                        class="w-full mt-6 bg-blue-600/30 backdrop-blur-sm text-blue-700 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-300 disabled:text-gray-500 enabled:hover:bg-blue-600/40 border-2 border-blue-600/50">
                         {{ product.variants.length > 0 && !selectedVariant ? 'Selecciona opciones' : (isInventoryTracked ? (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') : 'Agregar al Carrito') }}
+                    </button>
+                    
+                    <button 
+                        @click="buyNow"
+                        :disabled="(product.variants.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
+                        class="w-full mt-3 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:bg-blue-700">
+                        Comprar Ahora
                     </button>
                 </div>
                 

@@ -212,17 +212,36 @@ const deleteItem = () => {
     </header>
     <main class="container mx-auto px-6 py-12">
         <div class="mb-8 flex justify-between items-center">
-            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight bg-clip-text text-transparent bg-gradient-to-b from-gray-900 to-gray-600" style="font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;">Mi Carrito de Compras</h1>
-            <Link :href="route('catalogo.index', { store: store.slug })" class="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-800 text-sm font-semibold rounded-md hover:bg-gray-300">
+            <h1 class="text-xl sm:text-2xl font-medium text-gray-600">Mi Carrito de Compras</h1>
+            <Link v-if="cartItems.length > 0" :href="route('catalogo.index', { store: store.slug })" class="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-800 text-sm font-semibold rounded-md hover:bg-gray-300">
                 Seguir Comprando
             </Link>
         </div>
 
-        <div v-if="cartItems.length === 0" class="bg-white shadow rounded-lg p-6 text-center">
-            <p class="text-gray-600">Tu carrito está vacío.</p>
-            <Link :href="route('catalogo.index', { store: store.slug })" class="mt-4 inline-block bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
-                Ir a la tienda
-            </Link>
+        <div v-if="cartItems.length === 0" class="bg-gradient-to-br from-gray-50 to-white rounded-2xl shadow-lg border border-gray-200 p-12 md:p-16 text-center">
+            <div class="max-w-md mx-auto">
+                <!-- Icono de carrito vacío -->
+                <div class="mb-6 flex justify-center">
+                    <div class="relative">
+                        <svg class="w-24 h-24 md:w-32 md:h-32 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/>
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <svg class="w-12 h-12 md:w-16 md:h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-3">Tu carrito está vacío</h2>
+                <p class="text-gray-600 mb-8 text-lg">¡Aprovechá y explorá nuestros increíbles productos!</p>
+                <Link :href="route('catalogo.index', { store: store.slug })" class="inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-4 px-8 rounded-xl hover:bg-blue-700 transition duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                    </svg>
+                    Explorar Catálogo
+                </Link>
+            </div>
         </div>
 
 		<div v-else>
