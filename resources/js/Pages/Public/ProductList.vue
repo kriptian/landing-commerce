@@ -462,7 +462,7 @@ watch(featuredProducts, () => {
 
 		<!-- Galería de productos destacados con transición -->
 		<div 
-			v-if="featuredProducts.length > 0" 
+			v-if="featuredProducts.length > 0 && !isSearchActive && !search" 
 			ref="galleryContainer"
 			class="mb-8 relative overflow-hidden rounded-2xl shadow-xl md:cursor-default cursor-grab active:cursor-grabbing"
 			@touchstart="handleDragStart"
