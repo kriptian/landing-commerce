@@ -5,8 +5,9 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import Pagination from '@/Components/Pagination.vue';
 
-// Navegación por niveles: cache de hijos y pila de navegación
+// Navegación por niveles: cache de hijos y pila de navegación para categorías principales
 const childrenCache = ref(new Map()); // parentId -> items
+const cacheUpdateKey = ref(0); // Para forzar reactividad cuando cambia el cache
 const menuStack = ref([]); // [{ id, name }]
 const isLevelLoading = ref(false);
 const currentParentId = computed(() => menuStack.value.length ? menuStack.value[menuStack.value.length - 1].id : null);
@@ -15,24 +16,112 @@ const currentItems = computed(() => {
   if (!currentParentId.value) return props.categories;
   return childrenCache.value.get(currentParentId.value) || [];
 });
+// Nivel actual del menú para el efecto de deslizamiento (0 = raíz, 1+ = niveles anidados)
+const currentMenuLevel = computed(() => menuStack.value.length);
+// Total de niveles (raíz + niveles navegados)
+const totalMenuLevels = computed(() => menuStack.value.length + 1);
+// Estilo para el ancho de cada slide
+const slideWidth = computed(() => `${100 / totalMenuLevels.value}%`);
+// Porcentaje de desplazamiento del contenedor de slides
+const slideTransform = computed(() => {
+    if (totalMenuLevels.value === 0) return '0%';
+    return `${(-currentMenuLevel.value * 100) / totalMenuLevels.value}%`;
+});
+
+// Función helper para obtener hijos de forma segura (para uso en computed o métodos)
+const getLevelChildren = (categoryId) => {
+    if (!childrenCache.value || typeof childrenCache.value.get !== 'function') {
+        return [];
+    }
+    return childrenCache.value.get(categoryId) || [];
+};
+
+// Computed para obtener los hijos de cada nivel (para reactividad)
+const levelChildrenData = computed(() => {
+    // Incluir cacheUpdateKey para forzar reactividad
+    cacheUpdateKey.value; // Dependencia reactiva
+    return menuStack.value.map(level => {
+        const children = getLevelChildren(level.id);
+        const isLoading = isLevelLoading.value && menuStack.value[menuStack.value.length - 1]?.id === level.id;
+        return {
+            levelId: level.id,
+            levelName: level.name,
+            children: children,
+            isLoading: isLoading
+        };
+    });
+});
+
 const openNode = async (cat) => {
   if (!cat.has_children_with_products) return;
   menuStack.value.push({ id: cat.id, name: cat.name });
+  if (!childrenCache.value || typeof childrenCache.value.has !== 'function') {
+    // Si el cache no está inicializado, inicializarlo
+    if (!childrenCache.value) {
+      childrenCache.value = new Map();
+    }
+  }
   if (!childrenCache.value.has(cat.id)) {
     isLevelLoading.value = true;
+    try {
     const res = await fetch(route('catalog.categories.children', { store: props.store.slug, category: cat.id }));
     const json = await res.json();
-    childrenCache.value.set(cat.id, Array.isArray(json.data) ? json.data : []);
+      const children = Array.isArray(json.data) ? json.data : [];
+      childrenCache.value.set(cat.id, children);
+      cacheUpdateKey.value++; // Forzar reactividad
+      // Forzar actualización del DOM
+      await nextTick();
+    } catch (error) {
+      console.error('Error loading children:', error);
+      childrenCache.value.set(cat.id, []);
+      cacheUpdateKey.value++; // Forzar reactividad incluso en caso de error
+    } finally {
     isLevelLoading.value = false;
+    }
+  } else {
+    // Si ya están en cache, igual forzar reactividad para asegurar que se muestren
+    cacheUpdateKey.value++;
   }
 };
 const goBack = () => { if (menuStack.value.length) menuStack.value.pop(); };
+
+// Sistema de acordeón solo para subcategorías (nivel 2+)
+const loadingCategories = ref(new Set()); // IDs de categorías cargando
+
+// Función para cargar hijos de una subcategoría (para acordeón)
+const loadSubChildren = async (categoryId) => {
+    if (!childrenCache.value || typeof childrenCache.value.has !== 'function') {
+        return [];
+    }
+    if (childrenCache.value.has(categoryId) || loadingCategories.value.has(categoryId)) {
+        return childrenCache.value.get(categoryId) || [];
+    }
+    
+    loadingCategories.value.add(categoryId);
+    try {
+        const res = await fetch(route('catalog.categories.children', { store: props.store.slug, category: categoryId }));
+        const json = await res.json();
+        const children = Array.isArray(json.data) ? json.data : [];
+        childrenCache.value.set(categoryId, children);
+        cacheUpdateKey.value++; // Forzar reactividad
+        return children;
+    } catch (e) {
+        console.error('Error loading children:', e);
+        childrenCache.value.set(categoryId, []);
+        cacheUpdateKey.value++; // Forzar reactividad incluso en caso de error
+        return [];
+    } finally {
+        loadingCategories.value.delete(categoryId);
+    }
+};
 
 const props = defineProps({
     products: Object,
     store: Object,
     categories: Array,
     filters: Object,
+    hasProductsWithPromo: Boolean, // Información global sobre si hay productos con promoción en toda la tienda
+    maxProductPromoPercent: Number, // Porcentaje máximo de promoción de todos los productos con promoción
 });
 
 const search = ref(props.filters.search);
@@ -43,17 +132,24 @@ const drawerOpen = ref(false);
 const expanded = ref({});
 // Modo navegación: aplicamos filtro inmediato sin checkboxes/botones
 const selected = ref(new Set());
-const toggleNode = (cat) => {
-  expanded.value[cat.id] = !expanded.value[cat.id];
+const toggleNode = async (cat) => {
+  if (!cat.has_children_with_products) return;
+  
+  const isExpanding = !expanded.value[cat.id];
+  expanded.value[cat.id] = isExpanding;
+  
+  // Si estamos expandiendo y no tenemos los hijos, cargarlos
+  if (isExpanding && !childrenCache.value.has(cat.id)) {
+    await loadSubChildren(cat.id);
+  }
 };
 const applyImmediate = (categoryId) => {
   router.get(route('catalogo.index', { store: props.store.slug }), { category: categoryId, search: search.value || undefined }, { preserveState: true, replace: true, preserveScroll: true });
   drawerOpen.value = false;
 };
-const viewAllInLevel = () => {
-  // Toma ids visibles del nivel actual y aplica todos
-  const ids = (currentItems.value || []).map(i => i.id);
-  router.get(route('catalogo.index', { store: props.store.slug }), { categories: ids.join(',') }, { preserveState: true, replace: true, preserveScroll: true });
+const goToHome = () => {
+  // Siempre regresar a la página principal sin filtros
+  router.get(route('catalogo.index', { store: props.store.slug }), {}, { preserveState: true, replace: true, preserveScroll: true });
   drawerOpen.value = false;
 };
 const applySearch = () => {
@@ -92,12 +188,47 @@ const promoPercent = (product) => {
   return 0;
 };
 
-// Estado global de promos
+// Ref para forzar re-render del banner cuando cambian las promociones
+const promoUpdateKey = ref(0);
+
+// Estado global de promos - asegurar que siempre tenga acceso a props.store
 const storePromoActive = computed(() => {
     try {
-        const percent = Number(props.store?.promo_discount_percent || 0);
-        return Boolean(props.store?.promo_active) && percent > 0;
-    } catch (e) { return false; }
+        // Forzar reactividad accediendo directamente a props.store y todos sus valores relevantes
+        const store = props.store;
+        const _filters = props.filters?.category; // Forzar reactividad cuando cambia la categoría
+        const _updateKey = promoUpdateKey.value; // Forzar reactividad cuando cambia
+        const _promoActive = store?.promo_active; // Acceder explícitamente para forzar reactividad
+        const _promoPercent = store?.promo_discount_percent; // Acceder explícitamente para forzar reactividad
+        
+        if (!store) return false;
+        
+        // Verificar promo_active: puede venir como 1, true, "1", o cualquier valor truthy
+        const promoActiveValue = store.promo_active;
+        const isPromoActive = promoActiveValue === 1 || 
+                             promoActiveValue === true || 
+                             promoActiveValue === "1" ||
+                             (promoActiveValue && promoActiveValue !== 0 && promoActiveValue !== "0");
+        
+        // Verificar que haya un porcentaje > 0
+        const percent = Number(store.promo_discount_percent || 0);
+        
+        // Debug temporal - activar para ver valores
+        // if (props.filters?.category) {
+        //     console.log('🔍 storePromoActive en categoría:', {
+        //         promoActiveValue,
+        //         isPromoActive,
+        //         percent,
+        //         result: isPromoActive && percent > 0,
+        //         category: props.filters?.category
+        //     });
+        // }
+        
+        // Solo mostrar si está activo Y tiene porcentaje configurado
+        return isPromoActive && percent > 0;
+    } catch (e) { 
+        return false; 
+    }
 });
 const anyProductPromo = computed(() => {
     try {
@@ -106,7 +237,16 @@ const anyProductPromo = computed(() => {
     } catch (e) { return false; }
 });
 const maxPromoPercent = computed(() => {
-    let max = storePromoActive.value ? Number(props.store.promo_discount_percent) : 0;
+    let max = 0;
+    // Siempre verificar promociones de la tienda primero (globales)
+    if (storePromoActive.value && props.store?.promo_discount_percent) {
+        max = Number(props.store.promo_discount_percent) || 0;
+    }
+    // Si hay productos con promoción en toda la tienda, usar el máximo global
+    if (props.hasProductsWithPromo === true && props.maxProductPromoPercent) {
+        max = Math.max(max, Number(props.maxProductPromoPercent) || 0);
+    }
+    // También verificar productos de la página actual como respaldo
     try {
         const arr = props.products?.data || [];
         for (const p of arr) {
@@ -114,9 +254,84 @@ const maxPromoPercent = computed(() => {
             if (Boolean(p?.promo_active) && pct > 0) max = Math.max(max, pct);
         }
     } catch (e) {}
+    // Retornar max solo si es > 0, para no mostrar "0%" cuando no hay promociones
     return max;
 });
-const hasAnyPromoGlobally = computed(() => storePromoActive.value || anyProductPromo.value);
+
+// Computed para verificar promociones directamente desde props (respaldo para reactividad)
+const checkStorePromoDirect = computed(() => {
+    try {
+        // Forzar reactividad accediendo directamente a props
+        const store = props.store;
+        const _updateKey = promoUpdateKey.value; // Forzar reactividad
+        const _filters = props.filters?.category; // Forzar reactividad cuando cambia categoría
+        
+        if (!store) return false;
+        const promoActiveValue = store.promo_active;
+        const isPromoActive = promoActiveValue === 1 || 
+                             promoActiveValue === true || 
+                             promoActiveValue === "1" ||
+                             (promoActiveValue && promoActiveValue !== 0 && promoActiveValue !== "0");
+        const percent = Number(store.promo_discount_percent || 0);
+        return isPromoActive && percent > 0;
+    } catch (e) {
+        return false;
+    }
+});
+
+const hasAnyPromoGlobally = computed(() => {
+    // Forzar reactividad accediendo a props.filters, props.store y promoUpdateKey
+    const _filters = props.filters?.category || props.filters?.search || props.filters?.promo;
+    const _store = props.store;
+    const _updateKey = promoUpdateKey.value; // Forzar reactividad cuando cambia
+    const _hasProductsPromo = props.hasProductsWithPromo; // Forzar reactividad cuando cambia
+    
+    // SIEMPRE verificar primero las promociones de la tienda (globales)
+    // Estas deben mostrarse sin importar la categoría actual o los productos visibles
+    const storeHasPromo = storePromoActive.value;
+    // También verificar directamente desde props como respaldo
+    const storeHasPromoDirect = checkStorePromoDirect.value;
+    
+    if (storeHasPromo || storeHasPromoDirect) {
+        return true;
+    }
+    
+    // Si no hay promociones globales activas, verificar si hay productos con promoción en toda la tienda
+    // (no solo en la página actual)
+    if (props.hasProductsWithPromo === true) {
+        return true;
+    }
+    
+    // Como respaldo, también verificar productos individuales en la página actual
+    return anyProductPromo.value;
+});
+
+// Watch para detectar cambios en props.store completo y forzar actualización
+watch(() => props.store, (newStore, oldStore) => {
+    // Forzar re-evaluación de computed cuando cambia el store (por ejemplo, al navegar)
+    nextTick(() => {
+        // Siempre incrementar la key cuando cambia el store para forzar actualización
+        // Esto asegura que los banners se actualicen incluso si los valores no cambian pero el objeto sí
+        promoUpdateKey.value++;
+    });
+}, { immediate: true, deep: true });
+
+// Watch adicional para props.filters para detectar cambios de categoría
+watch(() => props.filters?.category, () => {
+    // Forzar re-evaluación cuando cambia la categoría
+    nextTick(() => {
+        // Forzar actualización del banner cuando cambia la categoría
+        promoUpdateKey.value++;
+    });
+}, { immediate: true });
+
+// Watch para hasProductsWithPromo para detectar cambios en productos con promoción
+watch(() => props.hasProductsWithPromo, () => {
+    // Forzar actualización cuando cambia el estado de productos con promoción
+    nextTick(() => {
+        promoUpdateKey.value++;
+    });
+}, { immediate: true });
 const goToPromo = () => {
     router.get(route('catalogo.index', { store: props.store.slug }), { promo: 1 }, { preserveState: true, replace: true, preserveScroll: true });
     drawerOpen.value = false;
@@ -136,42 +351,92 @@ watch(search, (value) => {
 // Loading state (Inertia navigation)
 const isLoading = ref(false);
 router.on('start', () => { isLoading.value = true; });
-router.on('finish', () => { isLoading.value = false; });
+router.on('finish', () => { 
+    isLoading.value = false;
+    // Forzar re-evaluación de computed después de cada navegación
+    // Esto asegura que los banners de promociones se actualicen correctamente
+    nextTick(() => {
+        // Forzar actualización del banner después de cada navegación
+        promoUpdateKey.value++;
+    });
+});
+
+// Escuchar cuando Inertia actualiza los props (success event)
+router.on('success', () => {
+    // Forzar actualización cuando los props se actualizan exitosamente
+    nextTick(() => {
+        promoUpdateKey.value++;
+    });
+});
 
 // Al abrir el drawer, reiniciar navegación al nivel raíz y forzar re-render para animación
 const drawerItemsKey = ref(0);
 const showMenuItems = ref(false);
 
-watch(drawerOpen, (open) => {
-    if (open) {
+// Función para resetear el menú al nivel raíz
+const resetMenuToRoot = () => {
         menuStack.value = [];
+    expanded.value = {}; // Resetear todas las expansiones de acordeón
         isLevelLoading.value = false;
-        showMenuItems.value = false;
-        // Forzar re-render y luego mostrar items con animación
-        drawerItemsKey.value++;
+    showMenuItems.value = false;
+    // Forzar re-render completo (incluyendo banner de promociones)
+    drawerItemsKey.value++;
+    cacheUpdateKey.value++; // Forzar actualización del computed
+};
+
+// Función para abrir el drawer y resetear al nivel raíz
+const openDrawer = () => {
+    // Primero cerrar el drawer si está abierto (para forzar re-render completo)
+    if (drawerOpen.value) {
+        drawerOpen.value = false;
+        // Pequeño delay para que el cierre se complete
+        setTimeout(() => {
+            resetMenuToRoot();
+            drawerOpen.value = true;
+            nextTick(() => {
+                setTimeout(() => {
+                    showMenuItems.value = true;
+                }, 100);
+            });
+        }, 50);
+    } else {
+        resetMenuToRoot();
+        drawerOpen.value = true;
+        // Usar nextTick para asegurar que el reset se aplique antes de renderizar
         nextTick(() => {
-            // Pequeño delay para que el DOM esté listo
+            // Pequeño delay para que el DOM se actualice completamente
             setTimeout(() => {
                 showMenuItems.value = true;
-            }, 50);
+            }, 100);
         });
+    }
+};
+
+watch(drawerOpen, (open) => {
+    if (open) {
+        // Asegurar que siempre esté en el nivel raíz al abrir
+        if (menuStack.value.length > 0) {
+            resetMenuToRoot();
+        }
+        // Si no hay items mostrándose, mostrarlos
+        if (!showMenuItems.value) {
+            nextTick(() => {
+                setTimeout(() => {
+                    showMenuItems.value = true;
+                }, 100);
+            });
+        }
     } else {
         showMenuItems.value = false;
     }
 });
 
-watch(currentItems, () => {
-    // Cada vez que cambian los items (navegación entre niveles), forzar re-render
+watch(menuStack, () => {
+    // Cuando cambia el menuStack (navegación entre niveles), forzar re-render
     if (drawerOpen.value) {
-        showMenuItems.value = false;
         drawerItemsKey.value++;
-        nextTick(() => {
-            setTimeout(() => {
-                showMenuItems.value = true;
-            }, 50);
-        });
     }
-});
+}, { deep: true });
 
 // Helpers de stock para badges en cards
 const isOutOfStock = (product) => {
@@ -255,12 +520,16 @@ const dragOffset = ref(0);
 const nextSlide = () => {
     if (featuredProducts.value.length > 0 && !isDragging.value) {
         currentSlide.value = (currentSlide.value + 1) % featuredProducts.value.length;
+        // Reiniciar autoplay después de navegación manual
+        resetAutoPlay();
     }
 };
 
 const prevSlide = () => {
     if (featuredProducts.value.length > 0 && !isDragging.value) {
         currentSlide.value = currentSlide.value === 0 ? featuredProducts.value.length - 1 : currentSlide.value - 1;
+        // Reiniciar autoplay después de navegación manual
+        resetAutoPlay();
     }
 };
 
@@ -369,8 +638,12 @@ onBeforeUnmount(() => {
     }
 });
 
-// Reset autoplay cuando cambian los productos destacados
-watch(featuredProducts, () => {
+// Reset autoplay cuando cambian los productos destacados y resetear slide actual
+watch(featuredProducts, (newProducts, oldProducts) => {
+    // Resetear currentSlide a 0 cuando cambian los productos para evitar índices fuera de rango
+    if (newProducts.length > 0) {
+        currentSlide.value = 0;
+    }
     resetAutoPlay();
 });
 </script>
@@ -384,28 +657,28 @@ watch(featuredProducts, () => {
         </template>
     </Head>
 
-    <!-- Cinta de ofertas arriba del todo (fixed) -->
-    <div v-if="hasAnyPromoGlobally" class="fixed top-0 left-0 right-0 z-[60] bg-red-600/60 backdrop-blur-sm">
+    <!-- Cinta de ofertas arriba del todo (fixed) - siempre visible cuando hay promociones activas -->
+    <div v-if="hasAnyPromoGlobally || checkStorePromoDirect" :key="`promo-banner-${storePromoActive || checkStorePromoDirect ? 'store' : 'products'}-${props.filters?.category || 'all'}-${props.filters?.search || ''}-${promoUpdateKey}`" class="fixed top-0 left-0 right-0 z-[60] bg-red-600/60 backdrop-blur-sm">
         <button @click="goToPromo" class="w-full py-2 sm:py-3 shadow-lg hover:bg-red-600/70 transition-all">
 				<div class="marquee">
                 <div class="marquee__inner text-white font-extrabold uppercase tracking-wider text-xs sm:text-sm">
                     <span class="flex items-center gap-2 whitespace-nowrap">
 							<span class="blink">🔥</span>
-							Ofertas hasta {{ maxPromoPercent }}%
+							Ofertas<span v-if="maxPromoPercent > 0"> hasta {{ maxPromoPercent }}%</span>
 							<span aria-hidden="true">•</span>
 							Toca para ver
 							<span aria-hidden="true">↗</span>
 						</span>
                     <span class="flex items-center gap-2 whitespace-nowrap">
 							<span class="blink">🔥</span>
-							Ofertas hasta {{ maxPromoPercent }}%
+							Ofertas<span v-if="maxPromoPercent > 0"> hasta {{ maxPromoPercent }}%</span>
 							<span aria-hidden="true">•</span>
 							Toca para ver
 							<span aria-hidden="true">↗</span>
 						</span>
                     <span class="flex items-center gap-2 whitespace-nowrap">
 							<span class="blink">🔥</span>
-							Ofertas hasta {{ maxPromoPercent }}%
+							Ofertas<span v-if="maxPromoPercent > 0"> hasta {{ maxPromoPercent }}%</span>
 							<span aria-hidden="true">•</span>
 							Toca para ver
 							<span aria-hidden="true">↗</span>
@@ -418,7 +691,7 @@ watch(featuredProducts, () => {
     <header class="bg-white shadow-sm sticky z-50" :class="hasAnyPromoGlobally ? 'top-[44px] sm:top-[52px]' : 'top-0'">
         <nav class="container mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-2 relative">
             <!-- Menú hamburguesa - siempre visible -->
-            <button @click="drawerOpen = true" class="p-2 rounded-lg hover:bg-gray-100 transition-colors z-10 flex-shrink-0" aria-label="Abrir menú">
+            <button @click="openDrawer" class="p-2 rounded-lg hover:bg-gray-100 transition-colors z-10 flex-shrink-0" aria-label="Abrir menú">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6 text-gray-700">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/>
                 </svg>
@@ -438,7 +711,7 @@ watch(featuredProducts, () => {
                                 <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
                             </svg>
                         </button>
-                    </div>
+                        </div>
                     <div v-else class="flex items-center gap-2 min-w-[200px] sm:min-w-[280px]">
                         <input 
                             ref="searchInput" 
@@ -473,24 +746,24 @@ watch(featuredProducts, () => {
 			@mouseup="handleDragEnd"
 			@mouseleave="handleDragEnd"
 		>
-			<!-- Flechas de navegación solo para desktop -->
+			<!-- Flechas de navegación - visibles en web y móvil -->
 			<button 
 				v-if="featuredProducts.length > 1"
 				@click="prevSlide"
-				class="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-800 p-3 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-110 active:scale-95"
+				class="flex absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-800 p-2 sm:p-3 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-110 active:scale-95"
 				aria-label="Anterior"
 			>
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5 sm:w-6 sm:h-6">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
 				</svg>
 			</button>
 			<button 
 				v-if="featuredProducts.length > 1"
 				@click="nextSlide"
-				class="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-800 p-3 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-110 active:scale-95"
+				class="flex absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-800 p-2 sm:p-3 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-110 active:scale-95"
 				aria-label="Siguiente"
 			>
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5 sm:w-6 sm:h-6">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
 				</svg>
 			</button>
@@ -539,7 +812,7 @@ watch(featuredProducts, () => {
 								<div class="flex justify-center pointer-events-auto mb-8 sm:mb-12 md:mb-16">
 									<button 
 										@click="buyNowFromGallery(featuredProducts[currentSlide])"
-										class="bg-white/80 backdrop-blur-sm text-gray-900 font-bold py-3 px-6 sm:px-8 rounded-full shadow-2xl hover:bg-white/90 transition-all transform hover:scale-105 active:scale-95 text-base sm:text-lg md:text-xl border-2 border-gray-200"
+										class="buy-now-gallery bg-white/80 backdrop-blur-sm text-gray-900 font-bold py-3 px-6 sm:px-8 rounded-full shadow-2xl hover:bg-white/90 transition-all transform hover:scale-105 active:scale-95 text-base sm:text-lg md:text-xl border-2 border-gray-200"
 									>
 										COMPRAR
 									</button>
@@ -563,55 +836,137 @@ watch(featuredProducts, () => {
 					></button>
 				</div>
 			</div>
-		</div>
+                        </div>
 
         <transition name="drawer">
             <div v-if="drawerOpen" class="fixed inset-0 z-[70] flex">
                 <!-- Overlay con efecto cortina translúcida -->
-                <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="drawerOpen=false"></div>
+                <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="drawerOpen=false"></div>
                 
                 <!-- Panel del menú -->
-                <div class="relative w-80 max-w-[90%] bg-white/95 backdrop-blur-md h-full shadow-2xl">
-                    <div class="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b px-4 py-3 flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <button v-if="menuStack.length" @click="goBack" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Volver">
+                <div class="relative w-[85%] max-w-sm bg-white h-full shadow-2xl rounded-r-2xl overflow-hidden">
+                    <!-- Header fijo -->
+                    <div class="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <button v-if="menuStack.length" @click="goBack" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Volver">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-700">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
                                 </svg>
                             </button>
-                            <h3 class="font-semibold text-gray-900">{{ currentTitle }}</h3>
+                            <h3 class="font-semibold text-gray-900 text-base">{{ currentTitle }}</h3>
                         </div>
-                        <button @click="drawerOpen=false" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Cerrar">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-700">
+                        <button @click="drawerOpen=false" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Cerrar">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6 text-gray-700">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
                         </button>
                     </div>
-                    <div class="px-2 py-2 overflow-y-auto h-[calc(100%-56px)]">
-                        <div class="px-3 pb-2 flex items-center justify-between">
-                            <div class="text-sm font-semibold text-gray-800">{{ currentTitle }}</div>
-                            <button @click="viewAllInLevel" class="text-xs font-semibold text-blue-600 hover:underline">Ver todo</button>
+                    
+                    <!-- Banner de Promociones (siempre visible en todos los niveles cuando hay promociones activas) -->
+                    <div v-if="hasAnyPromoGlobally || checkStorePromoDirect" :key="`promo-drawer-${storePromoActive || checkStorePromoDirect ? 'store' : 'products'}-${drawerItemsKey}-${promoUpdateKey}`" class="border-b border-gray-200 bg-white flex-shrink-0">
+                        <button class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors" @click="goToPromo">
+                            <span class="font-semibold text-red-700 uppercase text-sm">Promociones</span>
+                            <span v-if="maxPromoPercent > 0" class="text-xs bg-red-600 text-white rounded-full px-2.5 py-1 font-medium">Hasta {{ maxPromoPercent }}%</span>
+                        </button>
+                        <div class="border-b border-gray-200"></div>
+                    </div>
+                    
+                    <!-- Contenedor de slides con deslizamiento horizontal -->
+                    <div class="relative overflow-hidden" :style="{ height: hasAnyPromoGlobally ? 'calc(100% - 116px)' : 'calc(100% - 73px)' }">
+                        <div 
+                            class="menu-slides-container"
+                            :style="{ 
+                                transform: `translateX(${slideTransform})`,
+                                width: `${totalMenuLevels * 100}%`
+                            }"
+                        >
+                            <!-- Nivel 1: Categorías principales -->
+                            <div class="menu-slide" :style="{ width: slideWidth }">
+                                <div class="h-full overflow-y-auto flex flex-col">
+                                    <!-- Botón HOME (siempre visible) -->
+                                    <div class="border-b border-gray-200 flex-shrink-0">
+                                        <button @click="goToHome" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-blue-50 active:bg-blue-100 transition-colors">
+                                            <span class="font-semibold text-blue-700 text-sm uppercase">HOME</span>
+                                            <span class="text-xs text-blue-600">›</span>
+                                        </button>
+                                        <div class="border-b border-gray-200"></div>
+                                    </div>
+                                    <!-- Contenido de categorías -->
+                                    <div class="flex-1 overflow-y-auto">
+                                        <transition-group name="menu-item" tag="div" :key="drawerItemsKey">
+                                            <div v-for="(cat, index) in props.categories" :key="`${cat.id}-${drawerItemsKey}`" class="menu-item-wrapper" :style="{ '--i': index }">
+                                                <button 
+                                                    class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-200" 
+                                                    @click="cat.has_children_with_products ? openNode(cat) : applyImmediate(cat.id)"
+                                                >
+                                                    <span class="font-medium text-gray-800 text-sm uppercase">{{ cat.name }}</span>
+                        <div class="flex items-center gap-2">
+                                                        <span class="text-xs text-gray-500">{{ cat.products_count }}</span>
+                                                        <span v-if="cat.has_children_with_products" class="text-gray-400 text-lg leading-none">›</span>
                         </div>
-                        <!-- Entrada destacada de Promoción -->
-                        <div v-if="hasAnyPromoGlobally" class="mb-1">
-                            <button class="w-full flex items-center justify-between rounded-lg px-3 py-2 bg-red-50 hover:bg-red-100 active:scale-[.99] transition border border-red-200" @click="goToPromo">
-                                <span class="font-bold text-red-700 uppercase">Promociones</span>
-                                <span class="text-xs bg-red-600 text-white rounded-full px-2 py-0.5">Hasta {{ maxPromoPercent }}%</span>
+                                                </button>
+                    </div>
+                                        </transition-group>
+                        </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Niveles anidados: Subcategorías -->
+                            <template v-for="(levelData, levelIndex) in levelChildrenData" :key="`level-${levelData.levelId}-${levelIndex}-${cacheUpdateKey}`">
+                                <div class="menu-slide" :style="{ width: slideWidth }">
+                                    <div class="h-full overflow-y-auto flex flex-col">
+                                        <!-- Botón HOME (siempre visible en niveles anidados) -->
+                                        <div class="border-b border-gray-200 flex-shrink-0">
+                                            <button @click="goToHome" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-blue-50 active:bg-blue-100 transition-colors">
+                                                <span class="font-semibold text-blue-700 text-sm uppercase">HOME</span>
+                                                <span class="text-xs text-blue-600">›</span>
                             </button>
+                                            <div class="border-b border-gray-200"></div>
                         </div>
-                        <div v-if="isLevelLoading" class="px-2 py-2 text-sm text-gray-500">Cargando...</div>
-                        <div v-show="showMenuItems">
-                            <transition-group name="menu-item" tag="div" :key="drawerItemsKey">
-                                <div v-for="(cat, index) in currentItems" :key="`${cat.id}-${drawerItemsKey}`" class="menu-item-wrapper" :style="{ '--i': index }">
-                                    <button class="w-full flex items-center justify-between rounded-lg px-3 py-2 hover:bg-gray-50 active:scale-[.99] transition-all duration-200" @click="cat.has_children_with_products ? openNode(cat) : applyImmediate(cat.id)">
-                                <span class="font-medium text-gray-800">{{ cat.name }}</span>
+                                        <!-- Contenido de categorías -->
+                                        <div v-if="levelData.children.length > 0" class="flex-1 overflow-y-auto">
+                                            <transition-group name="menu-item" tag="div" :key="`${levelData.levelId}-${drawerItemsKey}-${cacheUpdateKey}`">
+                                                <div v-for="(cat, index) in levelData.children" :key="`${cat.id}-${drawerItemsKey}`" class="menu-item-wrapper" :style="{ '--i': index }">
+                                                    <!-- Acordeón para subcategorías (dentro de niveles navegados) -->
+                                                    <button 
+                                                        class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-200" 
+                                                        @click="cat.has_children_with_products ? toggleNode(cat) : applyImmediate(cat.id)"
+                                                    >
+                                                        <span class="font-medium text-gray-800 text-sm">{{ cat.name }}</span>
                                 <div class="flex items-center gap-3">
-                                    <span class="text-xs bg-gray-100 text-gray-700 rounded-full px-2 py-0.5">{{ cat.products_count }}</span>
-                                    <span v-if="cat.has_children_with_products" class="w-4 h-4 inline-flex items-center justify-center">›</span>
+                                                            <span v-if="cat.has_children_with_products" class="text-gray-800 text-lg font-light leading-none min-w-[20px] text-center">
+                                                                {{ expanded[cat.id] ? '−' : '+' }}
+                                                            </span>
                                 </div>
                             </button>
+                                                    <!-- Sub-subcategorías indentadas cuando está expandido -->
+                                                    <transition name="submenu">
+                                                        <div v-if="expanded[cat.id] && cat.has_children_with_products" class="bg-gray-50/50">
+                                                            <template v-if="loadingCategories.has(cat.id)">
+                                                                <div class="px-4 py-3 pl-8 text-xs text-gray-500">Cargando...</div>
+                                                            </template>
+                                                            <transition-group v-else name="submenu-item" tag="div">
+                                                                <button
+                                                                    v-for="(subcat, subIndex) in getLevelChildren(cat.id)"
+                                                                    :key="subcat.id"
+                                                                    class="submenu-item-wrapper w-full flex items-center justify-between px-4 py-2.5 pl-8 hover:bg-gray-100 active:bg-gray-150 transition-colors border-b border-gray-200/50"
+                                                                    @click="applyImmediate(subcat.id)"
+                                                                    :style="{ '--i': subIndex }"
+                                                                >
+                                                                    <span class="font-normal text-gray-700 text-sm">{{ subcat.name }}</span>
+                                                                </button>
+                                                            </transition-group>
+                        </div>
+                                                    </transition>
+                    </div>
+                                            </transition-group>
+                </div>
+                                        <!-- Estados cuando no hay hijos o está cargando -->
+                                        <div v-else-if="levelData.isLoading" class="flex-1 flex items-center justify-center px-4 py-6 text-sm text-gray-500">Cargando...</div>
+                                        <div v-else class="flex-1 flex items-center justify-center px-4 py-6 text-sm text-gray-500">No hay categorías disponibles</div>
+                                    </div>
                                 </div>
-                            </transition-group>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -758,11 +1113,11 @@ watch(featuredProducts, () => {
 
 /* Transiciones para el drawer (cortina translúcida) */
 .drawer-enter-active {
-    transition: opacity 0.3s ease;
+    transition: opacity 0.25s ease;
 }
 
 .drawer-leave-active {
-    transition: opacity 0.3s ease;
+    transition: opacity 0.25s ease;
 }
 
 .drawer-enter-from {
@@ -774,7 +1129,7 @@ watch(featuredProducts, () => {
 }
 
 .drawer-enter-active > div:last-child {
-    animation: slideInLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: slideInLeft 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .drawer-leave-active > div:last-child {
@@ -854,17 +1209,17 @@ watch(featuredProducts, () => {
 
 /* Efecto de menú hamburguesa estilo chalochalo.co - entrada progresiva desde la izquierda */
 .menu-item-wrapper {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0;
 }
 
 .menu-item-enter-active {
-    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-    transition-delay: calc(var(--i) * 80ms);
+    animation: slideReveal 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation-delay: calc(var(--i) * 80ms);
 }
 
 .menu-item-enter-from {
     opacity: 0;
-    transform: translateX(-60px);
+    transform: translateX(-50px);
 }
 
 .menu-item-enter-to {
@@ -873,7 +1228,7 @@ watch(featuredProducts, () => {
 }
 
 .menu-item-leave-active {
-    transition: all 0.3s ease-in-out;
+    transition: all 0.25s ease-in-out;
 }
 
 .menu-item-leave-from {
@@ -883,10 +1238,140 @@ watch(featuredProducts, () => {
 
 .menu-item-leave-to {
     opacity: 0;
-    transform: translateX(-30px);
+    transform: translateX(-20px);
 }
 
 .menu-item-move {
-    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes slideReveal {
+    from {
+        opacity: 0;
+        transform: translateX(-50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Transición para subcategorías */
+.submenu-enter-active {
+    transition: all 0.3s ease-out;
+    overflow: hidden;
+}
+
+.submenu-leave-active {
+    transition: all 0.25s ease-in;
+    overflow: hidden;
+}
+
+.submenu-enter-from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+}
+
+.submenu-enter-to {
+    opacity: 1;
+    max-height: 500px;
+    transform: translateY(0);
+}
+
+.submenu-leave-from {
+    opacity: 1;
+    max-height: 500px;
+    transform: translateY(0);
+}
+
+.submenu-leave-to {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+}
+
+/* Efecto de barrido para subcategorías */
+.submenu-item-wrapper {
+    margin-bottom: 0;
+}
+
+.submenu-item-enter-active {
+    animation: slideReveal 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation-delay: calc(var(--i) * 60ms);
+}
+
+.submenu-item-enter-from {
+    opacity: 0;
+    transform: translateX(-30px);
+}
+
+.submenu-item-enter-to {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.submenu-item-leave-active {
+    transition: all 0.2s ease-in-out;
+}
+
+.submenu-item-leave-from {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.submenu-item-leave-to {
+    opacity: 0;
+    transform: translateX(-15px);
+}
+
+.submenu-item-move {
+    transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Multi-level Sliding Menu - Contenedor de slides */
+.menu-slides-container {
+    display: flex;
+    height: 100%;
+    transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+}
+
+/* Cada nivel del menú es un slide */
+.menu-slide {
+    flex-shrink: 0;
+    background: white;
+    height: 100%;
+    position: relative;
+}
+
+/* Animación de salto vertical y pulso para el botón "COMPRAR" en la galería */
+.buy-now-gallery {
+    animation: bounce-pulse-gallery 2s ease-in-out infinite;
+}
+
+@keyframes bounce-pulse-gallery {
+    0%, 100% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.6);
+    }
+    25% {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 0 0 8px rgba(255, 255, 255, 0);
+    }
+    50% {
+        transform: translateY(0) scale(1.02);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+    }
+    75% {
+        transform: translateY(-2px) scale(1.01);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+    }
+}
+
+.buy-now-gallery:hover {
+    animation: none;
+    transform: translateY(0) scale(1.05);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.4);
 }
 </style>

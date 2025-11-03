@@ -502,7 +502,7 @@ const getVariantDisplayPrices = (variant) => {
                     <button 
                         @click="buyNow"
                         :disabled="(product.variants.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
-                        class="w-full mt-3 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:bg-blue-700">
+                        class="w-full mt-3 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:bg-blue-700 buy-now-button">
                         Comprar Ahora
                     </button>
                 </div>
@@ -672,4 +672,34 @@ const getVariantDisplayPrices = (variant) => {
 <style>
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Animación de salto vertical y pulso para el botón "Comprar Ahora" */
+.buy-now-button:not(:disabled) {
+    animation: bounce-pulse 2s ease-in-out infinite;
+}
+
+@keyframes bounce-pulse {
+    0%, 100% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7);
+    }
+    25% {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 0 0 8px rgba(37, 99, 235, 0);
+    }
+    50% {
+        transform: translateY(0) scale(1.02);
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+    }
+    75% {
+        transform: translateY(-2px) scale(1.01);
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+    }
+}
+
+.buy-now-button:not(:disabled):hover {
+    animation: none;
+    transform: translateY(0) scale(1.05);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.3);
+}
 </style>

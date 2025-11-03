@@ -101,6 +101,20 @@ class ProductController extends Controller
         ]);
         // =========================================================
 
+        // Validar que la categoría seleccionada no tenga hijos (debe ser una hoja)
+        $category = \App\Models\Category::find($validated['category_id']);
+        if ($category) {
+            $hasChildren = \App\Models\Category::where('parent_id', $category->id)
+                ->where('store_id', auth()->user()->store_id)
+                ->exists();
+            
+            if ($hasChildren) {
+                return redirect()->back()->withErrors([
+                    'category_id' => 'Debés seleccionar una subcategoría. La categoría principal tiene subcategorías disponibles y es obligatorio elegir una de ellas.'
+                ])->withInput();
+            }
+        }
+
         if (!empty($validated['specifications'])) {
             $specArray = array_map('trim', explode(',', $validated['specifications']));
             $validated['specifications'] = json_encode($specArray);
@@ -248,6 +262,20 @@ class ProductController extends Controller
             'promo_discount_percent' => 'sometimes|nullable|integer|min:1|max:90',
         ]);
         // =================================================================
+
+        // Validar que la categoría seleccionada no tenga hijos (debe ser una hoja)
+        $category = \App\Models\Category::find($validated['category_id']);
+        if ($category) {
+            $hasChildren = \App\Models\Category::where('parent_id', $category->id)
+                ->where('store_id', auth()->user()->store_id)
+                ->exists();
+            
+            if ($hasChildren) {
+                return redirect()->back()->withErrors([
+                    'category_id' => 'Debés seleccionar una subcategoría. La categoría principal tiene subcategorías disponibles y es obligatorio elegir una de ellas.'
+                ])->withInput();
+            }
+        }
 
         if (!empty($validated['images_to_delete'])) {
             $imagesToDelete = ProductImage::whereIn('id', $validated['images_to_delete'])->get();

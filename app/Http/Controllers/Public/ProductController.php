@@ -107,10 +107,24 @@ class ProductController extends Controller
 
         // --- FIN DE LA LÓGICA ---
 
+        // Verificar si hay productos con promoción en toda la tienda (no solo en la página actual)
+        $hasProductsWithPromo = \App\Models\Product::where('store_id', $store->id)
+            ->where('promo_active', true)
+            ->where('promo_discount_percent', '>', 0)
+            ->exists();
+
+        // Obtener el porcentaje máximo de promoción de todos los productos con promoción
+        $maxProductPromoPercent = \App\Models\Product::where('store_id', $store->id)
+            ->where('promo_active', true)
+            ->where('promo_discount_percent', '>', 0)
+            ->max('promo_discount_percent') ?? 0;
+
         return Inertia::render('Public/ProductList', [
             'products' => $productsQuery->latest()->paginate(36)->withQueryString(),
             'store' => $store,
             'categories' => $categories, // Mandamos solo las categorías principales para los botones
+            'hasProductsWithPromo' => $hasProductsWithPromo, // Información global sobre productos con promoción
+            'maxProductPromoPercent' => (int) $maxProductPromoPercent, // Porcentaje máximo de promoción de productos
             'filters' => [
                 'category' => $request->input('category'),
                 'categories' => $request->input('categories'),

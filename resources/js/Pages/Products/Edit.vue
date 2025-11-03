@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -103,10 +103,27 @@ const onSelectAtLevel = async (levelIndex) => {
     const children = Array.isArray(json.data) ? json.data : [];
     if (children.length > 0) {
         levels.value.push({ options: children, selected: null });
+        // Limpiar category_id para forzar selección de subcategoría
+        form.category_id = null;
     }
 };
 // --- FIN Selects en cascada ---
 
+// Validar que si hay niveles inferiores disponibles, se debe seleccionar una hoja
+const requiresSubcategory = computed(() => {
+    // Si hay más de un nivel y el último nivel tiene opciones pero no está seleccionado
+    // Solo validar si form.category_id no está establecido (usuario cambiando categoría)
+    if (levels.value.length > 1) {
+        const lastLevel = levels.value[levels.value.length - 1];
+        // Solo requiere subcategoría si hay opciones pero no hay selección Y form.category_id no está establecido o es null
+        if (lastLevel.options.length > 0 && !lastLevel.selected) {
+            // Si form.category_id está en uno de los niveles anteriores, no requerir
+            const hasValidCategory = levels.value.some(lvl => lvl.selected === form.category_id);
+            return !hasValidCategory;
+        }
+    }
+    return false;
+});
 
 // --- Lógica de Variantes (ajustada) ---
 const convertJsonToText = (optionsJson) => {
@@ -369,6 +386,21 @@ watch(totalQuantity, (newTotal) => {
 
 // (retail por variante eliminado)
 const submit = () => {
+    // Validar que se haya seleccionado una categoría hoja si hay subcategorías disponibles
+    if (requiresSubcategory.value) {
+        errorMessages.value = ['Debés seleccionar una subcategoría. La categoría principal tiene subcategorías disponibles y es obligatorio elegir una de ellas.'];
+        showErrors.value = true;
+        // Hacer scroll al campo de categorías
+        nextTick(() => {
+            const firstCategorySelect = document.querySelector('.space-y-3 select');
+            if (firstCategorySelect) {
+                firstCategorySelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                firstCategorySelect.focus();
+            }
+        });
+        return;
+    }
+    
     // Siempre derivar variant_attributes desde el estado actual del builder (aunque no se toquen inputs)
     try {
         const attrs = attributes.value.map(a => ({
@@ -504,19 +536,27 @@ const confirmSave = () => {
                                     
                                     <div class="mb-2">
                                         <label class="block font-medium text-sm text-gray-700">Categorías</label>
+                                        <p v-if="requiresSubcategory" class="mt-1 text-sm text-amber-600 font-medium">
+                                            ⚠️ Es obligatorio seleccionar una subcategoría
+                                        </p>
                                     </div>
                                     <div class="space-y-3">
                                         <div v-for="(lvl, idx) in levels" :key="idx" class="mb-1">
                                             <select 
                                                 class="block w-full rounded-md shadow-sm border-gray-300"
+                                                :class="{ 'border-red-500': requiresSubcategory && idx === levels.length - 1 && !lvl.selected }"
                                                 v-model="lvl.selected"
                                                 @change="onSelectAtLevel(idx)"
+                                                :required="idx === levels.length - 1 && lvl.options.length > 0"
                                             >
                                                 <option :value="null">Seleccione una categoría</option>
                                                 <option v-for="opt in lvl.options" :key="opt.id" :value="opt.id">{{ opt.name }}</option>
                                             </select>
                                         </div>
                                     </div>
+                                    <p v-if="requiresSubcategory" class="mt-1 text-sm text-red-600">
+                                        Debés seleccionar una subcategoría. La categoría principal tiene subcategorías disponibles.
+                                    </p>
                                 </div>
                                 
                                 <div>
