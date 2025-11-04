@@ -37,7 +37,7 @@ class CategoryController extends Controller
     {
         $storeId = $request->user()->store_id;
 
-        // 2. ARREGLAMOS LA VALIDACIÓN 'UNIQUE'
+        // Validación: Solo la categoría principal debe ser única en toda la tienda
         $validated = $request->validate([
             'name' => [
                 'required', 'string', 'max:255',
@@ -49,38 +49,58 @@ class CategoryController extends Controller
             'subcategories' => 'nullable|array',
             'subcategories.*.name' => [
                 'required_with:subcategories', 'string', 'max:255',
-                Rule::unique('categories', 'name')->where(fn ($q) => $q
-                    ->where('store_id', $storeId)
-                ),
+                // NO validamos unique aquí porque las subcategorías pueden repetirse en diferentes categorías principales
             ],
             'subcategories.*.children' => 'nullable|array',
             'subcategories.*.children.*.name' => [
                 'required_with:subcategories.*.children', 'string', 'max:255',
-                Rule::unique('categories', 'name')->where(fn ($q) => $q
-                    ->where('store_id', $storeId)
-                ),
+                // NO validamos unique aquí porque los subniveles pueden repetirse en diferentes padres
             ],
+        ], [
+            'name.required' => 'El nombre de la categoría es obligatorio.',
+            'name.unique' => 'Ya existe una categoría principal con este nombre en tu tienda.',
+            'subcategories.*.name.required_with' => 'El nombre de la subcategoría es obligatorio.',
+            'subcategories.*.children.*.name.required_with' => 'El nombre del subnivel es obligatorio.',
         ]);
 
         $store = $request->user()->store;
 
+        // Crear la categoría principal
         $parentCategory = $store->categories()->create([
             'name' => $validated['name'],
             'parent_id' => null,
         ]);
 
+        // Crear subcategorías con validación de unicidad dentro del mismo padre
         if (!empty($validated['subcategories'])) {
-            foreach ($validated['subcategories'] as $subcategory) {
+            foreach ($validated['subcategories'] as $index => $subcategory) {
                 if (empty($subcategory['name'])) {
                     continue;
                 }
+                
+                // Validar que no exista otra subcategoría con el mismo nombre dentro de esta categoría principal
+                $exists = Category::where('store_id', $storeId)
+                    ->where('parent_id', $parentCategory->id)
+                    ->where('name', $subcategory['name'])
+                    ->exists();
+                
+                if ($exists) {
+                    return back()->withErrors([
+                        "subcategories.{$index}.name" => "Ya existe una subcategoría llamada '{$subcategory['name']}' en esta categoría principal."
+                    ])->withInput();
+                }
+                
                 $child = $store->categories()->create([
                     'name' => $subcategory['name'],
                     'parent_id' => $parentCategory->id,
                 ]);
+                
                 // Crear hijas del subnivel si vienen
                 if (!empty($subcategory['children']) && is_array($subcategory['children'])) {
-                    $this->createNestedChildren($store, $child->id, $subcategory['children']);
+                    $errors = $this->createNestedChildren($store, $child->id, $subcategory['children'], $index);
+                    if ($errors) {
+                        return back()->withErrors($errors)->withInput();
+                    }
                 }
             }
         }
@@ -88,20 +108,39 @@ class CategoryController extends Controller
         return redirect()->route('admin.categories.index')->with('success', '¡Categoría creada con éxito!');
     }
 
-    private function createNestedChildren($store, int $parentId, array $children): void
+    private function createNestedChildren($store, int $parentId, array $children, int $subcategoryIndex = 0): ?array
     {
-        foreach ($children as $child) {
+        $errors = [];
+        foreach ($children as $childIndex => $child) {
             if (empty($child['name'])) {
                 continue;
             }
+            
+            // Validar que no exista otra categoría con el mismo nombre dentro del mismo padre
+            $exists = Category::where('store_id', $store->id)
+                ->where('parent_id', $parentId)
+                ->where('name', $child['name'])
+                ->exists();
+            
+            if ($exists) {
+                $errors["subcategories.{$subcategoryIndex}.children.{$childIndex}.name"] = 
+                    "Ya existe un subnivel llamado '{$child['name']}' en esta subcategoría.";
+                continue;
+            }
+            
             $created = $store->categories()->create([
                 'name' => $child['name'],
                 'parent_id' => $parentId,
             ]);
             if (!empty($child['children']) && is_array($child['children'])) {
-                $this->createNestedChildren($store, $created->id, $child['children']);
+                $nestedErrors = $this->createNestedChildren($store, $created->id, $child['children'], $subcategoryIndex);
+                if ($nestedErrors) {
+                    $errors = array_merge($errors, $nestedErrors);
+                }
             }
         }
+        
+        return !empty($errors) ? $errors : null;
     }
 
     public function edit(Category $category)

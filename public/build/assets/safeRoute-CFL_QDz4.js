@@ -1,0 +1,1 @@
+function c(n,r={},o="/"){try{if(typeof route=="function")return route(n,r)}catch{}let e=String(o);return Object.entries(r||{}).forEach(([t,u])=>{e=e.replace(new RegExp(`:${t}\\b|{${t}}`,"g"),String(u))}),e}export{c as s};

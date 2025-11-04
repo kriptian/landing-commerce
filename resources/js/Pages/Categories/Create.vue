@@ -5,6 +5,7 @@ import { ref } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import SectionTour from '@/Components/SectionTour.vue';
 import { useSectionTour } from '@/utils/useSectionTour.js';
+import { safeRoute } from '@/utils/safeRoute';
 
 const form = useForm({
     name: '', // El nombre de la categoría principal
@@ -44,9 +45,61 @@ const removeChildFromSubcategory = (subIndex, childIndex) => {
 };
 
 const showSaved = ref(false);
+const showErrors = ref(false);
+const errorMessages = ref([]);
+
 const submit = () => {
-    form.post(route('admin.categories.store'), {
-        onSuccess: () => { showSaved.value = true; },
+    const url = safeRoute('admin.categories.store', {}, '/admin/categories');
+    form.post(url, {
+        onSuccess: () => { 
+            showSaved.value = true; 
+            showErrors.value = false;
+            errorMessages.value = [];
+        },
+        onError: (errors) => {
+            console.error('Error al crear categoría:', errors);
+            // Construir mensajes de error legibles en español
+            const msgs = [];
+            for (const [key, val] of Object.entries(form.errors)) {
+                let message = '';
+                if (typeof val === 'string') {
+                    message = val;
+                } else if (Array.isArray(val)) {
+                    message = val.join(', ');
+                } else {
+                    message = String(val);
+                }
+                
+                // Traducir mensajes técnicos a mensajes amigables
+                if (message.includes('has already been taken')) {
+                    // Extraer el nombre del campo para hacer el mensaje más claro
+                    if (key.includes('subcategories') && key.includes('children')) {
+                        const match = key.match(/subcategories\.(\d+)\.children\.(\d+)\.name/);
+                        if (match) {
+                            const subIndex = parseInt(match[1]) + 1;
+                            const childIndex = parseInt(match[2]) + 1;
+                            message = `El nombre del subnivel ${childIndex} de la subcategoría ${subIndex} ya existe en tu tienda.`;
+                        } else {
+                            message = 'Uno de los nombres de subnivel ya existe en tu tienda.';
+                        }
+                    } else if (key.includes('subcategories')) {
+                        const match = key.match(/subcategories\.(\d+)\.name/);
+                        if (match) {
+                            const subIndex = parseInt(match[1]) + 1;
+                            message = `El nombre de la subcategoría ${subIndex} ya existe en tu tienda.`;
+                        } else {
+                            message = 'Uno de los nombres de subcategoría ya existe en tu tienda.';
+                        }
+                    } else {
+                        message = message.replace('has already been taken', 'ya existe en tu tienda');
+                    }
+                }
+                
+                msgs.push(message);
+            }
+            errorMessages.value = msgs;
+            showErrors.value = msgs.length > 0;
+        },
     });
 };
 </script>
@@ -63,6 +116,14 @@ const submit = () => {
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
+                        <!-- Mensajes de error generales -->
+                        <div v-if="showErrors && errorMessages.length > 0" class="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
+                            <h4 class="font-medium text-red-800 mb-2">Errores al crear la categoría:</h4>
+                            <ul class="list-disc list-inside text-sm text-red-700 space-y-1">
+                                <li v-for="(msg, index) in errorMessages" :key="index">{{ msg }}</li>
+                            </ul>
+                        </div>
+                        
                         <form @submit.prevent="submit">
                             <div class="mb-6 border-b pb-6">
                                 <label for="name" class="block font-medium text-lg text-gray-800">Nombre de la Categoría</label>
