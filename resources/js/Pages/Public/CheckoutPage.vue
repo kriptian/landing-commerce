@@ -8,24 +8,22 @@ const props = defineProps({
     store: Object,
 });
 
-// Precio base: Simplificamos para usar la misma lógica que el catálogo y detalle del producto
-// Siempre priorizamos el campo 'price' principal del producto, igual que en ProductList y ProductPage
+// Precio base: priorizar precio de variante si existe, sino usar precio principal del producto
+// IMPORTANTE: Ahora usamos el precio de variante incluso si track_inventory está desactivado
+// porque las variant_options pueden tener precios independientes
 const getBaseUnitPrice = (item) => {
     const v = item?.variant || null;
     const p = item?.product || null;
     
-    // Si hay variante seleccionada y tiene precio, usamos el precio de la variante
-    // PERO solo si el producto tiene track_inventory activo (lógica del ProductPage)
-    if (v && p && p.track_inventory !== false) {
-        // Con inventario activo: usar precio de variante si existe, sino precio del producto
+    // Si hay variante seleccionada, usar precio de variante si existe
+    if (v && p) {
         const variantPrice = v.price != null && v.price !== '' ? Number(v.price) : null;
         if (variantPrice !== null) {
             return variantPrice;
         }
     }
     
-    // En todos los demás casos (sin variante, inventario desactivado, o variante sin precio):
-    // Usar directamente el precio principal del producto (igual que ProductList y ProductPage)
+    // Si no hay variante o la variante no tiene precio: usar precio principal del producto
     if (p && p.price != null) {
         return Number(p.price);
     }

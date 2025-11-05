@@ -226,22 +226,22 @@ class CheckoutController extends Controller
             return redirect()->route('catalogo.index', ['store' => $store->slug])->withErrors('Tu carrito está vacío.');
         }
 
-        // Lógica de precio simplificada: igual que en ProductList y ProductPage
-        // Siempre priorizamos el campo 'price' principal del producto para mantener consistencia
+        // Lógica de precio: priorizar precio de variante si existe, sino usar precio principal del producto
         $computeBaseUnit = function ($item) {
             $variant = $item->variant ?? null;
             $product = $item->product ?? null;
             
-            // Si hay variante seleccionada y el producto tiene inventario activo, usar precio de variante
-            if ($variant && $product && $product->track_inventory !== false) {
-                // Con inventario activo: usar precio de variante si existe y no es null/vacío
+            // Si hay variante seleccionada, usar precio de variante si existe
+            // IMPORTANTE: Ahora usamos el precio de variante incluso si track_inventory está desactivado
+            // porque las variant_options pueden tener precios independientes
+            if ($variant && $product) {
+                // Usar precio de variante si existe y no es null/vacío
                 if ($variant->price !== null && $variant->price !== '') {
                     return (float) $variant->price;
                 }
             }
             
-            // En todos los demás casos: usar directamente el precio principal del producto
-            // Esto es consistente con ProductList y ProductPage que usan product.price directamente
+            // Si no hay variante o la variante no tiene precio: usar precio principal del producto
             if ($product && $product->price !== null) {
                 return (float) $product->price;
             }

@@ -20,24 +20,22 @@ const formatCurrency = (value) => new Intl.NumberFormat('es-CO', {
 }).format(value);
 
 const getItemKey = (item) => item.id ?? item.session_key;
-// Precio base: Simplificamos para usar la misma lógica que el catálogo y detalle del producto
-// Siempre priorizamos el campo 'price' principal del producto, igual que en ProductList y ProductPage
+// Precio base: priorizar precio de variante si existe, sino usar precio principal del producto
+// IMPORTANTE: Ahora usamos el precio de variante incluso si track_inventory está desactivado
+// porque las variant_options pueden tener precios independientes
 const getUnitPrice = (item) => {
     const v = item?.variant || null;
     const p = item?.product || null;
     
-    // Si hay variante seleccionada y tiene precio, usamos el precio de la variante
-    // PERO solo si el producto tiene track_inventory activo (lógica del ProductPage)
-    if (v && p && p.track_inventory !== false) {
-        // Con inventario activo: usar precio de variante si existe, sino precio del producto
+    // Si hay variante seleccionada, usar precio de variante si existe
+    if (v && p) {
         const variantPrice = v.price != null && v.price !== '' ? Number(v.price) : null;
         if (variantPrice !== null) {
             return variantPrice;
         }
     }
     
-    // En todos los demás casos (sin variante, inventario desactivado, o variante sin precio):
-    // Usar directamente el precio principal del producto (igual que ProductList y ProductPage)
+    // Si no hay variante o la variante no tiene precio: usar precio principal del producto
     if (p && p.price != null) {
         return Number(p.price);
     }
@@ -292,7 +290,7 @@ const deleteItem = () => {
 									</div>
                                     <div class="flex items-center gap-2 min-w-[140px] shrink-0 ml-auto">
                                         <button @click="decrement(item)" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 shrink-0">−</button>
-                                        <input :value="item.quantity" @change="onQtyInput(item, $event)" :min="1" :max="getMaxQty(item)" inputmode="numeric" class="w-12 h-9 text-center border rounded-md" />
+                                        <input :value="item.quantity" @change="onQtyInput(item, $event)" :min="1" :max="getMaxQty(item)" inputmode="numeric" class="w-16 h-9 text-center border rounded-md" />
                                         <button @click="increment(item)" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800 shrink-0">＋</button>
                                     </div>
 								</div>

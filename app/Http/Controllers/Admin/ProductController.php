@@ -72,6 +72,14 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
+        // DEBUG: Verificar TODOS los archivos que llegan en la petición
+        \Log::info('🔍 STORE - Todos los archivos en la petición', [
+            'allFiles' => $request->allFiles(),
+            'has_gallery_files' => $request->hasFile('gallery_files'),
+            'request_keys' => array_keys($request->all()),
+            'file_keys' => array_filter(array_keys($request->allFiles()), fn($k) => str_contains($k, 'variant_option')),
+        ]);
+        
         // ===== 1. VALIDACIÓN: inventario + nuevos campos de precios =====
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -120,8 +128,8 @@ class ProductController extends Controller
             $validated['specifications'] = json_encode($specArray);
         }
 
-        $productData = collect($validated)->except(['gallery_files', 'variants', 'variant_attributes'])->toArray(); 
-        // Persistimos definición de atributos/depencias si llega
+        $productData = collect($validated)->except(['gallery_files', 'variants', 'variant_attributes', 'variant_options'])->toArray(); 
+        // Persistimos definición de atributos/depencias si llega (retrocompatibilidad)
         if ($request->has('variant_attributes')) {
             $productData['variant_attributes'] = $request->input('variant_attributes');
         }
@@ -176,6 +184,82 @@ class ProductController extends Controller
             }
         }
 
+        // Guardar variant_options (nuevo sistema jerárquico)
+        $variantOptionsData = [];
+        if ($request->has('variant_options') && is_array($request->variant_options)) {
+            foreach ($request->variant_options as $parentIndex => $parentOptionData) {
+                if (empty($parentOptionData['name'])) {
+                    continue;
+                }
+                
+                // Crear la variante padre
+                $parentOption = $product->allVariantOptions()->create([
+                    'name' => $parentOptionData['name'],
+                    'parent_id' => null,
+                    'price' => null,
+                    'image_path' => null,
+                    'order' => $parentOptionData['order'] ?? $parentIndex,
+                ]);
+                
+                $childrenData = [];
+                // Crear las opciones hijas
+                if (isset($parentOptionData['children']) && is_array($parentOptionData['children'])) {
+                    foreach ($parentOptionData['children'] as $childIndex => $childData) {
+                        if (empty($childData['name'])) {
+                            continue;
+                        }
+                        
+                        $imagePath = null;
+                        // Buscar la imagen usando la clave generada en el frontend
+                        $imageKey = "variant_option_{$parentIndex}_{$childIndex}";
+                        if ($request->hasFile($imageKey)) {
+                            $imageFile = $request->file($imageKey);
+                            if ($imageFile && $imageFile->isValid()) {
+                                $path = $imageFile->store('variant-options', 'public');
+                                $imagePath = '/storage/' . $path;
+                            }
+                        }
+                        
+                        // DEBUG: Log temporal para verificar guardado
+                        \Log::info('🔍 STORE - Guardando variant option child', [
+                            'name' => $childData['name'],
+                            'image_path' => $imagePath,
+                            'imageKey' => $imageKey,
+                            'hasFile' => $request->hasFile($imageKey),
+                        ]);
+                        
+                        $childOption = $product->allVariantOptions()->create([
+                            'name' => $childData['name'],
+                            'parent_id' => $parentOption->id,
+                            'price' => isset($childData['price']) && $childData['price'] !== '' && $childData['price'] !== null ? $childData['price'] : null,
+                            'image_path' => $imagePath,
+                            'order' => $childData['order'] ?? $childIndex,
+                        ]);
+                        
+                        // DEBUG: Verificar que se guardó correctamente
+                        \Log::info('🔍 STORE - Variant option guardado', [
+                            'id' => $childOption->id,
+                            'image_path_saved' => $childOption->image_path,
+                        ]);
+                        
+                        $childrenData[] = [
+                            'name' => $childData['name'],
+                            'price' => isset($childData['price']) && $childData['price'] !== '' && $childData['price'] !== null ? $childData['price'] : null,
+                            'image_path' => $imagePath,
+                        ];
+                    }
+                }
+                
+                $variantOptionsData[] = [
+                    'name' => $parentOptionData['name'],
+                    'children' => $childrenData,
+                ];
+            }
+            
+            // Generar variantes antiguas automáticamente desde variant_options para compatibilidad con carrito
+            $this->generateVariantsFromOptions($product, $variantOptionsData, $request->input('variant_attributes', []));
+        }
+        
         if ($request->hasFile('gallery_files')) {
             foreach ($request->file('gallery_files') as $file) {
                 $path = $file->store('products', 'public');
@@ -194,7 +278,67 @@ class ProductController extends Controller
             abort(403);
         }
 
-        $product->load('images', 'category.parent', 'variants'); 
+        $product->load('images', 'category.parent', 'variants', 'variantOptions.children');
+        
+        // Asegurar que variant_options se serialicen correctamente
+        $productArray = $product->toArray();
+        if ($product->variantOptions && $product->variantOptions->count() > 0) {
+            $variantOptionsArray = [];
+            foreach ($product->variantOptions as $parentOption) {
+                $parentData = [
+                    'id' => $parentOption->id,
+                    'name' => $parentOption->name,
+                    'parent_id' => $parentOption->parent_id,
+                    'price' => $parentOption->price,
+                    'image_path' => $parentOption->image_path,
+                    'order' => $parentOption->order,
+                    'children' => [],
+                ];
+                
+                if ($parentOption->children && $parentOption->children->count() > 0) {
+                    foreach ($parentOption->children as $child) {
+                        $imagePath = $child->image_path ?: null;
+                        
+                        // DEBUG: Log de imagen desde BD
+                        \Log::info('🔍 EDIT - Cargando child desde BD', [
+                            'id' => $child->id,
+                            'name' => $child->name,
+                            'image_path_from_db' => $imagePath,
+                            'image_path_type' => gettype($imagePath),
+                        ]);
+                        
+                        // Asegurar que image_path esté en el formato correcto
+                        if (!empty($imagePath) && !str_starts_with($imagePath, 'http')) {
+                            if (!str_starts_with($imagePath, '/storage/')) {
+                                $imagePath = '/storage/' . ltrim($imagePath, '/');
+                            }
+                        }
+                        
+                        $childData = [
+                            'id' => $child->id,
+                            'name' => $child->name,
+                            'parent_id' => $child->parent_id,
+                            'price' => $child->price,
+                            'image_path' => $imagePath,
+                            'order' => $child->order,
+                        ];
+                        
+                        // DEBUG: Log de imagen después de normalizar
+                        \Log::info('🔍 EDIT - Child normalizado para enviar', [
+                            'id' => $childData['id'],
+                            'name' => $childData['name'],
+                            'image_path_normalized' => $childData['image_path'],
+                        ]);
+                        
+                        $parentData['children'][] = $childData;
+                    }
+                }
+                
+                $variantOptionsArray[] = $parentData;
+            }
+            
+            $productArray['variant_options'] = $variantOptionsArray;
+        } 
 
         // Construimos la ruta completa de categorías desde la raíz hasta la seleccionada
         $selectedCategoryPath = [];
@@ -210,7 +354,7 @@ class ProductController extends Controller
         $selectedCategoryPath = array_reverse($selectedCategoryPath);
 
         return Inertia::render('Products/Edit', [
-            'product' => $product,
+            'product' => $productArray, // Usar el array serializado con variant_options correctamente formateado
             'categories' => auth()->user()->store->categories()->whereNull('parent_id')->orderBy('name')->get(['id','name']),
             'selectedCategoryPath' => $selectedCategoryPath,
         ]);
@@ -218,6 +362,15 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
+        // DEBUG: Verificar TODOS los archivos que llegan en la petición
+        \Log::info('🔍 UPDATE - Todos los archivos en la petición', [
+            'allFiles' => $request->allFiles(),
+            'has_gallery_files' => $request->hasFile('gallery_files'),
+            'has_new_gallery_files' => $request->hasFile('new_gallery_files'),
+            'request_keys' => array_keys($request->all()),
+            'file_keys' => array_filter(array_keys($request->allFiles()), fn($k) => str_contains($k, 'variant_option')),
+        ]);
+        
         // Atajo: actualización rápida desde el listado (promos o activación)
         if ($request->hasAny(['promo_active', 'promo_discount_percent', 'is_active']) && !$request->has('name')) {
             $data = $request->validate([
@@ -291,7 +444,7 @@ class ProductController extends Controller
             }
         }
         
-        $productData = $request->except(['_method', 'new_gallery_files', 'images_to_delete', 'variants', 'variants_to_delete', 'variant_attributes']);
+        $productData = $request->except(['_method', 'new_gallery_files', 'images_to_delete', 'variants', 'variants_to_delete', 'variant_attributes', 'variant_options']);
         // Actualizar variant_attributes también cuando venga vacío explícitamente (para limpiar)
         if ($request->has('variant_attributes')) {
             $va = $request->input('variant_attributes');
@@ -359,6 +512,184 @@ class ProductController extends Controller
             $product->variants()->delete();
         }
         
+        // Actualizar variant_options (nuevo sistema jerárquico)
+        $variantOptionsData = [];
+        if ($request->has('variant_options') && is_array($request->variant_options)) {
+            // Obtener IDs de variant_options que se están enviando
+            $sentParentIds = [];
+            $sentChildIds = [];
+            
+            foreach ($request->variant_options as $parentIndex => $parentOptionData) {
+                if (empty($parentOptionData['name'])) {
+                    continue;
+                }
+                
+                $parentId = $parentOptionData['id'] ?? null;
+                $childrenData = [];
+                
+                // Actualizar o crear el padre
+                if ($parentId) {
+                    $parentOption = \App\Models\VariantOption::find($parentId);
+                    if ($parentOption && $parentOption->product_id === $product->id) {
+                        $parentOption->update([
+                            'name' => $parentOptionData['name'],
+                            'order' => $parentOptionData['order'] ?? $parentIndex,
+                        ]);
+                        $sentParentIds[] = $parentId;
+                    }
+                } else {
+                    $parentOption = $product->allVariantOptions()->create([
+                        'name' => $parentOptionData['name'],
+                        'parent_id' => null,
+                        'price' => null,
+                        'image_path' => null,
+                        'order' => $parentOptionData['order'] ?? $parentIndex,
+                    ]);
+                    $sentParentIds[] = $parentOption->id;
+                }
+                
+                // Procesar hijos
+                if (isset($parentOptionData['children']) && is_array($parentOptionData['children'])) {
+                    foreach ($parentOptionData['children'] as $childIndex => $childData) {
+                        if (empty($childData['name'])) {
+                            continue;
+                        }
+                        
+                        $childId = $childData['id'] ?? null;
+                        $imagePath = null;
+                        
+                        // Buscar nueva imagen si se envió
+                        $imageKey = "variant_option_{$parentIndex}_{$childIndex}";
+                        if ($request->hasFile($imageKey)) {
+                            $imageFile = $request->file($imageKey);
+                            if ($imageFile && $imageFile->isValid()) {
+                                // Eliminar imagen anterior si existe
+                                if ($childId) {
+                                    $oldChild = \App\Models\VariantOption::find($childId);
+                                    if ($oldChild && $oldChild->image_path) {
+                                        Storage::disk('public')->delete(str_replace('/storage/', '', $oldChild->image_path));
+                                    }
+                                }
+                                $path = $imageFile->store('variant-options', 'public');
+                                $imagePath = '/storage/' . $path;
+                            }
+                        } else {
+                            // Si no hay archivo nuevo, usar la ruta enviada o mantener la existente
+                            $receivedImagePath = $childData['image_path'] ?? null;
+                            
+                            // Verificar que receivedImagePath no sea el string "null" o vacío
+                            if ($receivedImagePath && is_string($receivedImagePath)) {
+                                $receivedImagePath = trim($receivedImagePath);
+                                if ($receivedImagePath === '' || $receivedImagePath === 'null' || $receivedImagePath === 'undefined') {
+                                    $receivedImagePath = null;
+                                }
+                            }
+                            
+                            if ($receivedImagePath && !empty($receivedImagePath)) {
+                                // Se envió una ruta válida (imagen existente que no se cambió)
+                                $imagePath = $receivedImagePath;
+                            } elseif ($childId) {
+                                // No se envió ruta válida ni archivo nuevo, pero existe en BD: mantener la existente
+                                $existingChild = \App\Models\VariantOption::find($childId);
+                                if ($existingChild && $existingChild->image_path) {
+                                    $imagePath = $existingChild->image_path;
+                                }
+                            }
+                        }
+                        
+                        // DEBUG: Log temporal para verificar actualización
+                        \Log::info('🔍 UPDATE - Procesando variant option child', [
+                            'childId' => $childId,
+                            'name' => $childData['name'],
+                            'image_path_received_raw' => $childData['image_path'] ?? null,
+                            'image_path_received_type' => gettype($childData['image_path'] ?? null),
+                            'imagePath_final' => $imagePath,
+                            'imageKey' => $imageKey,
+                            'hasFile' => $request->hasFile($imageKey),
+                        ]);
+                        
+                        if ($childId) {
+                            $childOption = \App\Models\VariantOption::find($childId);
+                            if ($childOption && $childOption->product_id === $product->id) {
+                                // DEBUG: Verificar imagen existente antes de actualizar
+                                \Log::info('🔍 UPDATE - Imagen existente en BD', [
+                                    'existing_image_path' => $childOption->image_path,
+                                ]);
+                                
+                                $childOption->update([
+                                    'name' => $childData['name'],
+                                    'parent_id' => $parentOption->id,
+                                    'price' => isset($childData['price']) && $childData['price'] !== '' && $childData['price'] !== null ? $childData['price'] : null,
+                                    'image_path' => $imagePath,
+                                    'order' => $childData['order'] ?? $childIndex,
+                                ]);
+                                
+                                // DEBUG: Verificar que se actualizó correctamente
+                                $childOption->refresh();
+                                \Log::info('🔍 UPDATE - Variant option actualizado', [
+                                    'id' => $childOption->id,
+                                    'image_path_after_update' => $childOption->image_path,
+                                ]);
+                                
+                                $sentChildIds[] = $childId;
+                            }
+                        } else {
+                            $newChild = $product->allVariantOptions()->create([
+                                'name' => $childData['name'],
+                                'parent_id' => $parentOption->id,
+                                'price' => isset($childData['price']) && $childData['price'] !== '' && $childData['price'] !== null ? $childData['price'] : null,
+                                'image_path' => $imagePath,
+                                'order' => $childData['order'] ?? $childIndex,
+                            ]);
+                            $sentChildIds[] = $newChild->id;
+                        }
+                        
+                        $childrenData[] = [
+                            'name' => $childData['name'],
+                            'price' => isset($childData['price']) && $childData['price'] !== '' && $childData['price'] !== null ? $childData['price'] : null,
+                            'image_path' => $imagePath,
+                        ];
+                    }
+                }
+                
+                $variantOptionsData[] = [
+                    'name' => $parentOptionData['name'],
+                    'children' => $childrenData,
+                ];
+            }
+            
+            // Eliminar variant_options que no están en la lista enviada
+            $allExistingIds = $product->allVariantOptions()->pluck('id')->toArray();
+            $idsToDelete = array_diff($allExistingIds, array_merge($sentParentIds, $sentChildIds));
+            
+            if (!empty($idsToDelete)) {
+                $optionsToDelete = \App\Models\VariantOption::whereIn('id', $idsToDelete)
+                    ->where('product_id', $product->id)
+                    ->get();
+                
+                foreach ($optionsToDelete as $option) {
+                    // Eliminar imagen si existe
+                    if ($option->image_path) {
+                        Storage::disk('public')->delete(str_replace('/storage/', '', $option->image_path));
+                    }
+                    $option->delete();
+                }
+            }
+            
+            // Eliminar variantes antiguas y regenerarlas desde variant_options
+            $product->variants()->delete();
+            $this->generateVariantsFromOptions($product, $variantOptionsData, $request->input('variant_attributes', []));
+        } else {
+            // Si no se envían variant_options, eliminar todas las existentes
+            $optionsToDelete = $product->allVariantOptions()->get();
+            foreach ($optionsToDelete as $option) {
+                if ($option->image_path) {
+                    Storage::disk('public')->delete(str_replace('/storage/', '', $option->image_path));
+                }
+                $option->delete();
+            }
+        }
+        
         // Redirigimos al listado para mostrar el modal de éxito
         return redirect()
             ->route('admin.products.index')
@@ -374,5 +705,138 @@ class ProductController extends Controller
         $product->delete();
         
         return redirect()->route('admin.products.index');
+    }
+
+    /**
+     * Generar variantes antiguas (ProductVariant) desde variant_options para compatibilidad con carrito
+     * Respetando dependencias de variant_attributes
+     */
+    private function generateVariantsFromOptions(Product $product, array $variantOptionsData, array $variantAttributes = [])
+    {
+        if (empty($variantOptionsData)) {
+            return;
+        }
+
+        // Construir mapa de dependencias desde variant_attributes
+        $dependencyMap = [];
+        if (!empty($variantAttributes) && is_array($variantAttributes)) {
+            foreach ($variantAttributes as $attr) {
+                if (!empty($attr['name']) && !empty($attr['dependsOn'])) {
+                    $dependencyMap[$attr['name']] = [
+                        'dependsOn' => $attr['dependsOn'],
+                        'rulesSelected' => $attr['rulesSelected'] ?? [],
+                        'rules' => $attr['rules'] ?? [],
+                    ];
+                }
+            }
+        }
+
+        // Construir arrays de valores por atributo
+        $attributeValues = [];
+        foreach ($variantOptionsData as $parent) {
+            $attributeValues[$parent['name']] = array_column($parent['children'] ?? [], 'name');
+        }
+
+        // Ordenar atributos por dependencias (padres primero)
+        $orderedAttributes = [];
+        $visited = [];
+        
+        function visitAttribute($attrName, &$orderedAttributes, &$visited, $dependencyMap, $attributeValues) {
+            if (in_array($attrName, $visited)) return;
+            if (isset($dependencyMap[$attrName]['dependsOn'])) {
+                $parent = $dependencyMap[$attrName]['dependsOn'];
+                if (isset($attributeValues[$parent])) {
+                    visitAttribute($parent, $orderedAttributes, $visited, $dependencyMap, $attributeValues);
+                }
+            }
+            $visited[] = $attrName;
+            if (isset($attributeValues[$attrName])) {
+                $orderedAttributes[] = $attrName;
+            }
+        }
+
+        foreach (array_keys($attributeValues) as $attrName) {
+            visitAttribute($attrName, $orderedAttributes, $visited, $dependencyMap, $attributeValues);
+        }
+
+        // Generar todas las combinaciones posibles respetando dependencias
+        $combinations = [];
+        
+        function generateCombinations($index, $current, $orderedAttributes, $attributeValues, $dependencyMap, &$combinations) {
+            if ($index >= count($orderedAttributes)) {
+                $combinations[] = $current;
+                return;
+            }
+
+            $attrName = $orderedAttributes[$index];
+            $values = $attributeValues[$attrName] ?? [];
+
+            // Verificar dependencias
+            if (isset($dependencyMap[$attrName])) {
+                $dependsOn = $dependencyMap[$attrName]['dependsOn'];
+                $parentValue = $current[$dependsOn] ?? null;
+                
+                if ($parentValue !== null) {
+                    $rules = $dependencyMap[$attrName]['rulesSelected'][$parentValue] ?? $dependencyMap[$attrName]['rules'][$parentValue] ?? [];
+                    $ruleValues = is_array($rules) ? $rules : (is_string($rules) ? array_map('trim', explode(',', $rules)) : []);
+                    
+                    if (!empty($ruleValues)) {
+                        $values = array_intersect($values, $ruleValues);
+                    }
+                }
+            }
+
+            foreach ($values as $value) {
+                $newCurrent = $current;
+                $newCurrent[$attrName] = $value;
+                generateCombinations($index + 1, $newCurrent, $orderedAttributes, $attributeValues, $dependencyMap, $combinations);
+            }
+        }
+
+        generateCombinations(0, [], $orderedAttributes, $attributeValues, $dependencyMap, $combinations);
+
+        // Crear variantes desde las combinaciones
+        // IMPORTANTE: Solo UNA variante principal puede tener precios
+        // Buscar la variante principal que tiene precios
+        $pricedVariantParent = null;
+        foreach ($variantOptionsData as $parent) {
+            if (!empty($parent['children'])) {
+                foreach ($parent['children'] as $child) {
+                    if (isset($child['price']) && $child['price'] !== null && $child['price'] !== '') {
+                        $pricedVariantParent = $parent['name'];
+                        break 2; // Salir de ambos loops cuando encontramos la primera variante con precios
+                    }
+                }
+            }
+        }
+        
+        foreach ($combinations as $combination) {
+            // Si hay una variante principal con precios, buscar el precio de esa variante en la combinación
+            // Si no hay variante con precios o la opción no tiene precio, usar null (se usará el precio principal)
+            $variantPrice = null;
+            
+            if ($pricedVariantParent) {
+                $value = $combination[$pricedVariantParent] ?? null;
+                if ($value) {
+                    foreach ($variantOptionsData as $parent) {
+                        if ($parent['name'] === $pricedVariantParent) {
+                            foreach ($parent['children'] ?? [] as $child) {
+                                if ($child['name'] === $value && isset($child['price']) && $child['price'] !== null && $child['price'] !== '') {
+                                    $variantPrice = (float) $child['price'];
+                                    break 2; // Salir cuando encontramos el precio
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            $product->variants()->create([
+                'options' => $combination,
+                'price' => $variantPrice, // null si no hay precio en la variante con precios (se usará precio principal)
+                'stock' => 0, // Se manejará por el inventario total
+                'alert' => null,
+            ]);
+        }
     }
 }

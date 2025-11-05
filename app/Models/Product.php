@@ -34,12 +34,13 @@ class Product extends Model
 
     /**
      * ESTA ES LA NUEVA FUNCIÓN QUE CREA LA URL DE LA IMAGEN
+     * Incluye imágenes de variantes si no hay imágenes regulares del producto
      */
     protected function mainImageUrl(): Attribute
     {
         return Attribute::make(
             get: function () {
-                // Busca la primera imagen asociada a este producto
+                // 1. Primero busca la primera imagen asociada a este producto
                 $firstImage = $this->images()->first();
 
                 if ($firstImage) {
@@ -47,12 +48,37 @@ class Product extends Model
                     return $firstImage->path;
                 }
 
-                // Si no hay imagen del producto, usamos el logo de la tienda si existe
+                // 2. Si no hay imagen del producto, busca en las imágenes de variantes
+                // Cargar variantOptions con children si no están cargados
+                if (!$this->relationLoaded('variantOptions')) {
+                    $this->load('variantOptions.children');
+                }
+
+                if ($this->variantOptions && $this->variantOptions->count() > 0) {
+                    foreach ($this->variantOptions as $parentOption) {
+                        if ($parentOption->children && $parentOption->children->count() > 0) {
+                            foreach ($parentOption->children as $child) {
+                                if (!empty($child->image_path)) {
+                                    // Normalizar la ruta de la imagen
+                                    $imagePath = $child->image_path;
+                                    if (!str_starts_with($imagePath, 'http://') && !str_starts_with($imagePath, 'https://')) {
+                                        if (!str_starts_with($imagePath, '/storage/')) {
+                                            $imagePath = '/storage/' . ltrim($imagePath, '/');
+                                        }
+                                    }
+                                    return $imagePath;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Si no hay imagen del producto ni de variantes, usamos el logo de la tienda si existe
                 if ($this->store && !empty($this->store->logo_url)) {
                     return $this->store->logo_url;
                 }
 
-                // Fallback local para evitar dependencias externas
+                // 4. Fallback local para evitar dependencias externas
                 return asset('img/product-placeholder.svg');
             },
         );
@@ -100,5 +126,21 @@ class Product extends Model
     public function variants()
     {
         return $this->hasMany(\App\Models\ProductVariant::class);
+    }
+
+    /**
+     * Un producto tiene muchas opciones de variantes jerárquicas.
+     */
+    public function variantOptions()
+    {
+        return $this->hasMany(VariantOption::class)->whereNull('parent_id')->orderBy('order');
+    }
+
+    /**
+     * Obtener todas las opciones de variantes (incluyendo hijos).
+     */
+    public function allVariantOptions()
+    {
+        return $this->hasMany(VariantOption::class)->orderBy('order');
     }
 }

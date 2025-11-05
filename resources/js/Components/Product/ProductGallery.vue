@@ -9,14 +9,66 @@ const props = defineProps({
     },
 });
 
+// Exponer método para cambiar la imagen activa desde el padre
+const selectImageByPath = (path) => {
+    if (!path) return;
+    
+    // Buscar la imagen por path (comparación flexible)
+    const index = allImages.value.findIndex(img => {
+        const imgPath = img.path || '';
+        const searchPath = path || '';
+        // Comparar rutas normalizadas (sin espacios, mismo formato)
+        return imgPath === searchPath || 
+               imgPath.replace(/^\/+/, '') === searchPath.replace(/^\/+/, '') ||
+               imgPath.endsWith(searchPath) ||
+               searchPath.endsWith(imgPath);
+    });
+    
+    if (index >= 0) {
+        setIndex(index);
+        activeImage.value = allImages.value[index].path;
+    } else {
+        // Si no se encuentra, intentar buscar por nombre de archivo
+        const fileName = path.split('/').pop();
+        const indexByFile = allImages.value.findIndex(img => {
+            const imgPath = img.path || '';
+            return imgPath.includes(fileName) || fileName.includes(imgPath.split('/').pop());
+        });
+        
+        if (indexByFile >= 0) {
+            setIndex(indexByFile);
+            activeImage.value = allImages.value[indexByFile].path;
+        }
+    }
+};
+
+defineExpose({
+    selectImageByPath,
+    setIndex,
+});
+
 const VISIBLE_COUNT = 3;
 
-const initialActive = props.mainImageUrl || (props.images[0]?.path || '');
+const allImages = computed(() => props.images || []);
+const initialActive = props.mainImageUrl || (allImages.value[0]?.path || '');
 const activeImage = ref(initialActive);
 
 const showAll = ref(false);
-const allImages = computed(() => props.images || []);
 const currentIndex = ref(0);
+
+// Sincronizar currentIndex con activeImage inicial
+watch(() => allImages.value, (newImages) => {
+    if (newImages.length > 0) {
+        const index = newImages.findIndex(img => img.path === activeImage.value);
+        if (index >= 0) {
+            currentIndex.value = index;
+        } else {
+            // Si la imagen activa no se encuentra, usar la primera
+            activeImage.value = newImages[0].path;
+            currentIndex.value = 0;
+        }
+    }
+}, { immediate: true });
 const thumbsRef = ref(null);
 const hasThumbsOverflow = ref(false);
 
@@ -26,6 +78,11 @@ const hiddenThumbnails = computed(() => props.images.slice(VISIBLE_COUNT));
 function selectImage(path) {
     if (!path) return;
     activeImage.value = path;
+    // Sincronizar el índice actual con la imagen seleccionada
+    const index = indexOfPath(path);
+    if (index >= 0) {
+        setIndex(index);
+    }
 }
 
 function indexOfPath(path) {

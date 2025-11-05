@@ -47,9 +47,11 @@ class ProductController extends Controller
         })->filter(fn($c) => $c['products_count'] > 0)->values();
 
         // Empezamos la consulta de productos (incluimos variantes para calcular bajo stock en frontend)
+        // También cargamos variantOptions para incluir sus imágenes en main_image_url
         $productsQuery = $store->products()->where('is_active', true)->with([
             'images',
-            'variants:id,product_id,stock,minimum_stock,alert'
+            'variants:id,product_id,stock,minimum_stock,alert',
+            'variantOptions.children' // Cargar variantOptions con children para incluir imágenes de variantes
         ]);
 
         // --- LÓGICA DE FILTRADO: múltiples categorías y descendientes ---
@@ -143,7 +145,7 @@ class ProductController extends Controller
             abort(404);
         }
 
-        $product->load('images', 'category', 'variants', 'store');
+        $product->load('images', 'category', 'variants', 'variantOptions.children', 'store');
         // Productos relacionados: misma tienda, misma categoría si existe, activos, excluyendo el actual
         $related = $store->products()
             ->where('is_active', true)
@@ -183,8 +185,74 @@ class ProductController extends Controller
             ]);
         }
         
+        // Asegurar que variant_options se serialicen correctamente con sus imágenes
+        $product->loadMissing('variantOptions.children');
+        
+        // Convertir variant_options a array manualmente para asegurar que se serialicen correctamente
+        $productArray = $product->toArray();
+        
+        // Asegurar que variant_options se serialicen correctamente
+        if ($product->variantOptions && $product->variantOptions->count() > 0) {
+            $variantOptionsArray = [];
+            foreach ($product->variantOptions as $parentOption) {
+                $parentData = [
+                    'id' => $parentOption->id,
+                    'name' => $parentOption->name,
+                    'parent_id' => $parentOption->parent_id,
+                    'price' => $parentOption->price,
+                    'image_path' => $parentOption->image_path,
+                    'order' => $parentOption->order,
+                    'children' => [],
+                ];
+                
+                // Agregar hijos
+                if ($parentOption->children && $parentOption->children->count() > 0) {
+                    foreach ($parentOption->children as $child) {
+                        $imagePath = $child->image_path;
+                        
+                        // DEBUG: Log temporal para verificar qué se está cargando
+                        \Log::info('🔍 SHOW - Cargando variant option child', [
+                            'id' => $child->id,
+                            'name' => $child->name,
+                            'image_path_raw' => $imagePath,
+                        ]);
+                        
+                        // Asegurar que image_path esté en el formato correcto
+                        if (!empty($imagePath) && !str_starts_with($imagePath, 'http')) {
+                            // Si no empieza con /storage/, agregarlo
+                            if (!str_starts_with($imagePath, '/storage/')) {
+                                $imagePath = '/storage/' . ltrim($imagePath, '/');
+                            }
+                        }
+                        
+                        $childData = [
+                            'id' => $child->id,
+                            'name' => $child->name,
+                            'parent_id' => $child->parent_id,
+                            'price' => $child->price,
+                            'image_path' => $imagePath ?: null,
+                            'order' => $child->order,
+                        ];
+                        
+                        // DEBUG: Verificar qué se está enviando al frontend
+                        \Log::info('🔍 SHOW - Enviando variant option child al frontend', [
+                            'id' => $childData['id'],
+                            'name' => $childData['name'],
+                            'image_path_final' => $childData['image_path'],
+                        ]);
+                        
+                        $parentData['children'][] = $childData;
+                    }
+                }
+                
+                $variantOptionsArray[] = $parentData;
+            }
+            
+            $productArray['variant_options'] = $variantOptionsArray;
+        }
+        
         return inertia('Public/ProductPage', [
-            'product' => $product,
+            'product' => $productArray,
             'store' => $store,
             'related' => $related,
             'suggested' => $youMayLike,

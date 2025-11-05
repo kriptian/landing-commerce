@@ -1,9 +1,12 @@
 <script setup>
 import ProductGallery from '@/Components/Product/ProductGallery.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import { useToast } from 'vue-toastification';
+
+// Referencia al componente ProductGallery
+const galleryRef = ref(null);
 
 const props = defineProps({
     product: Object,
@@ -16,8 +19,89 @@ import { ref as vref } from 'vue';
 const showVariantAlert = vref(false);
 const toast = useToast();
 
+// Usar variant_options si está disponible, sino usar variants (sistema antiguo)
+const hasVariantOptions = computed(() => {
+    return props.product.variant_options && Array.isArray(props.product.variant_options) && props.product.variant_options.length > 0;
+});
+
+// Combinar imágenes del producto con imágenes de variant_options
+const allProductImages = computed(() => {
+    const images = [...(props.product.images || [])];
+    const imagePaths = new Set(images.map(img => img.path));
+    
+    // Agregar imágenes de variant_options SIEMPRE (para que se vean en la galería)
+    // IMPORTANTE: Agregarlas inmediatamente después de las imágenes regulares
+    // para que aparezcan en las miniaturas visibles desde el inicio
+    if (hasVariantOptions.value) {
+        (props.product.variant_options || []).forEach(parent => {
+            (parent.children || []).forEach(child => {
+                if (child.image_path) {
+                    // Normalizar la ruta de la imagen
+                    let imagePath = child.image_path;
+                    
+                    // Si no empieza con /storage/ y no es una URL completa, agregar /storage/
+                    if (!imagePath.startsWith('/storage/') && !imagePath.startsWith('http://') && !imagePath.startsWith('https://')) {
+                        imagePath = '/storage/' + imagePath.replace(/^\/+/, '');
+                    }
+                    
+                    // Verificar que no esté ya en la galería (comparar de forma flexible)
+                    const normalizedPath = imagePath.replace(/^\/+/, '');
+                    const isDuplicate = Array.from(imagePaths).some(existingPath => {
+                        const normalizedExisting = (existingPath || '').replace(/^\/+/, '');
+                        return normalizedPath === normalizedExisting || 
+                               normalizedPath.endsWith(normalizedExisting) ||
+                               normalizedExisting.endsWith(normalizedPath);
+                    });
+                    
+                    if (!isDuplicate) {
+                        // Agregar inmediatamente después de las imágenes regulares
+                        // para que aparezcan en las miniaturas visibles desde el inicio
+                        images.push({
+                            id: `variant-option-${child.id}`,
+                            path: imagePath,
+                        });
+                        imagePaths.add(imagePath);
+                    }
+                }
+            });
+        });
+    }
+    
+    // Si no hay imágenes, agregar placeholder
+    if (images.length === 0) {
+        images.push({
+            id: 'placeholder',
+            path: '/img/product-placeholder.svg',
+        });
+    }
+    
+    return images;
+});
+
+// Construir opciones desde variant_options (nuevo sistema jerárquico)
+const variantOptionsMap = computed(() => {
+    if (!hasVariantOptions.value) return {};
+    
+    const map = {};
+    (props.product.variant_options || []).forEach(parent => {
+        if (!parent.name) return;
+        map[parent.name] = (parent.children || []).map(child => ({
+            name: child.name,
+            price: child.price,
+            image_path: child.image_path,
+            id: child.id,
+        }));
+    });
+    return map;
+});
+
 // Selección por atributos (Color, Talla, etc.)
 const optionKeys = computed(() => {
+    if (hasVariantOptions.value) {
+        // Usar variant_options
+        return Object.keys(variantOptionsMap.value);
+    }
+    // Sistema antiguo: usar variants
     const keys = new Set();
     (props.product.variants || []).forEach(v => {
         const opts = v?.options || {};
@@ -27,6 +111,15 @@ const optionKeys = computed(() => {
 });
 
 const optionValuesByKey = computed(() => {
+    if (hasVariantOptions.value) {
+        // Usar variant_options
+        const map = {};
+        optionKeys.value.forEach(k => {
+            map[k] = (variantOptionsMap.value[k] || []).map(child => child.name);
+        });
+        return map;
+    }
+    // Sistema antiguo: usar variants
     const map = {};
     optionKeys.value.forEach(k => { map[k] = []; });
     (props.product.variants || []).forEach(v => {
@@ -47,12 +140,60 @@ function initSelectedOptions() {
 }
 initSelectedOptions();
 
+// Obtener información completa de una opción hijo (precio, imagen)
+const getOptionChildInfo = (parentKey, childName) => {
+    if (!hasVariantOptions.value) return null;
+    const children = variantOptionsMap.value[parentKey] || [];
+    return children.find(c => c.name === childName) || null;
+};
+
 function selectOption(key, value) {
-    selectedOptions.value[key] = (selectedOptions.value[key] === value) ? null : value;
+    const wasSelected = selectedOptions.value[key] === value;
+    selectedOptions.value[key] = wasSelected ? null : value;
+    
+    // Si hay variant_options y se seleccionó una opción (no se deseleccionó), actualizar la imagen de la galería
+    if (hasVariantOptions.value && value && !wasSelected && galleryRef.value) {
+        const childInfo = getOptionChildInfo(key, value);
+        if (childInfo && childInfo.image_path) {
+            // Normalizar la ruta de la imagen
+            let imagePath = childInfo.image_path;
+            if (!imagePath.startsWith('/storage/') && !imagePath.startsWith('http://') && !imagePath.startsWith('https://')) {
+                imagePath = '/storage/' + imagePath.replace(/^\/+/, '');
+            }
+            
+            // Usar nextTick para asegurar que la galería esté actualizada
+            nextTick(() => {
+                if (galleryRef.value) {
+                    galleryRef.value.selectImageByPath(imagePath);
+                }
+            });
+        }
+    }
 }
 
 function isValueSelectable(key, value) {
-    // Permitir seleccionar valores aunque no haya stock; la validación final la hace el botón y el carrito
+    if (hasVariantOptions.value) {
+        // Sistema nuevo: verificar si existe en variant_options
+        const children = variantOptionsMap.value[key] || [];
+        if (!children.some(c => c.name === value)) return false;
+        
+        // Verificar dependencias usando variant_attributes si existen
+        if (props.product.variant_attributes && Array.isArray(props.product.variant_attributes)) {
+            const attr = props.product.variant_attributes.find(a => a.name === key);
+            if (attr && attr.dependsOn) {
+                const parentValue = selectedOptions.value[attr.dependsOn];
+                if (parentValue != null) {
+                    const rules = attr.rulesSelected?.[parentValue] || attr.rules?.[parentValue] || [];
+                    const ruleValues = Array.isArray(rules) ? rules : (typeof rules === 'string' ? rules.split(',').map(s => s.trim()) : []);
+                    if (ruleValues.length > 0 && !ruleValues.includes(value)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+    // Sistema antiguo: usar variants
     return (props.product.variants || []).some(v => {
         const opts = v?.options || {};
         if (opts[key] !== value) return false;
@@ -70,6 +211,28 @@ function isValueSelectable(key, value) {
 const dependentAttributes = true; // habilitado por defecto; podemos parametrizar más adelante
 
 function hasCombination(key, value) {
+    if (hasVariantOptions.value) {
+        // Sistema nuevo: verificar si existe la combinación
+        const children = variantOptionsMap.value[key] || [];
+        if (!children.some(c => c.name === value)) return false;
+        
+        // Verificar dependencias
+        if (props.product.variant_attributes && Array.isArray(props.product.variant_attributes)) {
+            const attr = props.product.variant_attributes.find(a => a.name === key);
+            if (attr && attr.dependsOn) {
+                const parentValue = selectedOptions.value[attr.dependsOn];
+                if (parentValue != null) {
+                    const rules = attr.rulesSelected?.[parentValue] || attr.rules?.[parentValue] || [];
+                    const ruleValues = Array.isArray(rules) ? rules : (typeof rules === 'string' ? rules.split(',').map(s => s.trim()) : []);
+                    if (ruleValues.length > 0 && !ruleValues.includes(value)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+    // Sistema antiguo
     return (props.product.variants || []).some(v => {
         const opts = v?.options || {};
         if (opts[key] !== value) return false;
@@ -85,10 +248,43 @@ function hasCombination(key, value) {
 function getValuesForKey(key) {
     const values = optionValuesByKey.value[key] || [];
     if (!dependentAttributes) return values;
-    // Si no hay ninguna selección en otras claves, mostramos todo
+    
+    // IMPORTANTE: Siempre mostrar TODAS las opciones, pero algunas pueden estar deshabilitadas
+    // Las dependencias solo afectan qué opciones están permitidas, no qué opciones se muestran
+    return values;
+}
+
+// Nueva función para verificar si una opción está permitida según las dependencias
+function isOptionAllowed(key, value) {
+    if (!dependentAttributes) return true;
+    
+    // Si hay variant_options y variant_attributes, verificar dependencias
+    if (hasVariantOptions.value && props.product.variant_attributes && Array.isArray(props.product.variant_attributes)) {
+        const attr = props.product.variant_attributes.find(a => a.name === key);
+        if (attr && attr.dependsOn) {
+            const parentValue = selectedOptions.value[attr.dependsOn];
+            if (parentValue != null) {
+                // Si el padre está seleccionado, verificar si esta opción está en las reglas
+                const rules = attr.rulesSelected?.[parentValue] || attr.rules?.[parentValue] || [];
+                const ruleValues = Array.isArray(rules) ? rules : (typeof rules === 'string' ? rules.split(',').map(s => s.trim()) : []);
+                
+                // IMPORTANTE: Si hay reglas definidas (checkboxes marcados), solo permitir las que están en las reglas
+                // Si NO hay reglas definidas (checkboxes vacíos), permitir TODAS las opciones
+                if (ruleValues.length > 0) {
+                    return ruleValues.includes(value);
+                }
+                // Si no hay reglas definidas para este valor del padre, permitir todas las opciones
+                return true;
+            }
+            // Si el padre NO está seleccionado, permitir todas las opciones (pero mostrar todas)
+            return true;
+        }
+    }
+    
+    // Si no hay dependencias para esta clave, verificar combinaciones existentes
     const hasAnyOtherSelection = optionKeys.value.some(k => k !== key && selectedOptions.value[k] != null);
-    if (!hasAnyOtherSelection) return values;
-    return values.filter(v => hasCombination(key, v));
+    if (!hasAnyOtherSelection) return true;
+    return hasCombination(key, value);
 }
 
 // Si la dependencia está activa, al cambiar una selección invalidamos las que ya no aplican
@@ -97,7 +293,8 @@ watch(selectedOptions, (now) => {
     for (const key of optionKeys.value) {
         const val = now[key];
         if (val == null) continue;
-        if (!hasCombination(key, val)) {
+        // Verificar si la opción seleccionada está permitida según las dependencias
+        if (!isOptionAllowed(key, val)) {
             selectedOptions.value[key] = null;
         }
     }
@@ -188,8 +385,57 @@ const hasAnySocial = computed(() => socialLinks.value.length > 0);
 
 // Si hay exactamente una seleccionada, la tratamos como selección única
 const allKeysSelected = computed(() => optionKeys.value.every(k => selectedOptions.value[k] != null));
+
+// Obtener precio de la opción seleccionada (sistema nuevo)
+// IMPORTANTE: Solo UNA variante principal puede tener precios, así que buscamos el precio de la opción seleccionada
+// Si esa opción no tiene precio, usar el precio principal del producto
+// CAMBIO: Ahora el precio se actualiza inmediatamente al seleccionar la variante con precios, sin esperar a que todas estén seleccionadas
+const selectedOptionPrice = computed(() => {
+    if (!hasVariantOptions.value) return null;
+    
+    // Buscar la variante principal que tiene precios (solo debería haber una)
+    const pricedVariantParent = props.product.variant_options?.find(parent => {
+        if (!parent.children || parent.children.length === 0) return false;
+        return parent.children.some(child => child.price != null && child.price !== '');
+    });
+    
+    if (!pricedVariantParent) {
+        // No hay variante con precios, usar precio principal
+        return props.product.price;
+    }
+    
+    // Buscar el precio de la opción seleccionada en la variante que tiene precios
+    // IMPORTANTE: No requiere que todas las variantes estén seleccionadas, solo la que tiene precios
+    const selectedValue = selectedOptions.value[pricedVariantParent.name];
+    if (selectedValue) {
+        const childInfo = getOptionChildInfo(pricedVariantParent.name, selectedValue);
+        if (childInfo && childInfo.price != null) {
+            // La opción seleccionada tiene precio, usarlo inmediatamente
+            return Number(childInfo.price);
+        }
+    }
+    
+    // La variante tiene precios pero aún no se ha seleccionado ninguna opción, usar precio principal
+    return props.product.price;
+});
+
 const selectedVariant = computed(() => {
     if (!allKeysSelected.value) return null;
+    
+    if (hasVariantOptions.value) {
+        // Sistema nuevo: crear un objeto similar a variant para compatibilidad
+        const options = {};
+        optionKeys.value.forEach(k => {
+            options[k] = selectedOptions.value[k];
+        });
+        return {
+            id: null, // No hay ID en variant_options, se manejará diferente
+            options: options,
+            price: selectedOptionPrice.value,
+        };
+    }
+    
+    // Sistema antiguo
     return (props.product.variants || []).find(v => {
         const opts = v?.options || {};
         return optionKeys.value.every(k => opts[k] === selectedOptions.value[k]);
@@ -214,15 +460,30 @@ const effectivePromoPercent = computed(() => {
 });
 
 const basePrice = computed(() => {
-    // Si hay una variante seleccionada, con inventario INACTIVO usamos retail de variante o caemos al precio principal del producto
+    // CAMBIO: Si hay variante con precios seleccionada (nuevo sistema), usar su precio inmediatamente
+    // No requiere que todas las variantes estén seleccionadas, solo la que tiene precios
+    if (hasVariantOptions.value && selectedOptionPrice.value != null) {
+        return selectedOptionPrice.value;
+    }
+    
+    // Si hay una variante seleccionada (sistema antiguo o todas las variantes seleccionadas), usar su precio
     if (selectedVariant.value) {
         if (!isInventoryTracked.value) {
+            if (hasVariantOptions.value) {
+                // Sistema nuevo: usar precio de la opción seleccionada (ya manejado arriba)
+                return Number(selectedOptionPrice.value ?? props.product.price);
+            }
             const vr = selectedVariant.value.retail_price;
             return Number((vr !== null && vr !== '') ? vr : props.product.price);
         }
         // Con inventario activo, mantenemos el flujo actual (precio base de variante)
+        if (hasVariantOptions.value) {
+            return Number(selectedOptionPrice.value ?? props.product.price);
+        }
         return Number(selectedVariant.value.price ?? props.product.price);
     }
+    
+    // Si no hay variante con precio seleccionada, usar precio principal
     return Number(props.product.price);
 });
 
@@ -282,12 +543,28 @@ watch(selectedQuantity, (newQty) => {
 
 const addToCart = () => {
     // Exigir selección completa cuando hay variantes con múltiples atributos
-    if (props.product.variants.length > 0 && !selectedVariant.value) {
+    const hasVariants = hasVariantOptions.value || (props.product.variants && props.product.variants.length > 0);
+    if (hasVariants && !selectedVariant.value) {
         showVariantAlert.value = true;
         return;
     }
 
-    const variantId = props.product.variants.length > 0 ? selectedVariant.value?.id ?? null : null;
+    // Buscar el ProductVariant real que corresponde a las opciones seleccionadas
+    let variantId = null;
+    if (hasVariantOptions.value && selectedVariant.value) {
+        // Sistema nuevo: buscar el ProductVariant que coincide con las opciones seleccionadas
+        const selectedOptionsObj = selectedVariant.value.options || {};
+        const matchingVariant = (props.product.variants || []).find(v => {
+            const variantOptions = v?.options || {};
+            // Verificar que todas las opciones coincidan
+            return optionKeys.value.every(k => variantOptions[k] === selectedOptionsObj[k]);
+        });
+        variantId = matchingVariant?.id ?? null;
+    } else if (props.product.variants.length > 0 && selectedVariant.value) {
+        // Sistema antiguo: usar el ID directamente
+        variantId = selectedVariant.value?.id ?? null;
+    }
+    
     const qty = selectedQuantity.value;
 
     router.post(route('cart.store'), {
@@ -307,12 +584,28 @@ const addToCart = () => {
 
 const buyNow = () => {
     // Exigir selección completa cuando hay variantes con múltiples atributos
-    if (props.product.variants.length > 0 && !selectedVariant.value) {
+    const hasVariants = hasVariantOptions.value || (props.product.variants && props.product.variants.length > 0);
+    if (hasVariants && !selectedVariant.value) {
         showVariantAlert.value = true;
         return;
     }
 
-    const variantId = props.product.variants.length > 0 ? selectedVariant.value?.id ?? null : null;
+    // Buscar el ProductVariant real que corresponde a las opciones seleccionadas
+    let variantId = null;
+    if (hasVariantOptions.value && selectedVariant.value) {
+        // Sistema nuevo: buscar el ProductVariant que coincide con las opciones seleccionadas
+        const selectedOptionsObj = selectedVariant.value.options || {};
+        const matchingVariant = (props.product.variants || []).find(v => {
+            const variantOptions = v?.options || {};
+            // Verificar que todas las opciones coincidan
+            return optionKeys.value.every(k => variantOptions[k] === selectedOptionsObj[k]);
+        });
+        variantId = matchingVariant?.id ?? null;
+    } else if (props.product.variants.length > 0 && selectedVariant.value) {
+        // Sistema antiguo: usar el ID directamente
+        variantId = selectedVariant.value?.id ?? null;
+    }
+    
     const qty = selectedQuantity.value;
 
     router.post(route('cart.store'), {
@@ -432,8 +725,9 @@ const getVariantDisplayPrices = (variant) => {
                     </svg>
                 </button>
                 <ProductGallery 
+                    ref="galleryRef"
                     :main-image-url="product.main_image_url"
-                    :images="product.images"
+                    :images="allProductImages"
                 />
             </div>
             <div class="info flex flex-col space-y-4">
@@ -453,7 +747,7 @@ const getVariantDisplayPrices = (variant) => {
 				</p>
                 <p v-if="product.short_description" class="text-lg text-gray-600">{{ product.short_description }}</p>
 
-                <div v-if="product.variants.length > 0" class="border-t pt-4">
+                <div v-if="hasVariantOptions || product.variants.length > 0" class="border-t pt-4">
                     <h3 class="text-xl font-semibold mb-3">Opciones Disponibles:</h3>
                     <div class="space-y-4">
                         <div v-for="key in optionKeys" :key="`opt-${key}`">
@@ -466,11 +760,11 @@ const getVariantDisplayPrices = (variant) => {
                                     class="px-3 py-1 rounded border"
                                     :class="{
                                         'bg-blue-600 text-white border-blue-700': selectedOptions[key] === value,
-                                        'bg-white text-gray-800 border-gray-300': selectedOptions[key] !== value,
-                                        'opacity-50 cursor-not-allowed': isInventoryTracked && (computeStockForValue(key, value) === 0)
+                                        'bg-white text-gray-800 border-gray-300 hover:bg-gray-50': selectedOptions[key] !== value && isOptionAllowed(key, value),
+                                        'bg-gray-100 text-gray-400 border-gray-200 opacity-50 cursor-not-allowed': !isOptionAllowed(key, value) || (isInventoryTracked && (computeStockForValue(key, value) === 0))
                                     }"
-                                    :disabled="isInventoryTracked && (computeStockForValue(key, value) === 0)"
-                                    @click="selectOption(key, value)"
+                                    :disabled="!isOptionAllowed(key, value) || (isInventoryTracked && (computeStockForValue(key, value) === 0))"
+                                    @click="isOptionAllowed(key, value) ? selectOption(key, value) : null"
                                 >
                                     {{ value }}
                                 </button>
@@ -486,7 +780,7 @@ const getVariantDisplayPrices = (variant) => {
                         <label class="font-semibold">Cantidad:</label>
                         <div class="flex items-center gap-2">
                             <button type="button" @click="decreaseQuantity" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">−</button>
-                            <input type="number" v-model.number="selectedQuantity" :min="1" :max="isFinite(displayStock) ? displayStock : undefined" class="w-12 h-9 text-center border rounded-md" />
+                            <input type="number" v-model.number="selectedQuantity" :min="1" :max="isFinite(displayStock) ? displayStock : undefined" class="w-16 h-9 text-center border rounded-md" />
                             <button type="button" @click="increaseQuantity" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800">＋</button>
                         </div>
                 <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked" class="ml-2 text-xs md:text-sm text-gray-600 whitespace-nowrap shrink-0">{{ isFinite(displayStock) ? displayStock : '∞' }} en stock</p>
@@ -494,14 +788,14 @@ const getVariantDisplayPrices = (variant) => {
 
                     <button 
                         @click="addToCart"
-                        :disabled="(product.variants.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
+                        :disabled="((hasVariantOptions || product.variants.length > 0) && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
                         class="w-full mt-6 bg-blue-600/30 backdrop-blur-sm text-blue-700 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-300 disabled:text-gray-500 enabled:hover:bg-blue-600/40 border-2 border-blue-600/50">
-                        {{ product.variants.length > 0 && !selectedVariant ? 'Selecciona opciones' : (isInventoryTracked ? (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') : 'Agregar al Carrito') }}
+                        {{ (hasVariantOptions || product.variants.length > 0) && !selectedVariant ? 'Selecciona opciones' : (isInventoryTracked ? (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') : 'Agregar al Carrito') }}
                     </button>
                     
                     <button 
                         @click="buyNow"
-                        :disabled="(product.variants.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
+                        :disabled="((hasVariantOptions || product.variants.length > 0) && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
                         class="w-full mt-3 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:bg-blue-700 buy-now-button">
                         Comprar Ahora
                     </button>

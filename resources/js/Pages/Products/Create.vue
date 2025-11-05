@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, router } from '@inertiajs/vue3';
 import { nextTick, ref, computed, watch } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import SectionTour from '@/Components/SectionTour.vue';
@@ -102,25 +102,293 @@ const form = useForm({
     long_description: '',
     specifications: '',
     gallery_files: [],
-    variants: [], 
+    variant_options: [], // Nueva estructura jerárquica
+    variants: [], // Mantener para retrocompatibilidad
     variant_attributes: [],
 });
 
-// --- Lógica de Variantes (Sigue igual) ---
-const addVariant = () => {
-    form.variants.push({ 
-        options_text: '', 
-        price: '', 
-        purchase_price: null,
-        retail_price: null,
-        stock: 0,
-        alert: null,
+// --- Lógica de Variantes Jerárquicas (Nuevo sistema) ---
+const variantParents = ref([]); // Variantes principales (ej: "Color", "Talla")
+const newVariantName = ref(''); // Nombre para el formulario de nueva variante
+// Estados para expandir/colapsar variantes (solo visual)
+const expandedVariants = ref({});
+
+const toggleExpandVariant = (parentIndex) => {
+    expandedVariants.value[parentIndex] = !(expandedVariants.value[parentIndex] ?? false);
+};
+
+const addVariantParent = () => {
+    const name = newVariantName.value.trim() || '';
+    const newIndex = variantParents.value.length;
+    variantParents.value.push({
+        id: null,
+        name: name,
+        children: [],
+        order: newIndex,
+        dependsOn: '',
+        rules: {},
+        rulesSelected: {},
+        __showDependency: false,
     });
+    // Expandir la nueva variante por defecto
+    expandedVariants.value[newIndex] = true;
+    // Limpiar el input
+    newVariantName.value = '';
 };
-const removeVariant = (index) => {
-    form.variants.splice(index, 1);
+
+const removeVariantParent = (index) => {
+    variantParents.value.splice(index, 1);
 };
-// --- FIN Lógica Variantes ---
+
+const addVariantChild = (parentIndex) => {
+    if (!variantParents.value[parentIndex].children) {
+        variantParents.value[parentIndex].children = [];
+    }
+    variantParents.value[parentIndex].children.push({
+        id: null,
+        name: '',
+        price: null,
+        image: null,
+        imagePreview: null,
+        imagePath: null,
+        order: variantParents.value[parentIndex].children.length,
+    });
+    // Asegurar que la variante esté expandida cuando se agrega un hijo
+    expandedVariants.value[parentIndex] = true;
+};
+
+const removeVariantChild = (parentIndex, childIndex) => {
+    variantParents.value[parentIndex].children.splice(childIndex, 1);
+};
+
+const onVariantChildImageChange = (parentIndex, childIndex, event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    
+    // Verificar si se puede agregar imagen a esta variante
+    if (!canAddImageToVariant(parentIndex)) {
+        // No permitir, limpiar el input
+        if (event?.target) event.target.value = '';
+        
+        // Mostrar modal si no se ha mostrado
+        if (!hasShownImageInfoModal.value) {
+            showImageInfoModal.value = true;
+            hasShownImageInfoModal.value = true;
+        }
+        return;
+    }
+    
+    const isImage = file.type?.startsWith('image/');
+    if (!isImage) {
+        errorMessages.value = ['El archivo seleccionado no es una imagen válida.'];
+        showErrors.value = true;
+        if (event?.target) event.target.value = '';
+        return;
+    }
+    
+    if (file.size > MAX_IMAGE_BYTES) {
+        errorMessages.value = [`La imagen "${file.name}" supera el límite de 2 MB.`];
+        showErrors.value = true;
+        if (event?.target) event.target.value = '';
+        return;
+    }
+    
+    variantParents.value[parentIndex].children[childIndex].image = file;
+    // Crear preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        variantParents.value[parentIndex].children[childIndex].imagePreview = e.target.result;
+    };
+    reader.readAsDataURL(file);
+};
+
+const removeVariantChildImage = (parentIndex, childIndex) => {
+    variantParents.value[parentIndex].children[childIndex].image = null;
+    variantParents.value[parentIndex].children[childIndex].imagePreview = null;
+};
+
+// Preparar datos de variant_options para enviar al backend
+const prepareVariantOptions = () => {
+    const options = [];
+    variantParents.value.forEach((parent, parentIndex) => {
+        if (!parent.name.trim()) return;
+        
+        // Crear el padre
+        const parentOption = {
+            name: parent.name.trim(),
+            parent_id: null,
+            price: null,
+            image_path: null,
+            order: parentIndex,
+            children: [],
+        };
+        
+        // Agregar hijos
+        if (parent.children && parent.children.length > 0) {
+            parent.children.forEach((child, childIndex) => {
+                if (!child.name.trim()) return;
+                
+                parentOption.children.push({
+                    name: child.name.trim(),
+                    parent_id: null, // Se establecerá en el backend
+                    price: child.price ? parseFloat(child.price) : null,
+                    image_file_key: child.image ? `variant_option_${parentIndex}_${childIndex}` : null,
+                    order: childIndex,
+                });
+            });
+        }
+        
+        if (parentOption.children.length > 0 || parentOption.name) {
+            options.push(parentOption);
+        }
+    });
+    
+    return options;
+};
+
+// Construir variant_attributes desde variantParents para conservar dependencias
+const buildVariantAttributes = () => {
+    const attrs = [];
+    variantParents.value.forEach((parent) => {
+        if (!parent.name.trim()) return;
+        
+        const values = (parent.children || []).map(child => child.name.trim()).filter(Boolean);
+        if (values.length === 0) return;
+        
+        const attr = {
+            name: parent.name.trim(),
+            values: values,
+            valuesText: values.join(', '),
+            dependsOn: parent.dependsOn || '',
+            rules: parent.rules || {},
+            rulesSelected: parent.rulesSelected || {},
+        };
+        
+        attrs.push(attr);
+    });
+    
+    return attrs;
+};
+
+// Ya no necesitamos attachVariantImages() porque usamos form.transform()
+
+// Detectar si hay múltiples variantes principales con precios diferentes
+const hasMultiplePricedVariants = computed(() => {
+    const parentsWithPrices = variantParents.value.filter(parent => {
+        if (!parent.children || parent.children.length === 0) return false;
+        // Verificar si alguna opción hijo tiene precio
+        return parent.children.some(child => child.price && child.price !== '' && child.price != null);
+    });
+    return parentsWithPrices.length > 1;
+});
+
+// Obtener la primera variante principal que tiene precios
+const firstPricedVariant = computed(() => {
+    return variantParents.value.find(parent => {
+        if (!parent.children || parent.children.length === 0) return false;
+        return parent.children.some(child => child.price && child.price !== '' && child.price != null);
+    });
+});
+
+// Modal informativo sobre precios múltiples
+const showPriceInfoModal = ref(false);
+const hasShownPriceInfoModal = ref(false); // Para mostrar solo una vez por sesión
+
+// Mensajes del modal de precios
+const priceModalMessages = [
+    'Has intentado agregar precios a una variante cuando ya existe otra variante principal con precios configurados.',
+    '',
+    '📋 Regla del Sistema:',
+    'Solo puedes asignar precios a las opciones hijas de UNA variante principal. Si ya asignaste precios a una variante (por ejemplo, Color), no podrás agregar precios a otra variante (por ejemplo, Equipo).',
+    '',
+    '💡 Cómo funciona:',
+    'Cuando un cliente seleccione una opción de la variante que tiene precios, se mostrará el precio de esa opción específica. Si no selecciona ninguna opción o selecciona una opción sin precio, se usará el precio principal del producto.',
+    '',
+    '💡 Sugerencia:',
+    'Si necesitas diferentes precios según múltiples características, considera crear productos separados o usar una sola variante que combine ambas características.'
+];
+
+// Verificar si se puede agregar precio a esta variante
+const canAddPriceToVariant = (parentIndex) => {
+    // Verificar si ya hay otra variante principal con precios
+    const otherPricedParent = variantParents.value.find((parent, index) => {
+        if (index === parentIndex) return false; // Excluir la variante actual
+        if (!parent.children || parent.children.length === 0) return false;
+        return parent.children.some(child => child.price && child.price !== '' && child.price != null);
+    });
+    
+    // Si hay otra variante con precios, no permitir agregar precio a esta
+    return !otherPricedParent;
+};
+
+// Verificar si se puede agregar imagen a esta variante
+const canAddImageToVariant = (parentIndex) => {
+    // Verificar si ya hay otra variante principal con imágenes
+    const otherImageParent = variantParents.value.find((parent, index) => {
+        if (index === parentIndex) return false; // Excluir la variante actual
+        if (!parent.children || parent.children.length === 0) return false;
+        return parent.children.some(child => (child.imagePreview || child.image) || (child.imagePath && child.imagePath !== ''));
+    });
+    
+    // Si hay otra variante con imágenes, no permitir agregar imagen a esta
+    return !otherImageParent;
+};
+
+// Manejar el input de precio
+const handlePriceInput = (parentIndex, childIndex, event) => {
+    const newPrice = event?.target?.value;
+    
+    // Si el nuevo precio está vacío o es null, permitirlo (está eliminando el precio)
+    if (!newPrice || newPrice === '' || newPrice == null) {
+        return;
+    }
+    
+    // Verificar si se puede agregar precio
+    if (!canAddPriceToVariant(parentIndex)) {
+        // No permitir, revertir el valor
+        event.target.value = '';
+        variantParents.value[parentIndex].children[childIndex].price = null;
+        
+        // Mostrar modal si no se ha mostrado
+        if (!hasShownPriceInfoModal.value) {
+            showPriceInfoModal.value = true;
+            hasShownPriceInfoModal.value = true;
+        }
+    }
+};
+
+// Modal informativo sobre imágenes múltiples
+const showImageInfoModal = ref(false);
+const hasShownImageInfoModal = ref(false); // Para mostrar solo una vez por sesión
+
+// Mensajes del modal de imágenes
+const imageModalMessages = [
+    'Has intentado agregar imágenes a una variante cuando ya existe otra variante principal con imágenes configuradas.',
+    '',
+    '📋 Regla del Sistema:',
+    'Solo puedes asignar imágenes a las opciones hijas de UNA variante principal. Si ya asignaste imágenes a una variante (por ejemplo, Color), no podrás agregar imágenes a otra variante (por ejemplo, Equipo).',
+    '',
+    '💡 Cómo funciona:',
+    'Cuando un cliente seleccione una opción de la variante que tiene imágenes, se mostrará la imagen de esa opción específica en la galería. Si no selecciona ninguna opción o selecciona una opción sin imagen, se mostrarán las imágenes regulares del producto.',
+    '',
+    '💡 Sugerencia:',
+    'Si necesitas diferentes imágenes según múltiples características, considera crear productos separados o usar una sola variante que combine ambas características.'
+];
+
+// Watch para mostrar el modal cuando se detecte múltiples precios
+watch(() => variantParents.value, () => {
+    // Esperar un poco para que el usuario termine de agregar precios
+    if (!hasShownPriceInfoModal.value) {
+        setTimeout(() => {
+            if (hasMultiplePricedVariants.value && !showPriceInfoModal.value) {
+                showPriceInfoModal.value = true;
+                hasShownPriceInfoModal.value = true;
+            }
+        }, 1000); // Aumentar el delay para que no sea intrusivo
+    }
+}, { deep: true });
+
+// --- FIN Lógica Variantes Jerárquicas ---
 
 // Sincronizar precio detal con precio principal cuando se controla inventario
 watch(() => form.track_inventory, (active) => {
@@ -140,11 +408,12 @@ const addAttribute = () => { attributes.value.push({ name: '', valuesText: '', d
 const removeAttribute = (idx) => { attributes.value.splice(idx, 1); };
 const parseCsv = (text) => String(text || '').split(',').map(s => s.trim()).filter(Boolean);
 const cartesian = (arrays) => arrays.reduce((a, b) => a.flatMap(x => b.map(y => x.concat([y]))), [[]]);
-// Helpers para selección múltiple segura en reglas
+// Helpers para selección múltiple segura en reglas (funciona para attributes y variantParents)
 function isRuleChecked(attr, pv, cv) {
     const arr = (attr.rulesSelected && Array.isArray(attr.rulesSelected[pv])) ? attr.rulesSelected[pv] : [];
     return arr.includes(cv);
 }
+
 function toggleRule(attr, pv, cv, event) {
     const checked = !!event?.target?.checked;
     if (!attr.rulesSelected) attr.rulesSelected = {};
@@ -154,7 +423,8 @@ function toggleRule(attr, pv, cv, event) {
     if (!checked && idx !== -1) base.splice(idx, 1);
     attr.rulesSelected[pv] = base;
 }
-// Alternar UI de dependencia y limpiar estado si se oculta
+
+// Alternar UI de dependencia y limpiar estado si se oculta (funciona para attributes y variantParents)
 function toggleDependencyUi(attr) {
     attr.__showDependency = !attr.__showDependency;
     if (!attr.__showDependency) {
@@ -264,43 +534,80 @@ const submit = () => {
         return;
     }
     
-    // Derivar siempre variant_attributes desde la UI antes de enviar
-    try {
-        const attrs = attributes.value.map(a => ({
-            name: String(a.name || '').trim(),
-            values: parseCsv(a.valuesText),
-            dependsOn: String(a.dependsOn || '').trim(),
-            rules: a.rules || {},
-            rulesSelected: a.rulesSelected || {},
-        })).filter(a => a.name && a.values.length > 0);
-        form.variant_attributes = attrs;
-        // Regenerar variantes con dependencias para persistencia coherente
-        if (attrs.length > 0) {
-            const nameToAttr = Object.fromEntries(attrs.map(a => [a.name, a]));
-            const ordered = [];
-            const visited = new Set();
-            function visit(attr) { if (visited.has(attr.name)) return; if (attr.dependsOn && nameToAttr[attr.dependsOn]) visit(nameToAttr[attr.dependsOn]); visited.add(attr.name); ordered.push(attr); }
-            attrs.forEach(visit);
-            const results = [];
-            function backtrack(index, chosen) {
-                if (index === ordered.length) { results.push({ ...chosen }); return; }
-                const attr = ordered[index];
-                let allowed = attr.values;
-                if (attr.dependsOn) {
-                    const parentVal = chosen[attr.dependsOn];
-                    if (parentVal != null) {
-                        const ruleRaw = attr.rulesSelected?.[parentVal] ?? attr.rules?.[parentVal] ?? [];
-                        const ruleVals = Array.isArray(ruleRaw) ? ruleRaw : parseCsv(ruleRaw);
-                        if (ruleVals.length > 0) allowed = attr.values.filter(v => ruleVals.includes(v));
+    // Preparar variant_options para el nuevo sistema jerárquico
+    form.variant_options = prepareVariantOptions();
+    
+    // Construir variant_attributes desde variantParents para conservar dependencias
+    // IMPORTANTE: Priorizar el nuevo sistema (variantParents) sobre el antiguo (attributes)
+    const variantAttrs = buildVariantAttributes();
+    if (variantAttrs.length > 0) {
+        // Usar el nuevo sistema de variantParents - IMPORTANTE: NO sobrescribir después
+        form.variant_attributes = variantAttrs.map(attr => ({
+            name: attr.name,
+            values: attr.values,
+            dependsOn: attr.dependsOn || '',
+            rulesSelected: attr.rulesSelected || {},
+            rules: attr.rules || {},
+        }));
+    } else {
+        // Solo usar el sistema antiguo si no hay variantParents
+        try {
+            const attrs = attributes.value.map(a => ({
+                name: String(a.name || '').trim(),
+                values: parseCsv(a.valuesText),
+                dependsOn: String(a.dependsOn || '').trim(),
+                rules: a.rules || {},
+                rulesSelected: a.rulesSelected || {},
+            })).filter(a => a.name && a.values.length > 0);
+            form.variant_attributes = attrs;
+            // Regenerar variantes con dependencias para persistencia coherente
+            if (attrs.length > 0) {
+                const nameToAttr = Object.fromEntries(attrs.map(a => [a.name, a]));
+                const ordered = [];
+                const visited = new Set();
+                function visit(attr) { if (visited.has(attr.name)) return; if (attr.dependsOn && nameToAttr[attr.dependsOn]) visit(nameToAttr[attr.dependsOn]); visited.add(attr.name); ordered.push(attr); }
+                attrs.forEach(visit);
+                const results = [];
+                function backtrack(index, chosen) {
+                    if (index === ordered.length) { results.push({ ...chosen }); return; }
+                    const attr = ordered[index];
+                    let allowed = attr.values;
+                    if (attr.dependsOn) {
+                        const parentVal = chosen[attr.dependsOn];
+                        if (parentVal != null) {
+                            const ruleRaw = attr.rulesSelected?.[parentVal] ?? attr.rules?.[parentVal] ?? [];
+                            const ruleVals = Array.isArray(ruleRaw) ? ruleRaw : parseCsv(ruleRaw);
+                            if (ruleVals.length > 0) allowed = attr.values.filter(v => ruleVals.includes(v));
+                        }
                     }
+                    for (const val of allowed) { chosen[attr.name] = val; backtrack(index + 1, chosen); }
+                    delete chosen[attr.name];
                 }
-                for (const val of allowed) { chosen[attr.name] = val; backtrack(index + 1, chosen); }
-                delete chosen[attr.name];
+                backtrack(0, {});
+                form.variants = results.map(sel => ({ options_text: ordered.map(a => `${a.name}:${sel[a.name]}`).join(', '), price: '', purchase_price: null, stock: 0, alert: null }));
             }
-            backtrack(0, {});
-            form.variants = results.map(sel => ({ options_text: ordered.map(a => `${a.name}:${sel[a.name]}`).join(', '), price: '', purchase_price: null, stock: 0, alert: null }));
+        } catch (_) {
+            // Si falla, asegurar que variant_attributes esté vacío
+            form.variant_attributes = [];
         }
-    } catch (_) {}
+    }
+
+    // Usar form.transform() para agregar archivos dinámicos ANTES de enviar
+    // Esto hace que Inertia los detecte automáticamente
+    form.transform((data) => {
+        // Agregar archivos de variantes al objeto de datos
+        variantParents.value.forEach((parent, parentIndex) => {
+            if (parent.children && parent.children.length > 0) {
+                parent.children.forEach((child, childIndex) => {
+                    if (child.image instanceof File) {
+                        const key = `variant_option_${parentIndex}_${childIndex}`;
+                        data[key] = child.image;
+                    }
+                });
+            }
+        });
+        return data;
+    });
 
     form.post(route('admin.products.store'), {
         preserveScroll: true,
@@ -448,86 +755,264 @@ const submit = () => {
                                     <label for="specifications" class="block font-medium text-sm text-gray-700">Especificaciones (separadas por comas)</label>
                                     <input id="specifications" v-model="form.specifications" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" placeholder="Alto: 2.30m,Ancho: 1.20m,...">
                                 </div>
+                            </div>
+                            
+                                <div class="md:col-span-2 mt-6 border-t pt-6">
+                                <!-- Contenedor estilo categorías -->
+                                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                                    <div class="p-6 text-gray-900">
+                                        <div class="flex items-center justify-between">
+                                            <h3 class="text-lg font-medium">Variantes del Producto</h3>
+                                            <div class="flex items-center gap-2">
+                                                <button 
+                                                    type="button" 
+                                                    class="w-7 h-7 inline-flex items-center justify-center rounded border border-gray-300 hover:bg-gray-100 text-gray-700" 
+                                                    title="Expandir todo" 
+                                                    @click="() => { variantParents.forEach((_, idx) => expandedVariants[idx] = true); }"
+                                                >
+                                                    +
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    class="w-7 h-7 inline-flex items-center justify-center rounded border border-gray-300 hover:bg-gray-100 text-gray-700" 
+                                                    title="Colapsar todo" 
+                                                    @click="() => { variantParents.forEach((_, idx) => expandedVariants[idx] = false); }"
+                                                >
+                                                    −
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-4 border rounded-lg divide-y">
+                                            <p v-if="variantParents.length === 0" class="text-sm text-gray-500 p-3">
+                                                Aún no hay variantes principales. Agregá una usando el botón de abajo.
+                                            </p>
+                                            
+                                            <div v-for="(parent, parentIndex) in variantParents" :key="`parent-${parentIndex}`" class="p-3 hover:bg-gray-50">
+                                                <!-- Fila principal de la variante -->
+                                                <div class="flex justify-between items-center">
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center gap-2">
+                                                            <!-- Botón expandir/colapsar -->
+                                                            <button 
+                                                                type="button" 
+                                                                class="w-6 h-6 inline-flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100" 
+                                                                :title="(expandedVariants[parentIndex] ?? false) ? 'Colapsar opciones' : 'Expandir opciones'" 
+                                                                @click="toggleExpandVariant(parentIndex)"
+                                                            >
+                                                                <span v-if="!(expandedVariants[parentIndex] ?? false)">&gt;</span>
+                                                                <span v-else>v</span>
+                                                            </button>
+                                                            
+                                                            <!-- Input del nombre de la variante principal -->
+                                                            <input 
+                                                                v-model="parent.name" 
+                                                                type="text" 
+                                                                placeholder="Ej: Color, Talla, Material" 
+                                                                class="font-medium border-0 bg-transparent focus:bg-white focus:border focus:border-gray-300 rounded px-2 py-1 focus:outline-none"
+                                                            />
+                                                            
+                                                            <!-- Badge con contador de hijos -->
+                                                            <span v-if="parent.children && parent.children.length > 0" class="text-xs bg-gray-100 text-gray-700 rounded px-2 py-0.5 align-middle">
+                                                                ({{ parent.children.length }})
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Botones de acción -->
+                                                    <div class="flex items-center gap-2">
+                                                        <!-- Botón dependencias -->
+                                                        <button 
+                                                            type="button" 
+                                                            class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-indigo-600" 
+                                                            :title="parent.__showDependency ? 'Ocultar dependencia' : 'Configurar dependencia'"
+                                                            @click="toggleDependencyUi(parent)"
+                                                        >
+                                                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                                            </svg>
+                                                        </button>
+                                                        
+                                                        <!-- Botón agregar opción -->
+                                                        <button 
+                                                            type="button" 
+                                                            class="w-8 h-8 inline-flex items-center justify-center rounded border border-green-500 text-green-600 hover:bg-green-50" 
+                                                            title="Añadir opción" 
+                                                            @click="addVariantChild(parentIndex)"
+                                                        >
+                                                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                                <rect x="4" y="3" width="11" height="15" rx="2" ry="2" stroke-width="1.5" />
+                                                                <circle cx="18" cy="18" r="3" stroke-width="1.5" />
+                                                                <path stroke-linecap="round" stroke-width="1.5" d="M18 16.5v3M16.5 18h3" />
+                                                            </svg>
+                                                        </button>
+                                                        
+                                                        <!-- Botón eliminar variante -->
+                                                        <button 
+                                                            type="button" 
+                                                            @click="removeVariantParent(parentIndex)" 
+                                                            class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-red-600" 
+                                                            title="Eliminar"
+                                                        >
+                                                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                                                <path fill-rule="evenodd" d="M16.5 4.5V6h3.75a.75.75 0 010 1.5H3.75A.75.75 0 013 6h3.75V4.5A2.25 2.25 0 019 2.25h6A2.25 2.25 0 0117.25 4.5zM5.625 7.5h12.75l-.701 10.518A2.25 2.25 0 0115.43 20.25H8.57a2.25 2.25 0 01-2.244-2.232L5.625 7.5z" clip-rule="evenodd"/>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Dependencias (si está expandido) -->
+                                                <div v-if="parent.__showDependency" class="mt-2 pl-2 bg-gray-50 rounded-md p-2">
+                                                    <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                                            <div class="md:col-span-2">
+                                                            <label class="block text-xs font-medium text-gray-700 mb-1">Depende de</label>
+                                                            <select v-model="parent.dependsOn" class="block w-full text-sm border-gray-300 rounded-md shadow-sm">
+                                                    <option value="">(sin dependencia)</option>
+                                                                <option v-for="(other, oi) in variantParents" :key="`dep-${parentIndex}-${oi}`" :value="other.name" :disabled="other === parent || !other.name">{{ other.name || '(sin nombre)' }}</option>
+                                                </select>
+                                            </div>
+                                                        <div v-if="parent.dependsOn" class="md:col-span-3">
+                                                            <label class="block text-xs font-medium text-gray-700 mb-1">Permitir valores según el valor del padre</label>
+                                                            <div class="mt-2 space-y-2">
+                                                                <div v-for="pv in (variantParents.find(p => p.name === parent.dependsOn)?.children || []).map(c => c.name)" :key="`pv-${parentIndex}-${pv}`" class="border rounded p-2 bg-white">
+                                                                    <div class="text-xs font-semibold text-gray-700 mb-1">{{ parent.dependsOn }} = <strong>{{ pv }}</strong></div>
+                                                                    <div class="flex flex-wrap gap-2">
+                                                                        <label v-for="cv in (parent.children || []).map(c => c.name)" :key="`cv-${parentIndex}-${pv}-${cv}`" class="inline-flex items-center gap-1 text-xs">
+                                                                            <input type="checkbox" :checked="isRuleChecked(parent, pv, cv)" @change="toggleRule(parent, pv, cv, $event)" class="rounded">
+                                                                <span>{{ cv }}</span>
+                                                            </label>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Opciones hijas (expandidas) -->
+                                                <div v-if="expandedVariants[parentIndex] ?? false" class="mt-2 pl-4 border-l">
+                                                    <div v-for="(child, childIndex) in parent.children" :key="`child-${parentIndex}-${childIndex}`" class="py-2 flex justify-between items-start">
+                                                        <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                            <div>
+                                                                <label class="block text-xs font-medium text-gray-600 mb-1">Nombre</label>
+                                                                <input 
+                                                                    v-model="child.name" 
+                                                                    type="text" 
+                                                                    placeholder="Ej: Rojo, Verde" 
+                                                                    class="block w-full text-sm border-gray-300 rounded-md shadow-sm"
+                                                                />
+                                            </div>
+                                                            <div>
+                                                                <label class="block text-xs font-medium text-gray-600 mb-1">Precio (opcional)</label>
+                                                                <input 
+                                                                    v-model="child.price" 
+                                                                    type="number" 
+                                                                    step="0.01"
+                                                                    placeholder="Usa precio principal" 
+                                                                    class="block w-full text-sm border-gray-300 rounded-md shadow-sm"
+                                                                    :disabled="!canAddPriceToVariant(parentIndex)"
+                                                                    :class="{ 'bg-gray-100 cursor-not-allowed': !canAddPriceToVariant(parentIndex) }"
+                                                                    @input="handlePriceInput(parentIndex, childIndex, $event)"
+                                                                />
+                                                                <p v-if="!canAddPriceToVariant(parentIndex)" class="mt-1 text-xs text-amber-600">
+                                                                    Solo puedes agregar precios a una variante principal
+                                                                </p>
+                                        </div>
+                                                <div class="flex items-center gap-2">
+                                                                <input 
+                                                                    type="file" 
+                                                                    accept="image/*"
+                                                                    @change="onVariantChildImageChange(parentIndex, childIndex, $event)"
+                                                                    class="hidden"
+                                                                    :id="`variant-image-input-${parentIndex}-${childIndex}`"
+                                                                    :disabled="!canAddImageToVariant(parentIndex)"
+                                                                />
+                                                                <div v-if="child.imagePreview" class="relative">
+                                                                    <img :src="child.imagePreview" alt="Preview" class="w-10 h-10 object-cover rounded border">
+                                                                    <button 
+                                                                        type="button"
+                                                                        @click.stop="removeVariantChildImage(parentIndex, childIndex)"
+                                                                        class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs hover:bg-red-600"
+                                                                    >
+                                                                        ×
+                                                                    </button>
+                                                                </div>
+                                                                <label 
+                                                                    v-else
+                                                                    :for="`variant-image-input-${parentIndex}-${childIndex}`"
+                                                                    class="inline-flex items-center justify-center w-10 h-10 border-2 border-dashed border-gray-300 rounded hover:border-blue-400 hover:bg-blue-50 transition"
+                                                                    :class="{ 'cursor-pointer': canAddImageToVariant(parentIndex), 'cursor-not-allowed opacity-50': !canAddImageToVariant(parentIndex) }"
+                                                                    :title="canAddImageToVariant(parentIndex) ? 'Agregar foto' : 'Solo puedes agregar imágenes a una variante principal'"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5 text-gray-400" fill="currentColor">
+                                                                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                                                                    </svg>
+                                                                </label>
+                                                                <p v-if="!canAddImageToVariant(parentIndex)" class="mt-1 text-xs text-amber-600">
+                                                                    Solo puedes agregar imágenes a una variante principal
+                                                                </p>
+                                                            </div>
+                                                </div>
+                                                        <div class="flex items-center gap-2 ml-2">
+                                                            <button 
+                                                                type="button"
+                                                                @click="removeVariantChild(parentIndex, childIndex)"
+                                                                class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-red-600" 
+                                                                title="Eliminar"
+                                                            >
+                                                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                                                    <path fill-rule="evenodd" d="M16.5 4.5V6h3.75a.75.75 0 010 1.5H3.75A.75.75 0 013 6h3.75V4.5A2.25 2.25 0 019 2.25h6A2.25 2.25 0 0117.25 4.5zM5.625 7.5h12.75l-.701 10.518A2.25 2.25 0 0115.43 20.25H8.57a2.25 2.25 0 01-2.244-2.232L5.625 7.5z" clip-rule="evenodd"/>
+                                                                </svg>
+                                                    </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Formulario para agregar nueva variante principal -->
+                                        <form @submit.prevent="addVariantParent" class="mt-6 border-t pt-4">
+                                            <label class="block font-medium text-sm text-gray-700">Añadir Nueva Variante Principal</label>
+                                            <div class="mt-2 flex items-center gap-2">
+                                                <input 
+                                                    type="text" 
+                                                    v-model="newVariantName" 
+                                                    class="block w-full rounded-md shadow-sm border-gray-300" 
+                                                    placeholder="Nombre de la nueva variante principal"
+                                                    @keyup.enter="addVariantParent"
+                                                />
+                                                <button 
+                                                    type="submit" 
+                                                    class="w-8 h-8 inline-flex items-center justify-center rounded bg-green-500 text-white hover:bg-green-600" 
+                                                    title="Añadir"
+                                                >
+                                                    ✔
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    class="w-8 h-8 inline-flex items-center justify-center rounded bg-gray-200 text-gray-800 hover:bg-gray-300" 
+                                                    @click="newVariantName = ''" 
+                                                    title="Cancelar"
+                                                >
+                                                    ✖
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                                </div>
+
+                            <!-- Sección de imágenes al final -->
+                            <div class="md:col-span-2 mt-6 border-t pt-6">
+                                <h3 class="text-lg font-medium text-gray-900 mb-2">Imágenes Extra de la Galería</h3>
+                                <p class="text-sm text-gray-600 mb-4">
+                                    Estas imágenes se agregarán a la galería general del producto. Las imágenes de las variantes se muestran cuando se selecciona esa opción.
+                                </p>
                                 <div class="mb-4">
                                     <label for="gallery_files" class="block font-medium text-sm text-gray-700">Imágenes de la Galería</label>
                                     <input id="gallery_files" @input="onGalleryInput($event)" type="file" multiple class="block mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                                     <p class="mt-1 text-xs text-gray-500">Formatos de imagen y hasta 2 MB por archivo.</p>
                                 </div>
-                            </div>
-                            
-                                <div class="md:col-span-2 mt-6 border-t pt-6">
-                                <h3 class="text-lg font-medium text-gray-900">Variantes del Producto</h3>
-                                <p class="text-sm text-gray-600 mb-4">
-                                    Cada fila representa una combinación única. Si usás inventario, el stock total se suma automáticamente.
-                                </p>
-                                <!-- Atributos de variantes -->
-                                <div class="mb-4 p-4 border rounded-md bg-gray-50">
-                                    <h4 class="font-semibold text-gray-800 mb-2">Atributos de variantes</h4>
-                                    <p class="text-xs text-gray-500 mb-3">Ejemplos: Nombre "Color" y Valores "Rojo, Verde, Azul". Podés agregar más filas como "Talla" con "S, M, L".</p>
-                                    <div class="space-y-2">
-                                        <div v-for="(attr, ai) in attributes" :key="`attr-${ai}`" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
-                                            <div class="md:col-span-2">
-                                                <label class="block text-sm font-medium text-gray-700">Nombre</label>
-                                                <input v-model="attr.name" type="text" placeholder="Color" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
-                                            </div>
-                                        <div class="md:col-span-3">
-                                                <label class="block text-sm font-medium text-gray-700">Valores (separados por coma)</label>
-                                                <input v-model="attr.valuesText" type="text" placeholder="Rojo, Verde, Azul" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
-                                            </div>
-                                        <!-- Toggle dependencia para no saturar la vista -->
-                                        <div class="md:col-span-5 flex items-center gap-2">
-                                            <button type="button" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300" @click="toggleDependencyUi(attr)" :title="attr.__showDependency ? 'Ocultar dependencia' : 'Configurar dependencia'" :aria-label="attr.__showDependency ? 'Ocultar dependencia' : 'Configurar dependencia'">
-                                                <svg v-if="!attr.__showDependency" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/></svg>
-                                                <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M5 12a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/></svg>
-                                            </button>
-                                            <span class="text-xs text-blue-600 md:hidden" v-text="attr.__showDependency ? 'Ocultar' : 'Depend.'"></span>
-                                        </div>
-                                        <div v-if="attr.__showDependency" class="md:col-span-5 grid grid-cols-1 md:grid-cols-5 gap-3 items-start">
-                                            <div class="md:col-span-2">
-                                                <label class="block text-sm font-medium text-gray-700">Depende de</label>
-                                                <select v-model="attr.dependsOn" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                                                    <option value="">(sin dependencia)</option>
-                                                    <option v-for="(other, oi) in attributes" :key="`dep-${ai}-${oi}`" :value="other.name" :disabled="other === attr || !other.name">{{ other.name || '(sin nombre)' }}</option>
-                                                </select>
-                                            </div>
-                                            <div v-if="attr.dependsOn" class="md:col-span-3">
-                                                <label class="block text-sm font-medium text-gray-700">Permitir valores del hijo según el valor del padre</label>
-                                                <div class="mt-2 space-y-3">
-                                                    <div v-for="pv in parseCsv((attributes.find(a => a.name === attr.dependsOn)?.valuesText) || '')" :key="`pv-${ai}-${pv}`" class="border rounded p-2">
-                                                        <div class="text-xs font-semibold text-gray-700 mb-2">{{ attr.dependsOn }} = <strong>{{ pv }}</strong></div>
-                                                        <div class="flex flex-wrap gap-3">
-                                                            <label v-for="cv in parseCsv(attr.valuesText)" :key="`cv-${ai}-${pv}-${cv}`" class="inline-flex items-center gap-1 text-sm">
-                                                                <input type="checkbox" :checked="isRuleChecked(attr, pv, cv)" @change="toggleRule(attr, pv, cv, $event)" class="rounded">
-                                                                <span>{{ cv }}</span>
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <p class="text-xs text-gray-500 mt-2">Si no seleccionas nada para un valor del padre, se permiten todos los valores del hijo.</p>
-                                            </div>
-                                        </div>
-                                            <div class="md:col-span-5 flex items-center gap-4">
-                                                <div class="flex items-center gap-2">
-                                                    <button type="button" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300" @click="addAttribute" title="Añadir atributo" aria-label="Añadir atributo">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M11 11V5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6z"/></svg>
-                                                    </button>
-                                                    <span class="text-xs md:hidden">Añadir</span>
-                                                </div>
-                                                <div class="flex items-center gap-2">
-                                                    <button type="button" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300" @click="removeAttribute(ai)" title="Quitar atributo" aria-label="Quitar atributo">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor"><path d="M7 7h10l-1 12a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2L7 7zm9-3a1 1 0 0 1 1 1v1H7V5a1 1 0 0 1 1-1h8zM9 5V4a3 3 0 0 1 3-3 3 3 0 0 1 3 3v1H9z"/></svg>
-                                                    </button>
-                                                    <span class="text-xs md:hidden">Quitar</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                </div>
-
-                                
-                                
-                                
                             </div>
                             
                             <div class="md:col-span-2 flex items-center justify-end mt-6 border-t pt-6">
@@ -562,6 +1047,28 @@ const submit = () => {
         primary-text="Entendido"
         @primary="showErrors=false"
         @close="showErrors=false"
+    />
+
+    <!-- Modal informativo sobre precios múltiples en variantes -->
+    <AlertModal
+        :show="showPriceInfoModal"
+        type="warning"
+        title="Solo una Variante Puede Tener Precios"
+        :messages="priceModalMessages"
+        primary-text="Entendido"
+        @primary="showPriceInfoModal = false"
+        @close="showPriceInfoModal = false"
+    />
+    
+    <!-- Modal informativo sobre imágenes múltiples en variantes -->
+    <AlertModal
+        :show="showImageInfoModal"
+        type="warning"
+        title="Solo una Variante Puede Tener Imágenes"
+        :messages="imageModalMessages"
+        primary-text="Entendido"
+        @primary="showImageInfoModal = false"
+        @close="showImageInfoModal = false"
     />
 
     <!-- Tour de sección para crear productos -->
