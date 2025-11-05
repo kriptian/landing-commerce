@@ -790,13 +790,13 @@ const submit = () => {
                                             
                                             <div v-for="(parent, parentIndex) in variantParents" :key="`parent-${parentIndex}`" class="p-3 hover:bg-gray-50">
                                                 <!-- Fila principal de la variante -->
-                                                <div class="flex justify-between items-center">
-                                                    <div class="flex-1">
+                                                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                                                    <div class="flex-1 min-w-0">
                                                         <div class="flex items-center gap-2">
                                                             <!-- Botón expandir/colapsar -->
                                                             <button 
                                                                 type="button" 
-                                                                class="w-6 h-6 inline-flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100" 
+                                                                class="w-6 h-6 flex-shrink-0 inline-flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100" 
                                                                 :title="(expandedVariants[parentIndex] ?? false) ? 'Colapsar opciones' : 'Expandir opciones'" 
                                                                 @click="toggleExpandVariant(parentIndex)"
                                                             >
@@ -809,18 +809,18 @@ const submit = () => {
                                                                 v-model="parent.name" 
                                                                 type="text" 
                                                                 placeholder="Ej: Color, Talla, Material" 
-                                                                class="font-medium border-0 bg-transparent focus:bg-white focus:border focus:border-gray-300 rounded px-2 py-1 focus:outline-none"
+                                                                class="flex-1 min-w-0 font-medium border-0 bg-transparent focus:bg-white focus:border focus:border-gray-300 rounded px-2 py-1 focus:outline-none"
                                                             />
                                                             
                                                             <!-- Badge con contador de hijos -->
-                                                            <span v-if="parent.children && parent.children.length > 0" class="text-xs bg-gray-100 text-gray-700 rounded px-2 py-0.5 align-middle">
+                                                            <span v-if="parent.children && parent.children.length > 0" class="flex-shrink-0 text-xs bg-gray-100 text-gray-700 rounded px-2 py-0.5 align-middle">
                                                                 ({{ parent.children.length }})
                                                             </span>
                                                         </div>
                                                     </div>
                                                     
                                                     <!-- Botones de acción -->
-                                                    <div class="flex items-center gap-2">
+                                                    <div class="flex items-center gap-2 flex-shrink-0">
                                                         <!-- Botón dependencias -->
                                                         <button 
                                                             type="button" 
