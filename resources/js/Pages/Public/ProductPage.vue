@@ -874,6 +874,7 @@ const getVariantDisplayPrices = (variant) => {
                                     class="px-3 py-1 rounded border transition-all"
                                     :class="{
                                         'bg-white text-gray-800 border-gray-300 hover:bg-gray-50': selectedOptions[key] !== value && isOptionAllowed(key, value) && catalogUseDefault,
+                                        'bg-blue-600 text-white border-blue-600': selectedOptions[key] === value && catalogUseDefault && isOptionAllowed(key, value),
                                         'bg-gray-100 text-gray-400 border-gray-200 opacity-50 cursor-not-allowed': !isOptionAllowed(key, value) || (isInventoryTracked && (computeStockForValue(key, value) === 0))
                                     }"
                                     :style="selectedOptions[key] === value && variantButtonSelectedStyle ? variantButtonSelectedStyle : (selectedOptions[key] !== value && !catalogUseDefault && isOptionAllowed(key, value) && buttonBgColor ? { borderColor: buttonBgColor, color: buttonBgColor } : {})"
