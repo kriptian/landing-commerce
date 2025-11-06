@@ -39,6 +39,7 @@ class Store extends Model
         'catalog_logo_position',
         'catalog_menu_type',
         'catalog_product_template',
+        'catalog_show_buy_button',
         'catalog_header_style',
         'catalog_header_bg_color',
         'catalog_header_text_color',

@@ -15,6 +15,7 @@ const props = defineProps({
 const form = useForm({
     catalog_use_default: props.store.catalog_use_default ?? true,
     catalog_product_template: props.store.catalog_product_template ?? 'default',
+    catalog_show_buy_button: props.store.catalog_show_buy_button ?? false,
     catalog_header_style: props.store.catalog_header_style ?? 'default',
     // Colores granulares
     catalog_header_bg_color: props.store.catalog_header_bg_color ?? '#FFFFFF',
@@ -56,6 +57,7 @@ const resetToDefaults = () => {
     // Resetear todos los valores a los por defecto
     form.catalog_use_default = true;
     form.catalog_product_template = 'default';
+    form.catalog_show_buy_button = false;
     form.catalog_header_style = 'default';
     // Colores granulares - valores por defecto
     form.catalog_header_bg_color = '#FFFFFF';
@@ -222,7 +224,7 @@ const previewStyles = computed(() => {
                             </div>
 
                             <!-- Plantillas de Productos -->
-                            <div class="mb-8 border-t pt-6">
+                            <div v-if="!form.catalog_use_default" class="mb-8 border-t pt-6">
                                 <h3 class="text-lg font-semibold text-gray-800 mb-4">Plantilla de Lista de Productos</h3>
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <button
@@ -267,10 +269,27 @@ const previewStyles = computed(() => {
                                         </div>
                                     </button>
                                 </div>
+                                
+                                <!-- Checkbox para mostrar botón "Comprar Ahora" -->
+                                <div class="mt-4 pt-4 border-t border-gray-200">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            v-model="form.catalog_show_buy_button"
+                                            class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                        />
+                                        <span class="ml-2 text-sm font-medium text-gray-700">
+                                            Botón "Comprar Ahora"
+                                        </span>
+                                    </label>
+                                    <p class="mt-1 ml-6 text-xs text-gray-500">
+                                        Muestra un botón "Comprar Ahora" en cada producto de la lista
+                                    </p>
+                                </div>
                             </div>
 
                             <!-- Estilos de Header -->
-                            <div class="mb-8 border-t pt-6">
+                            <div v-if="!form.catalog_use_default" class="mb-8 border-t pt-6">
                                 <h3 class="text-lg font-semibold text-gray-800 mb-4">Estilo de Header</h3>
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <button
@@ -385,33 +404,39 @@ const previewStyles = computed(() => {
                             </div>
 
                             <!-- Botones de acción -->
-                            <div class="mt-8 flex items-center justify-end gap-4 border-t pt-6">
+                            <div class="mt-8 flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-4 border-t pt-6 pb-6 sm:pb-8">
                                 <button
                                     type="button"
                                     @click="showResetConfirm = true"
-                                    class="px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-md shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                    class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-lg shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
                                 >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                                    </svg>
                                     Restablecer
                                 </button>
                                 <button
                                     type="button"
-                                    @click="form.reset()"
-                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="button"
                                     @click="showPreviewModal = true"
-                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                    class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                                 >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    </svg>
                                     Vista Previa
                                 </button>
                                 <button
                                     type="submit"
                                     :disabled="form.processing"
-                                    class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
+                                    <svg v-if="!form.processing" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                                    </svg>
+                                    <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 animate-spin">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                                    </svg>
                                     <span v-if="form.processing">Guardando...</span>
                                     <span v-else>Guardar cambios</span>
                                 </button>
@@ -466,27 +491,27 @@ const previewStyles = computed(() => {
     </Modal>
 
     <!-- Modal de vista previa -->
-    <Modal :show="showPreviewModal" @close="showPreviewModal = false" maxWidth="6xl">
-        <div class="p-6">
-            <div class="flex items-center justify-between mb-6">
-                <h3 class="text-2xl font-bold text-gray-900">Vista Previa del Catálogo</h3>
+    <Modal :show="showPreviewModal" @close="showPreviewModal = false" :maxWidth="previewMode === 'desktop' ? '5xl' : 'md'">
+        <div class="p-3 sm:p-4 max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between mb-3 sm:mb-4 flex-shrink-0 relative">
+                <h3 class="flex-1 text-center text-lg sm:text-xl font-serif font-light tracking-wider text-gray-900">Vista Previa del Catálogo</h3>
                 <button
                     @click="showPreviewModal = false"
-                    class="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                    class="absolute right-0 p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
                     aria-label="Cerrar"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6 text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 sm:w-6 sm:h-6 text-gray-500">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                 </button>
             </div>
             
             <!-- Selector de vista -->
-            <div class="flex items-center justify-center gap-4 mb-6">
+            <div class="flex items-center justify-center gap-3 sm:gap-4 mb-3 sm:mb-4 flex-shrink-0">
                 <button
                     @click="previewMode = 'mobile'"
                     :class="[
-                        'px-6 py-2 rounded-lg font-medium transition-colors',
+                        'px-4 sm:px-6 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors',
                         previewMode === 'mobile'
                             ? 'bg-blue-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -497,7 +522,7 @@ const previewStyles = computed(() => {
                 <button
                     @click="previewMode = 'desktop'"
                     :class="[
-                        'px-6 py-2 rounded-lg font-medium transition-colors',
+                        'px-4 sm:px-6 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors',
                         previewMode === 'desktop'
                             ? 'bg-blue-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -506,6 +531,9 @@ const previewStyles = computed(() => {
                     🖥️ Escritorio
                 </button>
             </div>
+            
+            <!-- Contenedor scrollable para las previews -->
+            <div class="flex-1 overflow-y-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
 
             <!-- Vista previa móvil -->
             <div v-if="previewMode === 'mobile'" class="mx-auto bg-gray-100 rounded-2xl p-4" style="max-width: 375px;">
@@ -573,6 +601,32 @@ const previewStyles = computed(() => {
                     
                     <!-- Body -->
                     <div class="p-4 overflow-y-auto" :style="{ ...previewStyles.body, height: previewStyles.headerStyle === 'banner_logo' ? 'calc(600px - 180px)' : (previewStyles.headerStyle === 'fit' ? 'calc(600px - 80px)' : (form.catalog_promo_banner_color && !form.catalog_use_default ? 'calc(600px - 100px)' : 'calc(600px - 60px)')) }">
+                        <!-- Galería dinámica -->
+                        <div class="mb-4 relative overflow-hidden rounded-xl shadow-lg">
+                            <div class="relative h-48 bg-gradient-to-br from-gray-200 to-gray-300">
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <div class="w-32 h-32 bg-gray-400 rounded-lg"></div>
+                                </div>
+                                <!-- Overlay con información -->
+                                <div class="absolute inset-0 flex flex-col justify-between p-3">
+                                    <div class="bg-white/70 backdrop-blur-sm rounded-lg px-3 py-2">
+                                        <div class="h-4 bg-gray-500 rounded mb-1.5 w-3/4"></div>
+                                        <div class="h-3 bg-gray-400 rounded w-1/2"></div>
+                                    </div>
+                                    <div class="flex justify-center">
+                                        <button class="px-4 py-2 rounded-full text-xs font-bold shadow-lg" :style="previewStyles.button">
+                                            COMPRAR
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Indicadores -->
+                                <div class="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1.5">
+                                    <div class="w-6 h-1.5 bg-white rounded-full"></div>
+                                    <div class="w-1.5 h-1.5 bg-white/50 rounded-full"></div>
+                                    <div class="w-1.5 h-1.5 bg-white/50 rounded-full"></div>
+                                </div>
+                            </div>
+                        </div>
                         
                         <!-- Plantilla Big -->
                         <div v-if="form.catalog_product_template === 'big'" class="space-y-4">
@@ -583,7 +637,7 @@ const previewStyles = computed(() => {
                                     <div class="h-4 bg-gray-300 rounded w-3/4 mb-3"></div>
                                     <div class="flex items-center justify-between">
                                         <div class="h-6 bg-gray-400 rounded w-24"></div>
-                                        <button class="px-5 py-2.5 rounded-lg text-sm font-bold" :style="previewStyles.button">
+                                        <button v-if="form.catalog_show_buy_button" class="px-5 py-2.5 rounded-lg text-sm font-bold" :style="previewStyles.button">
                                             Comprar Ahora
                                         </button>
                                     </div>
@@ -600,8 +654,8 @@ const previewStyles = computed(() => {
                                     <div class="h-3 bg-gray-300 rounded w-2/3 mb-2"></div>
                                     <div class="flex items-center justify-between">
                                         <div class="h-4 bg-gray-400 rounded w-16"></div>
-                                        <button class="px-3 py-1.5 rounded text-xs font-semibold" :style="previewStyles.button">
-                                            Ver
+                                        <button v-if="form.catalog_show_buy_button" class="px-3 py-1.5 rounded text-xs font-semibold" :style="previewStyles.button">
+                                            Comprar Ahora
                                         </button>
                                     </div>
                                 </div>
@@ -618,8 +672,8 @@ const previewStyles = computed(() => {
                                     <div class="h-3 bg-gray-300 rounded w-3/4 mb-3"></div>
                                     <div class="flex items-center justify-between">
                                         <div class="h-4 bg-gray-400 rounded w-20"></div>
-                                        <button class="px-3 py-1.5 rounded text-xs font-semibold" :style="previewStyles.button">
-                                            Ver Detalles
+                                        <button v-if="form.catalog_show_buy_button" class="px-3 py-1.5 rounded text-xs font-semibold" :style="previewStyles.button">
+                                            Comprar Ahora
                                         </button>
                                     </div>
                                 </div>
@@ -630,10 +684,11 @@ const previewStyles = computed(() => {
             </div>
 
             <!-- Vista previa escritorio -->
-            <div v-if="previewMode === 'desktop'" class="mx-auto bg-gray-100 rounded-lg p-4">
-                <div class="bg-white rounded-lg shadow-xl overflow-hidden" style="height: 500px;">
+            <div v-if="previewMode === 'desktop'" class="flex justify-center">
+                <div class="w-full max-w-4xl bg-gray-100 rounded-lg p-2 sm:p-3 overflow-x-auto">
+                    <div class="bg-white rounded-lg shadow-xl overflow-hidden" style="max-height: 60vh; display: flex; flex-direction: column;">
                     <!-- Cinta de promoción (PRIMERO, antes del header) -->
-                    <div v-if="!form.catalog_use_default || form.catalog_promo_banner_color" class="relative overflow-hidden" :style="previewStyles.promo">
+                    <div v-if="!form.catalog_use_default || form.catalog_promo_banner_color" class="relative overflow-hidden flex-shrink-0" :style="previewStyles.promo">
                         <div class="flex whitespace-nowrap animate-scroll text-sm font-bold uppercase py-3 px-6">
                             <span class="flex items-center gap-2 mx-4">🔥 Ofertas hasta 50% • Toca para ver ↗</span>
                             <span class="flex items-center gap-2 mx-4">🔥 Ofertas hasta 50% • Toca para ver ↗</span>
@@ -642,7 +697,7 @@ const previewStyles = computed(() => {
                     </div>
                     
                     <!-- Header Default -->
-                    <div v-if="(previewStyles.headerStyle === 'default' || form.catalog_use_default) && previewStyles.headerStyle !== 'banner_logo' && previewStyles.headerStyle !== 'fit'" class="px-6 py-4 border-b flex items-center justify-between" :style="previewStyles.header">
+                    <div v-if="(previewStyles.headerStyle === 'default' || form.catalog_use_default) && previewStyles.headerStyle !== 'banner_logo' && previewStyles.headerStyle !== 'fit'" class="px-6 py-4 border-b flex items-center justify-between flex-shrink-0" :style="previewStyles.header">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-full bg-gray-300"></div>
                             <span class="font-semibold">{{ props.store.name }}</span>
@@ -654,7 +709,7 @@ const previewStyles = computed(() => {
                     </div>
                     
                     <!-- Header Fit -->
-                    <div v-else-if="previewStyles.headerStyle === 'fit'" class="px-6 py-3 border-b flex items-center justify-between" :style="previewStyles.header">
+                    <div v-else-if="previewStyles.headerStyle === 'fit'" class="px-6 py-3 border-b flex items-center justify-between flex-shrink-0" :style="previewStyles.header">
                         <div class="w-8 h-8 rounded-full bg-gray-300"></div>
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-gray-200"></div>
@@ -669,17 +724,17 @@ const previewStyles = computed(() => {
                     <!-- Header Banner & Logo -->
                     <template v-else-if="previewStyles.headerStyle === 'banner_logo'">
                         <!-- Banner superior oscuro -->
-                        <div class="bg-gray-800 text-white py-2 px-6 flex justify-end items-center gap-3">
+                        <div class="bg-gray-800 text-white py-2 px-6 flex justify-end items-center gap-3 flex-shrink-0">
                             <div class="w-6 h-6 rounded-full bg-gray-600"></div>
                             <div class="w-6 h-6 rounded-full bg-gray-600"></div>
                         </div>
                         <!-- Área principal con logo centrado (con fondo personalizado) -->
-                        <div class="px-6 py-6 flex flex-col items-center gap-3" :style="previewStyles.header">
+                        <div class="px-6 py-6 flex flex-col items-center gap-3 flex-shrink-0" :style="previewStyles.header">
                             <div class="w-20 h-20 rounded-full bg-gray-300 ring-2 ring-gray-200"></div>
                             <span class="font-serif font-light text-base tracking-wider" :style="{ color: previewStyles.header.color }">{{ props.store.name }}</span>
                         </div>
                         <!-- Barra de navegación inferior -->
-                        <div class="px-6 py-3 border-t flex items-center justify-between" :style="previewStyles.header">
+                        <div class="px-6 py-3 border-t flex items-center justify-between flex-shrink-0" :style="previewStyles.header">
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 rounded-full bg-gray-200"></div>
                                 <div class="w-8 h-8 rounded-full bg-gray-200"></div>
@@ -693,8 +748,34 @@ const previewStyles = computed(() => {
                         </div>
                     </template>
                     
-                    <!-- Body -->
-                    <div class="p-6 overflow-y-auto" :style="{ ...previewStyles.body, height: previewStyles.headerStyle === 'banner_logo' ? 'calc(500px - 220px)' : (previewStyles.headerStyle === 'fit' ? 'calc(500px - 100px)' : (form.catalog_promo_banner_color && !form.catalog_use_default ? 'calc(500px - 120px)' : 'calc(500px - 80px)')) }">
+                    <!-- Body con scroll -->
+                    <div class="flex-1 overflow-y-auto p-4 sm:p-6" :style="previewStyles.body">
+                        <!-- Galería dinámica -->
+                        <div class="mb-6 relative overflow-hidden rounded-xl shadow-lg">
+                            <div class="relative h-64 bg-gradient-to-br from-gray-200 to-gray-300">
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <div class="w-48 h-48 bg-gray-400 rounded-lg"></div>
+                                </div>
+                                <!-- Overlay con información -->
+                                <div class="absolute inset-0 flex flex-col justify-between p-4 sm:p-6">
+                                    <div class="bg-white/70 backdrop-blur-sm rounded-lg px-4 py-3">
+                                        <div class="h-5 bg-gray-500 rounded mb-2 w-2/3"></div>
+                                        <div class="h-4 bg-gray-400 rounded w-1/2"></div>
+                                    </div>
+                                    <div class="flex justify-center">
+                                        <button class="px-6 py-3 rounded-full text-sm font-bold shadow-xl" :style="previewStyles.button">
+                                            COMPRAR
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Indicadores -->
+                                <div class="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex gap-2">
+                                    <div class="w-8 h-2 bg-white rounded-full"></div>
+                                    <div class="w-2 h-2 bg-white/50 rounded-full"></div>
+                                    <div class="w-2 h-2 bg-white/50 rounded-full"></div>
+                                </div>
+                            </div>
+                        </div>
                         
                         <!-- Plantilla Big -->
                         <div v-if="form.catalog_product_template === 'big'" class="grid grid-cols-2 gap-6">
@@ -705,7 +786,7 @@ const previewStyles = computed(() => {
                                     <div class="h-4 bg-gray-300 rounded w-3/4 mb-4"></div>
                                     <div class="flex items-center justify-between">
                                         <div class="h-6 bg-gray-400 rounded w-28"></div>
-                                        <button class="px-6 py-3 rounded-lg text-sm font-bold" :style="previewStyles.button">
+                                        <button v-if="form.catalog_show_buy_button" class="px-6 py-3 rounded-lg text-sm font-bold" :style="previewStyles.button">
                                             Comprar Ahora
                                         </button>
                                     </div>
@@ -722,8 +803,8 @@ const previewStyles = computed(() => {
                                     <div class="h-4 bg-gray-300 rounded w-2/3 mb-3"></div>
                                     <div class="flex items-center justify-between">
                                         <div class="h-5 bg-gray-400 rounded w-24"></div>
-                                        <button class="px-4 py-2 rounded-lg text-sm font-semibold" :style="previewStyles.button">
-                                            Ver Detalles
+                                        <button v-if="form.catalog_show_buy_button" class="px-4 py-2 rounded-lg text-sm font-semibold" :style="previewStyles.button">
+                                            Comprar Ahora
                                         </button>
                                     </div>
                                 </div>
@@ -740,15 +821,17 @@ const previewStyles = computed(() => {
                                     <div class="h-4 bg-gray-300 rounded w-3/4 mb-4"></div>
                                     <div class="flex items-center justify-between">
                                         <div class="h-5 bg-gray-400 rounded w-24"></div>
-                                        <button class="px-4 py-2 rounded-lg text-sm font-semibold" :style="previewStyles.button">
-                                            Ver Detalles
+                                        <button v-if="form.catalog_show_buy_button" class="px-4 py-2 rounded-lg text-sm font-semibold" :style="previewStyles.button">
+                                            Comprar Ahora
                                         </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    </div>
                 </div>
+            </div>
             </div>
         </div>
     </Modal>

@@ -93,6 +93,7 @@ class CartController extends Controller
                 'catalog_logo_position' => $store->catalog_logo_position ?? 'center',
                 'catalog_menu_type' => $store->catalog_menu_type ?? 'hamburger',
                 'catalog_product_template' => $store->catalog_product_template ?? 'default',
+                'catalog_show_buy_button' => $store->catalog_show_buy_button ?? false,
                 'catalog_header_style' => $store->catalog_header_style ?? 'default',
                 'catalog_header_bg_color' => $store->catalog_header_bg_color ?? '#FFFFFF',
                 'catalog_header_text_color' => $store->catalog_header_text_color ?? '#1F2937',

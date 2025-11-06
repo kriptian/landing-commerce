@@ -1752,55 +1752,50 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 					<p v-if="hasPromo(product)" class="text-xs sm:text-sm text-gray-400 line-through">
 						{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
 					</p>
-				</div>
-			</Link>
-		</div>
-		
-		<!-- Plantilla Big (Productos grandes destacados) -->
-		<div v-else-if="products.data.length > 0 && productTemplate === 'big'" class="space-y-6">
-			<Link v-for="(product, index) in products.data" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" :class="[
-				'group block border rounded-2xl shadow-lg overflow-hidden bg-white hover:shadow-xl transition',
-				index === 0 ? 'md:flex md:h-96' : 'md:flex md:h-48'
-			]">
-				<div :class="[
-					'relative',
-					index === 0 ? 'md:w-1/2 h-64 md:h-full' : 'md:w-1/3 h-48 md:h-full'
-				]">
-					<img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-full object-cover transform group-hover:scale-105 transition duration-300">
-					<span v-if="isOutOfStock(product)" class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">Agotado</span>
-					<span v-else-if="isLowStock(product)" class="absolute top-3 left-3 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">¡Pocas unidades!</span>
-				</div>
-				<div :class="[
-					'p-6 flex flex-col justify-between',
-					index === 0 ? 'md:w-1/2' : 'md:w-2/3'
-				]">
-					<div>
-						<h3 :class="[
-							'font-bold line-clamp-3 mb-4',
-							index === 0 ? 'text-2xl md:text-3xl' : 'text-xl md:text-2xl'
-						]" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor } : {}">{{ product.name }}</h3>
-						<div class="flex items-center gap-3 mb-2">
-							<p :class="[
-								'font-extrabold',
-								index === 0 ? 'text-2xl md:text-3xl' : 'text-xl md:text-2xl'
-							]" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor } : {}">
-								{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
-									hasPromo(product) ? Math.round(product.price * (100 - promoPercent(product)) / 100) : product.price
-								) }}
-							</p>
-							<span v-if="hasPromo(product)" class="inline-flex items-center rounded text-white font-bold px-2 py-1 text-sm" :class="store?.catalog_use_default ? 'bg-red-600' : ''" :style="promoBadgeStyle">
-								-{{ promoPercent(product) }}%
-							</span>
-						</div>
-						<p v-if="hasPromo(product)" class="text-sm text-gray-400 line-through mb-4">
-							{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
-						</p>
-					</div>
-					<button @click.stop.prevent="buyNowFromGallery(product)" class="w-full py-3 px-6 rounded-lg font-bold text-center transition duration-300 hover:opacity-90" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
+					<button v-if="store?.catalog_show_buy_button" @click.stop.prevent="buyNowFromGallery(product)" class="w-full py-2 px-4 rounded-lg font-semibold text-sm text-center transition duration-300 hover:opacity-90" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
 						Comprar Ahora
 					</button>
 				</div>
 			</Link>
+		</div>
+		
+		<!-- Plantilla Big (Galería dinámica + Grid de tarjetas grandes) -->
+		<div v-else-if="products.data.length > 0 && productTemplate === 'big'" class="space-y-6">
+			<!-- Los productos destacados ya se muestran en la galería dinámica arriba -->
+			<!-- Mostrar el resto de productos en formato de grid de tarjetas grandes (2 columnas) -->
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+				<Link v-for="product in products.data.filter(p => !featuredProducts.some(fp => fp.id === p.id))" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group block border rounded-xl shadow-lg overflow-hidden bg-white hover:shadow-xl transition">
+					<div class="relative h-56 bg-gray-200">
+						<img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-full object-cover transform group-hover:scale-105 transition duration-300">
+						<span v-if="isOutOfStock(product)" class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">Agotado</span>
+						<span v-else-if="isLowStock(product)" class="absolute top-3 left-3 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">¡Pocas unidades!</span>
+					</div>
+					<div class="p-5 flex flex-col justify-between min-h-[180px]">
+						<div>
+							<h3 class="text-lg sm:text-xl font-bold text-gray-900 mb-3 line-clamp-2" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor } : {}">{{ product.name }}</h3>
+							<p v-if="product.short_description" class="text-sm text-gray-600 mb-4 line-clamp-2" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor, opacity: 0.7 } : {}">
+								{{ product.short_description }}
+							</p>
+							<div class="flex items-center gap-2 mb-2">
+								<p class="text-xl sm:text-2xl text-gray-900 font-extrabold" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor } : {}">
+									{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
+										hasPromo(product) ? Math.round(product.price * (100 - promoPercent(product)) / 100) : product.price
+									) }}
+								</p>
+								<span v-if="hasPromo(product)" class="inline-flex items-center rounded text-white font-bold px-2 py-1 text-xs" :class="store?.catalog_use_default ? 'bg-red-600' : ''" :style="promoBadgeStyle">
+									-{{ promoPercent(product) }}%
+								</span>
+							</div>
+							<p v-if="hasPromo(product)" class="text-sm text-gray-400 line-through mb-4">
+								{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
+							</p>
+						</div>
+						<button v-if="store?.catalog_show_buy_button" @click.stop.prevent="buyNowFromGallery(product)" class="w-full py-3 px-6 rounded-lg font-bold text-center transition duration-300 hover:opacity-90" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
+							Comprar Ahora
+						</button>
+					</div>
+				</Link>
+			</div>
 		</div>
 		
 		<!-- Plantilla Full Text (Lista horizontal con texto completo) -->
@@ -1827,10 +1822,13 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 						<p v-if="hasPromo(product)" class="text-xs sm:text-sm text-gray-400 line-through mb-2">
 							{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
 						</p>
-						<p v-if="product.short_description" class="text-xs sm:text-sm text-gray-600 line-clamp-2" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor, opacity: 0.7 } : {}">
+						<p v-if="product.short_description" class="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-2" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor, opacity: 0.7 } : {}">
 							{{ product.short_description }}
 						</p>
 					</div>
+					<button v-if="store?.catalog_show_buy_button" @click.stop.prevent="buyNowFromGallery(product)" class="w-full py-2 px-4 rounded-lg font-semibold text-sm text-center transition duration-300 hover:opacity-90" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
+						Comprar Ahora
+					</button>
 				</div>
 			</Link>
 		</div>
