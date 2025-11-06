@@ -802,6 +802,8 @@ const getVariantDisplayPrices = (variant) => {
 <template>
     <Head :title="product.name">
         <template #default>
+            <meta v-if="product.meta_keywords" name="keywords" :content="product.meta_keywords">
+            <meta name="description" :content="product.short_description || `Compra ${product.name} en ${store.name}`">
         </template>
     </Head>
 

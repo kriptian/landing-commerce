@@ -101,6 +101,7 @@ const form = useForm({
     short_description: '',
     long_description: '',
     specifications: '',
+    meta_keywords: '',
     gallery_files: [],
     variant_options: [], // Nueva estructura jerárquica
     variants: [], // Mantener para retrocompatibilidad
@@ -770,6 +771,11 @@ const submit = () => {
                                 <div class="mb-4">
                                     <label for="specifications" class="block font-medium text-sm text-gray-700">Especificaciones (separadas por comas)</label>
                                     <input id="specifications" v-model="form.specifications" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" placeholder="Alto: 2.30m,Ancho: 1.20m,...">
+                                </div>
+                                <div class="mb-4">
+                                    <label for="meta_keywords" class="block font-medium text-sm text-gray-700">Palabras Clave SEO (separadas por comas)</label>
+                                    <input id="meta_keywords" v-model="form.meta_keywords" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" placeholder="palabra1, palabra2, palabra3">
+                                    <p class="mt-1 text-xs text-gray-500">Estas palabras clave ayudan a mejorar el SEO del producto. No son visibles para los clientes.</p>
                                 </div>
                             </div>
                             

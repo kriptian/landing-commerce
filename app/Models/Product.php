@@ -29,6 +29,7 @@ class Product extends Model
         'promo_active',
         'promo_discount_percent',
         'is_active',
+        'meta_keywords',
         // 'main_image_url', // <-- LO QUITAMOS DE AQUÍ PORQUE NO ES UNA COLUMNA REAL
     ];
 
