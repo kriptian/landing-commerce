@@ -29,7 +29,27 @@ class Store extends Model
         'plan_cycle',
         'plan_started_at',
         'plan_renews_at',
-    ];
+        'catalog_use_default',
+        'catalog_button_color',
+        'catalog_promo_banner_color',
+        'catalog_variant_button_color',
+        'catalog_purchase_button_color',
+        'catalog_cart_bubble_color',
+        'catalog_social_button_color',
+        'catalog_logo_position',
+        'catalog_menu_type',
+        'catalog_product_template',
+        'catalog_header_style',
+        'catalog_header_bg_color',
+        'catalog_header_text_color',
+        'catalog_button_bg_color',
+        'catalog_button_text_color',
+        'catalog_body_bg_color',
+        'catalog_body_text_color',
+            'catalog_input_bg_color',
+            'catalog_input_text_color',
+            'catalog_promo_banner_text_color',
+        ];
 
     /**
      * Se ejecuta cuando el modelo "arranca".

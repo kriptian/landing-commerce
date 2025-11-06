@@ -18,6 +18,7 @@ use App\Http\Controllers\StoreSetupController;
 // ===== AQUÍ ESTÁN LOS CAMBIOS =====
 // Controladores del Panel de Admin
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\CatalogCustomizationController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Middleware\EnsureUserIsAdmin;
@@ -144,6 +145,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
             Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
             Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
+            Route::get('catalog-customization', [CatalogCustomizationController::class, 'index'])->name('catalog-customization.index');
+            Route::put('catalog-customization', [CatalogCustomizationController::class, 'update'])->name('catalog-customization.update');
         });
     });
 

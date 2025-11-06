@@ -178,18 +178,23 @@ const onVariantChildImageChange = (parentIndex, childIndex, event) => {
         return;
     }
     
-    const isImage = file.type?.startsWith('image/');
+    // Validación de imagen (igual que onGalleryInput)
+    const msgs = [];
+    const isImage = (file?.type || '').startsWith('image/');
     if (!isImage) {
-        errorMessages.value = ['El archivo seleccionado no es una imagen válida.'];
-        showErrors.value = true;
-        if (event?.target) event.target.value = '';
-        return;
+        msgs.push(`${file.name}: no es una imagen válida.`);
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+        msgs.push(`${file.name}: supera el límite de 2 MB.`);
     }
     
-    if (file.size > MAX_IMAGE_BYTES) {
-        errorMessages.value = [`La imagen "${file.name}" supera el límite de 2 MB.`];
+    if (msgs.length) {
+        errorMessages.value = ['Problemas con la imagen de la variante:', ...msgs];
         showErrors.value = true;
+        // Limpiar selección para evitar enviar archivos inválidos
         if (event?.target) event.target.value = '';
+        variantParents.value[parentIndex].children[childIndex].image = null;
+        variantParents.value[parentIndex].children[childIndex].imagePreview = null;
         return;
     }
     
@@ -606,7 +611,18 @@ const submit = () => {
                 });
             }
         });
+        // Asegurar que los datos principales se mantengan
         return data;
+    });
+
+    // DEBUG: Log antes de enviar
+    console.log('🔍 CREATE - Enviando formulario', {
+        hasVariantOptions: form.variant_options?.length > 0,
+        variantOptionsCount: form.variant_options?.length || 0,
+        hasVariantAttributes: form.variant_attributes?.length > 0,
+        variantAttributesCount: form.variant_attributes?.length || 0,
+        hasGalleryFiles: form.gallery_files?.length > 0,
+        formKeys: Object.keys(form.data()),
     });
 
     form.post(route('admin.products.store'), {

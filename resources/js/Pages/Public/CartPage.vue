@@ -14,6 +14,80 @@ const props = defineProps({
 	store: Object,
 });
 
+// Colores personalizados del catálogo
+const catalogUseDefault = computed(() => props.store?.catalog_use_default ?? true);
+const buttonBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_button_bg_color || '#2563EB';
+});
+const buttonTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_button_text_color || '#FFFFFF';
+});
+const bodyBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_body_bg_color || '#FFFFFF';
+});
+const bodyTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_body_text_color || '#1F2937';
+});
+const inputBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_input_bg_color || '#FFFFFF';
+});
+const inputTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_input_text_color || '#1F2937';
+});
+const buttonStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value,
+        color: buttonTextColor.value,
+    };
+});
+
+// Usar los colores de botones para las burbujas flotantes
+const cartBubbleStyle = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value + '70',
+        ringColor: buttonBgColor.value + '50',
+        color: buttonTextColor.value,
+    };
+});
+
+const socialButtonStyle = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value + '70',
+        ringColor: buttonBgColor.value + '50',
+        color: buttonTextColor.value,
+    };
+});
+
+const bodyStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {}; // Modo por defecto: no aplicar estilos personalizados
+    if (!bodyBgColor.value || !bodyTextColor.value) return {};
+    return {
+        backgroundColor: bodyBgColor.value,
+        color: bodyTextColor.value,
+    };
+});
+
+const inputStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {}; // Modo por defecto: no aplicar estilos personalizados
+    if (!inputBgColor.value || !inputTextColor.value) return {};
+    return {
+        backgroundColor: inputBgColor.value,
+        color: inputTextColor.value,
+    };
+});
+
 // ===== Utilidades =====
 const formatCurrency = (value) => new Intl.NumberFormat('es-CO', {
 	style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0,
@@ -208,7 +282,7 @@ const deleteItem = () => {
             <div class="flex items-center space-x-4"></div>
         </nav>
     </header>
-    <main class="container mx-auto px-6 py-12">
+    <main class="container mx-auto px-6 py-12 min-h-screen" :style="bodyStyleObj">
         <div class="mb-8 flex justify-between items-center">
             <h1 class="text-xl sm:text-2xl font-medium text-gray-600">Mi Carrito de Compras</h1>
             <Link v-if="cartItems.length > 0" :href="route('catalogo.index', { store: store.slug })" class="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-800 text-sm font-semibold rounded-md hover:bg-gray-300">
@@ -233,7 +307,12 @@ const deleteItem = () => {
                 </div>
                 <h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-3">Tu carrito está vacío</h2>
                 <p class="text-gray-600 mb-8 text-lg">¡Aprovechá y explorá nuestros increíbles productos!</p>
-                <Link :href="route('catalogo.index', { store: store.slug })" class="inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-4 px-8 rounded-xl hover:bg-blue-700 transition duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
+                <Link 
+                    :href="route('catalogo.index', { store: store.slug })" 
+                    class="inline-flex items-center justify-center gap-2 font-bold py-4 px-8 rounded-xl transition duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+                    :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''"
+                    :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}"
+                >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
                     </svg>
@@ -312,7 +391,14 @@ const deleteItem = () => {
 							<span>Total seleccionado</span>
 							<span class="text-xl font-bold">{{ formatCurrency(selectedTotal) }}</span>
 						</div>
-						<Link :href="route('checkout.index', { store: store.slug })" class="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 text-white font-semibold py-3 hover:bg-blue-700">Continuar compra</Link>
+						<Link 
+                            :href="route('checkout.index', { store: store.slug })" 
+                            class="mt-5 inline-flex w-full items-center justify-center rounded-lg font-semibold py-3 transition-colors"
+                            :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''"
+                            :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}"
+                        >
+                            Continuar compra
+                        </Link>
 					</div>
 				</aside>
 			</div>
@@ -326,7 +412,14 @@ const deleteItem = () => {
 						<p class="text-gray-500">Total</p>
 						<p class="text-xl font-bold">{{ formatCurrency(selectedTotal) }}</p>
 					</div>
-					<Link :href="route('checkout.index', { store: store.slug })" class="inline-flex items-center justify-center px-5 py-3 rounded-full bg-blue-600 text-white font-semibold shadow-md active:scale-95">Continuar compra</Link>
+					<Link 
+                        :href="route('checkout.index', { store: store.slug })" 
+                        class="inline-flex items-center justify-center px-5 py-3 rounded-full font-semibold shadow-md active:scale-95 transition-colors"
+                        :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''"
+                        :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}"
+                    >
+                        Continuar compra
+                    </Link>
 				</div>
 			</div>
 		</div>
@@ -351,7 +444,7 @@ const deleteItem = () => {
                     </a>
                 </div>
             </transition>
-            <button @click="showSocialFab = !showSocialFab" class="w-12 h-12 rounded-full bg-blue-600/70 backdrop-blur ring-1 ring-blue-500/50 text-white flex items-center justify-center shadow-2xl active:scale-95 transition-transform duration-300" :class="{ 'scale-95': showSocialFab }">
+            <button @click="showSocialFab = !showSocialFab" class="w-12 h-12 rounded-full backdrop-blur ring-1 text-white flex items-center justify-center shadow-2xl active:scale-95 transition-transform duration-300" :class="[catalogUseDefault ? 'bg-blue-600/70 ring-blue-500/50' : '', { 'scale-95': showSocialFab }]" :style="socialButtonStyle">
                 <svg v-if="!showSocialFab" class="w-6 h-6 transition-opacity duration-200" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2c-3.18-.35-6.2-1.63-8.82-3.68a19.86 19.86 0 0 1-6.24-6.24C2.7 9.38 1.42 6.36 1.07 3.18A2 2 0 0 1 3.06 1h3a2 2 0 0 1 2 1.72c.09.74.25 1.46.46 2.16a2 2 0 0 1-.45 2.06L7.5 8.5a16 16 0 0 0 8 8l1.56-1.57a2 2 0 0 1 2.06-.45c.7.21 1.42.37 2.16.46A2 2 0 0 1 22 16.92z"/>
                 </svg>

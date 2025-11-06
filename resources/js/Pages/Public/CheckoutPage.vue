@@ -8,6 +8,60 @@ const props = defineProps({
     store: Object,
 });
 
+// Colores personalizados del catálogo
+const catalogUseDefault = computed(() => props.store?.catalog_use_default ?? true);
+const bodyBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_body_bg_color || '#FFFFFF';
+});
+const bodyTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_body_text_color || '#1F2937';
+});
+const inputBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_input_bg_color || '#FFFFFF';
+});
+const inputTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_input_text_color || '#1F2937';
+});
+const buttonBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_button_bg_color || '#2563EB';
+});
+const buttonTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_button_text_color || '#FFFFFF';
+});
+
+const bodyStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {}; // Modo por defecto: no aplicar estilos personalizados
+    if (!bodyBgColor.value || !bodyTextColor.value) return {};
+    return {
+        backgroundColor: bodyBgColor.value,
+        color: bodyTextColor.value,
+    };
+});
+
+const inputStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {}; // Modo por defecto: no aplicar estilos personalizados
+    if (!inputBgColor.value || !inputTextColor.value) return {};
+    return {
+        backgroundColor: inputBgColor.value,
+        color: inputTextColor.value,
+    };
+});
+
+const buttonStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value,
+        color: buttonTextColor.value,
+    };
+});
+
 // Precio base: priorizar precio de variante si existe, sino usar precio principal del producto
 // IMPORTANTE: Ahora usamos el precio de variante incluso si track_inventory está desactivado
 // porque las variant_options pueden tener precios independientes
@@ -95,7 +149,7 @@ const submitOrder = () => {
         </nav>
     </header>
 
-    <main class="container mx-auto px-6 py-12">
+    <main class="container mx-auto px-6 py-12 min-h-screen" :style="bodyStyleObj">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
             
             <div>
@@ -103,25 +157,25 @@ const submitOrder = () => {
                 <form @submit.prevent="submitOrder" class="space-y-6 bg-white p-8 lg:p-10 shadow-2xl rounded-2xl border border-gray-100 backdrop-blur-sm transform transition-all hover:shadow-3xl">
                     <div>
                         <label for="customer_name" class="block font-medium text-sm text-gray-700 mb-2">Nombre Completo</label>
-                        <input id="customer_name" v-model="form.customer_name" type="text" class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4 bg-gray-50 hover:bg-white" required>
+                        <input id="customer_name" v-model="form.customer_name" type="text" class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4" :class="catalogUseDefault ? 'bg-gray-50 hover:bg-white' : ''" :style="inputStyleObj" required>
                     </div>
                     
                     <div>
                         <label for="customer_phone" class="block font-medium text-sm text-gray-700 mb-2">Teléfono (WhatsApp)</label>
-                        <input id="customer_phone" v-model="form.customer_phone" type="tel" class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4 bg-gray-50 hover:bg-white" required>
+                        <input id="customer_phone" v-model="form.customer_phone" type="tel" class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4" :class="catalogUseDefault ? 'bg-gray-50 hover:bg-white' : ''" :style="inputStyleObj" required>
                     </div>
 
                     <div>
                         <label for="customer_email" class="block font-medium text-sm text-gray-700 mb-2">Correo Electrónico</label>
-                        <input id="customer_email" v-model="form.customer_email" type="email" class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4 bg-gray-50 hover:bg-white" required>
+                        <input id="customer_email" v-model="form.customer_email" type="email" class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4" :class="catalogUseDefault ? 'bg-gray-50 hover:bg-white' : ''" :style="inputStyleObj" required>
                     </div>
 
                     <div>
                         <label for="customer_address" class="block font-medium text-sm text-gray-700 mb-2">Dirección Completa (con ciudad y detalles)</label>
-                        <textarea id="customer_address" v-model="form.customer_address" class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4 bg-gray-50 hover:bg-white resize-none" rows="3" required></textarea>
+                        <textarea id="customer_address" v-model="form.customer_address" class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4 resize-none" :class="catalogUseDefault ? 'bg-gray-50 hover:bg-white' : ''" :style="inputStyleObj" rows="3" required></textarea>
                     </div>
                     
-                    <button type="submit" :disabled="form.processing" class="w-full bg-green-600 text-white font-bold py-4 px-6 rounded-xl text-center hover:bg-green-700 disabled:opacity-50 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl">
+                    <button type="submit" :disabled="form.processing" class="w-full font-bold py-4 px-6 rounded-xl text-center disabled:opacity-50 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl" :class="catalogUseDefault ? 'bg-green-600 text-white hover:bg-green-700' : ''" :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}">
                         {{ form.processing ? 'Procesando...' : 'Realizar Pedido por WhatsApp' }}
                     </button>
                 </form>

@@ -318,18 +318,24 @@ const onVariantChildImageChange = (parentIndex, childIndex, event) => {
         return;
     }
     
-    const isImage = file.type?.startsWith('image/');
+    // Validación de imagen (igual que onNewGalleryInput)
+    const msgs = [];
+    const isImage = (file?.type || '').startsWith('image/');
     if (!isImage) {
-        errorMessages.value = ['El archivo seleccionado no es una imagen válida.'];
-        showErrors.value = true;
-        if (event?.target) event.target.value = '';
-        return;
+        msgs.push(`${file.name}: no es una imagen válida.`);
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+        msgs.push(`${file.name}: supera el límite de 2 MB.`);
     }
     
-    if (file.size > MAX_IMAGE_BYTES) {
-        errorMessages.value = [`La imagen "${file.name}" supera el límite de 2 MB.`];
+    if (msgs.length) {
+        errorMessages.value = ['Problemas con la imagen de la variante:', ...msgs];
         showErrors.value = true;
+        // Limpiar selección para evitar enviar archivos inválidos
         if (event?.target) event.target.value = '';
+        variantParents.value[parentIndex].children[childIndex].image = null;
+        variantParents.value[parentIndex].children[childIndex].imagePreview = null;
+        variantParents.value[parentIndex].children[childIndex].imagePath = null; // También limpiar la ruta existente
         return;
     }
     

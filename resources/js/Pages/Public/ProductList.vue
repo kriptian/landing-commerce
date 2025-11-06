@@ -128,10 +128,14 @@ const search = ref(props.filters.search);
 
 // --- LÓGICA PARA LA BÚSQUEDA ANIMADA ---
 const isSearchActive = ref(false);
+const isClosingSearch = ref(false); // Bandera para evitar que blur reabra la búsqueda
 const drawerOpen = ref(false);
 const expanded = ref({});
 // Modo navegación: aplicamos filtro inmediato sin checkboxes/botones
 const selected = ref(new Set());
+// Dropdown para menú completo - rastrea qué categoría tiene su dropdown abierto
+const openDropdownCategory = ref(null);
+const dropdownExpanded = ref({}); // Para acordeón dentro del dropdown
 const toggleNode = async (cat) => {
   if (!cat.has_children_with_products) return;
   
@@ -147,6 +151,128 @@ const applyImmediate = (categoryId) => {
   router.get(route('catalogo.index', { store: props.store.slug }), { category: categoryId, search: search.value || undefined }, { preserveState: true, replace: true, preserveScroll: true });
   drawerOpen.value = false;
 };
+// Función para manejar hover/click en categorías del menú completo - abre dropdown
+const handleCategoryHover = async (cat) => {
+  if (!cat.has_children_with_products) return;
+  openDropdownCategory.value = cat.id;
+  // Cargar subcategorías si no están en cache
+  if (!childrenCache.value.has(cat.id)) {
+    await loadSubChildren(cat.id);
+  }
+};
+
+const handleCategoryLeave = (event) => {
+  // Solo cerrar si no estamos moviendo el mouse hacia el dropdown
+  // Pequeño delay para permitir movimiento al dropdown (solo en desktop)
+  if (window.innerWidth >= 768) {
+    setTimeout(() => {
+      const dropdown = document.querySelector('.category-dropdown:hover');
+      const relatedTarget = event.relatedTarget;
+      // No cerrar si el mouse está yendo hacia el dropdown o si el dropdown está siendo hovered
+      if (!dropdown && relatedTarget && !relatedTarget.closest('.category-dropdown')) {
+        openDropdownCategory.value = null;
+      }
+    }, 200);
+  }
+};
+
+// Función para toggle del dropdown con click (funciona en desktop y móvil)
+const handleCategoryClick = async (event, cat) => {
+  event.stopPropagation(); // Prevenir que el evento se propague
+  event.preventDefault(); // Prevenir comportamiento por defecto
+  
+  if (!cat.has_children_with_products) {
+    applyImmediate(cat.id);
+    return;
+  }
+  
+  // Si el dropdown ya está abierto para esta categoría, mantenerlo abierto (no cerrarlo)
+  // Solo cerrarlo si se hace clic en otra parte
+  if (openDropdownCategory.value === cat.id) {
+    // Si ya está abierto, mantenerlo abierto (no hacer toggle)
+    return;
+  }
+  
+  // Abrir el dropdown para esta categoría
+  openDropdownCategory.value = cat.id;
+  
+  // Cargar subcategorías si no están en cache
+  if (!childrenCache.value.has(cat.id)) {
+    await loadSubChildren(cat.id);
+  }
+  
+  // Forzar actualización del DOM
+  await nextTick();
+};
+
+// Función para calcular la posición del dropdown (fixed positioning)
+const getDropdownPosition = (cat) => {
+  // Retornar estilos básicos, la posición se calculará en el watch
+  return {
+    zIndex: '99999',
+    position: 'fixed',
+    display: 'block',
+    visibility: 'visible',
+    opacity: '1',
+    backgroundColor: 'white'
+  };
+};
+
+// Watch para actualizar la posición del dropdown cuando se abre
+watch(openDropdownCategory, async (newVal) => {
+  if (newVal !== null) {
+    await nextTick();
+    const cat = props.categories.find(c => c.id === newVal);
+    if (cat) {
+      const buttonElement = document.querySelector(`[data-category-button-id="${cat.id}"]`);
+      if (buttonElement) {
+        const rect = buttonElement.getBoundingClientRect();
+        const dropdown = document.querySelector(`[data-cat-id="${cat.id}"].category-dropdown`);
+        if (dropdown) {
+          dropdown.style.top = `${rect.bottom + 4}px`;
+          dropdown.style.left = `${rect.left}px`;
+        }
+      }
+    }
+  }
+});
+
+// Función para toggle del acordeón dentro del dropdown
+const toggleDropdownItem = async (cat) => {
+  if (!cat.has_children_with_products) {
+    applyImmediate(cat.id);
+    openDropdownCategory.value = null;
+    return;
+  }
+  
+  const isExpanding = !dropdownExpanded.value[cat.id];
+  dropdownExpanded.value[cat.id] = isExpanding;
+  
+  // Si estamos expandiendo y no tenemos los hijos, cargarlos
+  if (isExpanding && !childrenCache.value.has(cat.id)) {
+    await loadSubChildren(cat.id);
+  }
+};
+
+// Función para manejar clics en categorías del menú dropdown: si tiene subcategorías, abre drawer; si no, aplica filtro
+const handleDropdownMenuClick = async (cat) => {
+  if (cat.has_children_with_products) {
+    // Si tiene subcategorías, abrir drawer y navegar a esa categoría
+    if (!drawerOpen.value) {
+      resetMenuToRoot();
+      drawerOpen.value = true;
+      await nextTick();
+    } else {
+      resetMenuToRoot();
+      await nextTick();
+    }
+    // Navegar a la categoría (abrirá el nivel de subcategorías)
+    await openNode(cat);
+  } else {
+    // Si no tiene subcategorías, aplicar filtro directamente
+    applyImmediate(cat.id);
+  }
+};
 const goToHome = () => {
   // Siempre regresar a la página principal sin filtros
   router.get(route('catalogo.index', { store: props.store.slug }), {}, { preserveState: true, replace: true, preserveScroll: true });
@@ -158,22 +284,42 @@ const applySearch = () => {
 const searchInput = ref(null); // Referencia al input de búsqueda
 
 const toggleSearch = () => {
-    isSearchActive.value = !isSearchActive.value;
     if (isSearchActive.value) {
+        // Si estamos cerrando, marcar la bandera
+        isClosingSearch.value = true;
+        isSearchActive.value = false;
+        search.value = '';
+        // Resetear la bandera después de un pequeño delay
+        setTimeout(() => {
+            isClosingSearch.value = false;
+        }, 200);
+    } else {
+        isSearchActive.value = true;
         // nextTick espera a que Vue actualice el DOM (muestre el input)
         // antes de intentar ponerle el foco.
         nextTick(() => {
+            if (searchInput.value) {
             searchInput.value.focus();
+            }
         });
-    } else {
-        // Si cerramos la búsqueda, limpiamos el filtro
-        search.value = '';
     }
 };
 
-const handleSearchBlur = () => {
+const handleSearchBlur = (event) => {
+    // No hacer nada si estamos cerrando manualmente o si el clic fue en el botón de cerrar
+    if (isClosingSearch.value) {
+        return;
+    }
+    if (event.relatedTarget && event.relatedTarget.closest('button[aria-label="Cerrar búsqueda"]')) {
+        return;
+    }
+    // Solo cerrar si no hay texto en la búsqueda
     if (!search.value) {
-        toggleSearch();
+        setTimeout(() => {
+            if (!isClosingSearch.value && !search.value) {
+                isSearchActive.value = false;
+            }
+        }, 100);
     }
 };
 // --- FIN LÓGICA ---
@@ -190,6 +336,220 @@ const promoPercent = (product) => {
 
 // Ref para forzar re-render del banner cuando cambian las promociones
 const promoUpdateKey = ref(0);
+
+// Layout personalizado - SOLO se aplican si NO está en modo por defecto
+const logoPosition = computed(() => {
+    if (props.store?.catalog_use_default) return 'center'; // Modo por defecto: siempre centro
+    return props.store?.catalog_logo_position || 'center';
+});
+
+const menuType = computed(() => {
+    if (props.store?.catalog_use_default) return 'hamburger'; // Modo por defecto: siempre hamburguesa
+    return props.store?.catalog_menu_type || 'hamburger';
+});
+
+const productTemplate = computed(() => {
+    if (props.store?.catalog_use_default) return 'default'; // Modo por defecto: siempre default
+    return props.store?.catalog_product_template || 'default';
+});
+
+const headerStyle = computed(() => {
+    if (props.store?.catalog_use_default) return 'default'; // Modo por defecto: siempre default
+    return props.store?.catalog_header_style || 'default';
+});
+
+const logoClasses = computed(() => {
+    const base = 'flex items-center justify-center z-10 transition-all duration-300 ease-out';
+    let position = '';
+    if (logoPosition.value === 'left') {
+        position = 'absolute left-0';
+    } else if (logoPosition.value === 'right') {
+        // Cuando está a la derecha, dar espacio para la lupa (mínimo 60px desde el borde derecho)
+        position = 'absolute right-16 sm:right-20';
+    } else {
+        position = 'absolute left-1/2';
+    }
+    const searchState = isSearchActive.value 
+        ? 'opacity-0 scale-75 pointer-events-none' 
+        : 'opacity-100 scale-100 pointer-events-auto';
+    return `${base} ${position} ${searchState}`;
+});
+
+const logoStyle = computed(() => {
+    if (logoPosition.value === 'center') {
+        return isSearchActive.value 
+            ? { transform: 'translate(-50%, 0) translateX(-100px)' } 
+            : { transform: 'translate(-50%, 0)' };
+    }
+    return {};
+});
+
+// Colores personalizados del catálogo
+const catalogUseDefault = computed(() => props.store?.catalog_use_default ?? true);
+
+// Colores granulares
+const headerBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_header_bg_color || '#FFFFFF';
+});
+
+const headerTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_header_text_color || '#1F2937';
+});
+
+const buttonBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_button_bg_color || '#2563EB';
+});
+
+const buttonTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_button_text_color || '#FFFFFF';
+});
+
+const bodyBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_body_bg_color || '#FFFFFF';
+});
+
+const bodyTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_body_text_color || '#1F2937';
+});
+
+const inputBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_input_bg_color || '#FFFFFF';
+});
+
+const inputTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_input_text_color || '#1F2937';
+});
+
+// Estilos dinámicos - SOLO se aplican si NO está en modo por defecto
+const headerStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {}; // Modo por defecto: no aplicar estilos personalizados
+    if (!headerBgColor.value || !headerTextColor.value) return {};
+    return {
+        backgroundColor: headerBgColor.value,
+        color: headerTextColor.value,
+    };
+});
+
+const bodyStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {}; // Modo por defecto: no aplicar estilos personalizados
+    if (!bodyBgColor.value || !bodyTextColor.value) return {};
+    return {
+        backgroundColor: bodyBgColor.value,
+        color: bodyTextColor.value,
+    };
+});
+
+const inputStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {}; // Modo por defecto: no aplicar estilos personalizados
+    if (!inputBgColor.value || !inputTextColor.value) return {};
+    return {
+        backgroundColor: inputBgColor.value,
+        color: inputTextColor.value,
+    };
+});
+
+const buttonStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {}; // Modo por defecto: no aplicar estilos personalizados
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value,
+        color: buttonTextColor.value,
+    };
+});
+const catalogButtonColor = computed(() => {
+    if (catalogUseDefault.value) {
+        return '#1F2937'; // gray-800 por defecto
+    }
+    return props.store?.catalog_button_color || '#1F2937';
+});
+
+// Usar los colores de botones para las burbujas flotantes
+const cartBubbleStyle = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value + '70',
+        ringColor: buttonBgColor.value + '50',
+        color: buttonTextColor.value,
+    };
+});
+
+const socialButtonStyle = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value + '70',
+        ringColor: buttonBgColor.value + '50',
+        color: buttonTextColor.value,
+    };
+});
+
+const catalogPromoBannerColor = computed(() => {
+    if (props.store?.catalog_use_default) {
+        return '#DC2626'; // red-600 por defecto
+    }
+    return props.store?.catalog_promo_banner_color || '#DC2626';
+});
+
+const catalogPromoBannerTextColor = computed(() => {
+    if (props.store?.catalog_use_default) {
+        return '#FFFFFF'; // white por defecto
+    }
+    return props.store?.catalog_promo_banner_text_color || '#FFFFFF';
+});
+
+// Estilos dinámicos para la cinta de ofertas
+const promoBannerStyle = computed(() => {
+    if (props.store?.catalog_use_default) {
+        return {}; // Usa clases de Tailwind por defecto
+    }
+    return {
+        backgroundColor: catalogPromoBannerColor.value + '60', // Agregar opacidad 60%
+        color: catalogPromoBannerTextColor.value,
+    };
+});
+
+const promoBannerHoverStyle = computed(() => {
+    if (props.store?.catalog_use_default) {
+        return {}; // Usa clases de Tailwind por defecto
+    }
+    return {
+        backgroundColor: catalogPromoBannerColor.value + '70', // Agregar opacidad 70% en hover
+        color: catalogPromoBannerTextColor.value,
+    };
+});
+
+// Estilos dinámicos para los botones de comprar
+const buttonStyle = computed(() => {
+    if (props.store?.catalog_use_default) {
+        return {}; // Usa clases de Tailwind por defecto
+    }
+    // Usar los colores granulares de botones
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value,
+        color: buttonTextColor.value,
+    };
+});
+
+// Estilos dinámicos para badges de promoción
+const promoBadgeStyle = computed(() => {
+    if (props.store?.catalog_use_default) {
+        return {}; // Usa clases de Tailwind por defecto
+    }
+    return {
+        backgroundColor: catalogPromoBannerColor.value,
+        color: '#FFFFFF',
+    };
+});
 
 // Estado global de promos - asegurar que siempre tenga acceso a props.store
 const storePromoActive = computed(() => {
@@ -462,11 +822,20 @@ const isLowStock = (product) => {
 
 // FAB de redes sociales (móvil)
 const showSocialFab = ref(false);
+// Menú desplegable
+const showDropdownMenu = ref(false);
 const hasAnySocial = computed(() => {
     try {
-        const phone = (props.store?.phone ?? '').toString().replace(/[^0-9]/g, '');
-        return Boolean(props.store?.facebook_url || props.store?.instagram_url || props.store?.tiktok_url || phone);
+        const store = props.store || {};
+        const phone = (store.phone ?? '').toString().replace(/[^0-9]/g, '');
+        const hasFacebook = Boolean(store.facebook_url && String(store.facebook_url).trim());
+        const hasInstagram = Boolean(store.instagram_url && String(store.instagram_url).trim());
+        const hasTiktok = Boolean(store.tiktok_url && String(store.tiktok_url).trim());
+        const hasPhone = Boolean(phone && phone.length > 0);
+        const result = hasFacebook || hasInstagram || hasTiktok || hasPhone;
+        return result;
     } catch (e) {
+        console.error('Error checking social links:', e);
         return false;
     }
 });
@@ -627,15 +996,30 @@ const buyNowFromGallery = (product) => {
     });
 };
 
-// Iniciar autoplay al montar
+// Cerrar menú desplegable al hacer clic fuera
+const handleClickOutside = (event) => {
+    // Cerrar menú dropdown de categorías
+    if (showDropdownMenu.value && !event.target.closest('[data-dropdown-menu]')) {
+        showDropdownMenu.value = false;
+    }
+    // Cerrar dropdown de categorías del menú completo
+    if (openDropdownCategory.value !== null && !event.target.closest('.category-dropdown') && !event.target.closest('.menu-full-container')) {
+        openDropdownCategory.value = null;
+    }
+};
+
+// Iniciar autoplay al montar y configurar listener del menú
 onMounted(() => {
     resetAutoPlay();
+    document.addEventListener('click', handleClickOutside);
 });
 
 onBeforeUnmount(() => {
     if (autoPlayInterval.value) {
         clearInterval(autoPlayInterval.value);
     }
+    // Limpiar listener del menú desplegable
+    document.removeEventListener('click', handleClickOutside);
 });
 
 // Reset autoplay cuando cambian los productos destacados y resetear slide actual
@@ -658,10 +1042,10 @@ watch(featuredProducts, (newProducts, oldProducts) => {
     </Head>
 
     <!-- Cinta de ofertas arriba del todo (fixed) - siempre visible cuando hay promociones activas -->
-    <div v-if="hasAnyPromoGlobally || checkStorePromoDirect" :key="`promo-banner-${storePromoActive || checkStorePromoDirect ? 'store' : 'products'}-${props.filters?.category || 'all'}-${props.filters?.search || ''}-${promoUpdateKey}`" class="fixed top-0 left-0 right-0 z-[60] bg-red-600/60 backdrop-blur-sm">
-        <button @click="goToPromo" class="w-full py-2 sm:py-3 shadow-lg hover:bg-red-600/70 transition-all">
+    <div v-if="hasAnyPromoGlobally || checkStorePromoDirect" :key="`promo-banner-${storePromoActive || checkStorePromoDirect ? 'store' : 'products'}-${props.filters?.category || 'all'}-${props.filters?.search || ''}-${promoUpdateKey}`" class="fixed top-0 left-0 right-0 z-[60] backdrop-blur-sm" :class="store?.catalog_use_default ? 'bg-red-600/60' : ''" :style="promoBannerStyle">
+        <button @click="goToPromo" class="w-full py-2 sm:py-3 shadow-lg transition-all font-extrabold uppercase tracking-wider text-xs sm:text-sm" :class="store?.catalog_use_default ? 'text-white hover:bg-red-600/70' : ''" :style="store?.catalog_use_default ? {} : promoBannerHoverStyle">
 				<div class="marquee">
-                <div class="marquee__inner text-white font-extrabold uppercase tracking-wider text-xs sm:text-sm">
+                <div class="marquee__inner" :class="store?.catalog_use_default ? 'text-white' : ''" :style="store?.catalog_use_default ? {} : { color: catalogPromoBannerTextColor }">
                     <span class="flex items-center gap-2 whitespace-nowrap">
 							<span class="blink">🔥</span>
 							Ofertas<span v-if="maxPromoPercent > 0"> hasta {{ maxPromoPercent }}%</span>
@@ -688,22 +1072,295 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 			</button>
 		</div>
 
-    <header class="bg-white shadow-sm sticky z-50" :class="hasAnyPromoGlobally ? 'top-[44px] sm:top-[52px]' : 'top-0'">
-        <nav class="container mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-2 relative">
-            <!-- Menú hamburguesa - siempre visible -->
-            <button @click="openDrawer" class="p-2 rounded-lg hover:bg-gray-100 transition-colors z-10 flex-shrink-0" aria-label="Abrir menú">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6 text-gray-700">
+    <header 
+        class="shadow-sm sticky z-50" 
+        :class="[
+            hasAnyPromoGlobally ? 'top-[44px] sm:top-[52px]' : 'top-0',
+            catalogUseDefault ? 'bg-white' : '',
+            headerStyle === 'banner_logo' ? 'bg-transparent' : ''
+        ]"
+        :style="headerStyleObj"
+    >
+        <!-- Header Banner & Logo (estilo especial) - SOLO si NO está en modo por defecto -->
+        <template v-if="headerStyle === 'banner_logo' && !catalogUseDefault">
+            <!-- Banner superior oscuro con menú y carrito -->
+            <div class="bg-gray-800 text-white py-2 px-4 flex justify-end items-center gap-3">
+                <Link :href="route('cart.index', { store: store.slug })" class="relative p-1.5 rounded-lg hover:bg-gray-700 transition-colors" aria-label="Carrito de compras">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/></svg>
+                    <span v-if="$page.props.cart.count > 0" class="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center">
+                        {{ $page.props.cart.count }}
+                    </span>
+                </Link>
+                <button @click="openDrawer" class="p-1.5 rounded-lg hover:bg-gray-700 transition-colors" aria-label="Abrir menú">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Área principal con logo centrado -->
+            <div class="container mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8" :style="headerStyleObj">
+                <div class="flex flex-col items-center gap-4">
+            <!-- Logo centrado -->
+                    <div class="flex items-center justify-center">
+                        <img 
+                            v-if="store.logo_url" 
+                            :src="store.logo_url" 
+                            :alt="`Logo de ${store.name}`" 
+                            class="h-20 w-20 sm:h-24 sm:w-24 md:h-28 md:w-28 rounded-full object-cover ring-3 ring-gray-200 shadow-xl"
+                        >
+                    </div>
+                    
+                    <!-- Nombre de la tienda (opcional) -->
+                    <h1 
+                        v-if="store.name"
+                        class="font-serif font-light text-lg sm:text-xl md:text-2xl tracking-wider text-center"
+                        :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : { color: '#1F2937' }"
+                    >
+                        {{ store.name }}
+                    </h1>
+                </div>
+            </div>
+            
+            <!-- Barra de navegación inferior con iconos -->
+            <div class="container mx-auto px-3 sm:px-4 md:px-6 py-3 border-t border-gray-200" :style="headerStyleObj">
+                <div class="flex items-center justify-between gap-4">
+                    <!-- Iconos de navegación a la izquierda -->
+                    <div class="flex items-center gap-2">
+                        <button @click="goToHome" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Inicio" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                        </button>
+                        <!-- Búsqueda en header Banner & Logo -->
+                        <transition name="search-expand">
+                            <div v-if="!isSearchActive" class="flex items-center">
+                                <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                </button>
+                            </div>
+                            <div v-else class="flex items-center gap-2 min-w-[200px] sm:min-w-[280px]">
+                                <input 
+                                    ref="searchInput" 
+                                    v-model="search" 
+                                    type="text" 
+                                    placeholder="Buscar..." 
+                                    @blur="handleSearchBlur"
+                                    class="border border-gray-300 rounded-lg px-4 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300" 
+                                    :style="inputStyleObj"
+                                />
+                                <button @click.stop.prevent="toggleSearch" @mousedown.prevent class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" aria-label="Cerrar búsqueda">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-500">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </transition>
+                    </div>
+                    
+                    <!-- Redes sociales a la derecha -->
+                    <div class="flex items-center gap-2">
+                        <a v-if="store.facebook_url" :href="store.facebook_url" target="_blank" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors" :style="!catalogUseDefault && buttonBgColor && buttonTextColor ? { backgroundColor: buttonBgColor + '20', color: buttonBgColor } : {}">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/></svg>
+                        </a>
+                        <a v-if="store.instagram_url" :href="store.instagram_url" target="_blank" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors" :style="!catalogUseDefault && buttonBgColor && buttonTextColor ? { backgroundColor: buttonBgColor + '20', color: buttonBgColor } : {}">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.024.06 1.378.06 3.808s-.012 2.784-.06 3.808c-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.024.048-1.378.06-3.808.06s-2.784-.012-3.808-.06c-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.048-1.024-.06-1.378-.06-3.808s.012-2.784.06-3.808c.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 016.08 2.525c.636-.247 1.363-.416 2.427-.465C9.53 2.013 9.884 2 12.315 2zm-1.161 1.545a1.12 1.12 0 10-1.584 1.584 1.12 1.12 0 001.584-1.584zm-3.097 3.569a3.468 3.468 0 106.937 0 3.468 3.468 0 00-6.937 0z"/></svg>
+                        </a>
+                        <a v-if="store.tiktok_url" :href="store.tiktok_url" target="_blank" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors" :style="!catalogUseDefault && buttonBgColor && buttonTextColor ? { backgroundColor: buttonBgColor + '20', color: buttonBgColor } : {}">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12.525.02c1.31-.02 2.61-.01 3.91.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.01-1.58-.31-3.15-.82-4.7-.52-1.56-1.23-3.04-2.1-4.42a.1.1 0 00-.2-.04c-.02.13-.03.26-.05.39v7.24a.26.26 0 00.27.27c.82.04 1.63.16 2.42.37.04.83.16 1.66.36 2.47.19.82.49 1.6.86 2.33.36.73.81 1.41 1.32 2.02-.17.1-.34.19-.51.28a4.26 4.26 0 01-1.93.52c-1.37.04-2.73-.06-4.1-.23a9.8 9.8 0 01-3.49-1.26c-.96-.54-1.8-1.23-2.52-2.03-.72-.8-1.3-1.7-1.77-2.69-.47-.99-.8-2.06-1.02-3.13a.15.15 0 01.04-.15.24.24 0 01.2-.09c.64-.02 1.28-.04 1.92-.05.1 0 .19-.01 .28-.01.07 .01 .13 .02 .2 .04 .19 .04 .38 .09 .57 .14a5.2 5.2 0 005.02-5.22v-.02a.23 .23 0 00-.23-.23 .2 .2 0 00-.2-.02c-.83-.06-1.66-.13-2.49-.22-.05-.01-.1-.01-.15-.02-1.12-.13-2.25-.26-3.37-.44a.2 .2 0 01-.16-.24 .22 .22 0 01.23-.18c.41-.06 .82-.12 1.23-.18C9.9 .01 11.21 0 12.525 .02z"/></svg>
+                        </a>
+                        <a v-if="store.phone" :href="`https://wa.me/${String(store.phone).replace(/[^0-9]/g,'')}`" target="_blank" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors" :style="!catalogUseDefault && buttonBgColor && buttonTextColor ? { backgroundColor: buttonBgColor + '20', color: buttonBgColor } : {}">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M20.52 3.48A11.94 11.94 0 0012.01 0C5.4 0 .03 5.37.03 12c0 2.11.55 4.09 1.6 5.86L0 24l6.3-1.63a11.9 11.9 0 005.7 1.45h.01c6.61 0 11.98-5.37 11.98-12 0-3.2-1.25-6.2-3.47-8.34zM12 21.5c-1.8 0-3.56-.48-5.1-1.38l-.37-.22-3.74.97.99-3.65-.24-.38A9.5 9.5 0 1121.5 12c0 5.24-4.26 9.5-9.5 9.5zm5.28-6.92c-.29-.15-1.7-.84-1.96-.94-.26-.1-.45-.15-.64.15-.19.29-.74.94-.9 1.13-.17 .19-.33 .22-.62 .07-.29-.15-1.24-.46-2.35-1.47-.86-.76-1.44-1.7-1.61-1.99-.17-.29-.02-.45 .13-.6 .13-.13 .29-.33 .43-.5 .15-.17 .19-.29 .29-.48 .1-.19 .05-.36-.03-.51-.08-.15-.64-1.55-.88-2.12-.23-.55-.47-.48-.64-.49l-.55-.01c-.19 0 -.5 .07-.76 .36-.26 .29-1 1-1 2.45s1.02 2.84 1.16 3.03c.15 .19 2 3.06 4.84 4.29 .68 .29 1.21 .46 1.62 .59 .68 .22 1.3 .19 1.79 .12 .55-.08 1.7-.7 1.94-1.38 .24-.68 .24-1.26 .17-1.38-.07-.12-.26-.19-.55-.34z"/></svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </template>
+        
+        <!-- Header Default y Fit (estilos normales) -->
+        <nav v-else class="container mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 relative" :class="{ 'flex-wrap': menuType === 'full' && categories.length > 5 }">
+            <!-- Menú hamburguesa - solo visible si menuType es hamburger -->
+            <button v-if="menuType === 'hamburger' && headerStyle !== 'fit'" @click="openDrawer" class="p-2 rounded-lg hover:bg-gray-100 transition-colors z-10 flex-shrink-0 text-gray-700" aria-label="Abrir menú" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/>
                 </svg>
             </button>
+            
+            <!-- Header Fit - solo iconos - SOLO si NO está en modo por defecto -->
+            <template v-if="headerStyle === 'fit' && !catalogUseDefault">
+                <div class="flex items-center gap-2 z-10">
+                    <button @click="goToHome" class="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-700" aria-label="Inicio" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                    </button>
+                    <!-- Búsqueda en header Fit -->
+                    <transition name="search-expand">
+                        <div v-if="!isSearchActive" class="flex items-center">
+                            <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-700" aria-label="Buscar" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            </button>
+                        </div>
+                        <div v-else class="flex items-center gap-2 min-w-[200px] sm:min-w-[280px]">
+                            <input 
+                                ref="searchInput" 
+                                v-model="search" 
+                                type="text" 
+                                placeholder="Buscar..." 
+                                @blur="handleSearchBlur"
+                                class="border border-gray-300 rounded-lg px-4 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300" 
+                                :style="inputStyleObj"
+                            />
+                            <button 
+                                @click.stop.prevent="toggleSearch" 
+                                @mousedown.prevent
+                                class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" 
+                                aria-label="Cerrar búsqueda"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-500">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </transition>
+                    <button @click="openDrawer" class="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-700" aria-label="Menú" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/>
+                        </svg>
+                    </button>
+                </div>
+                <!-- Logo y nombre de la tienda en header Fit (ocultos en móvil cuando la búsqueda está activa) -->
+                <div class="flex-1 items-center justify-end gap-2 sm:gap-3 z-10" :class="isSearchActive ? 'hidden sm:flex' : 'flex'">
+                    <h1 
+                        class="font-serif font-light text-sm sm:text-base tracking-wider"
+                        :class="!catalogUseDefault && headerTextColor ? '' : 'text-gray-700'"
+                        :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}"
+                    >
+                        {{ store.name }}
+                    </h1>
+                    <img 
+                        v-if="store.logo_url" 
+                        :src="store.logo_url" 
+                        :alt="`Logo de ${store.name}`" 
+                        class="h-8 w-8 sm:h-10 sm:w-10 rounded-full object-cover ring-1 ring-gray-200 shadow-sm"
+                    >
+                </div>
+            </template>
 
-            <!-- Logo centrado -->
-            <div class="absolute left-1/2 flex items-center justify-center z-10 transition-all duration-300 ease-out" :class="isSearchActive ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100 pointer-events-auto'" :style="isSearchActive ? 'transform: translate(-50%, 0) translateX(-100px)' : 'transform: translate(-50%, 0)'">
+            <!-- Menú dropdown - solo visible si menuType es dropdown y NO es header Fit -->
+            <div v-if="menuType === 'dropdown' && (headerStyle !== 'fit' || catalogUseDefault)" class="relative z-10 flex-shrink-0" data-dropdown-menu @click.stop>
+                <button @click="showDropdownMenu = !showDropdownMenu" class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2" aria-label="Abrir menú">
+                    <span class="text-sm font-medium text-gray-700">Categorías</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-700 transition-transform duration-200" :class="{ 'rotate-180': showDropdownMenu }">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+                    </svg>
+                </button>
+                <!-- Menú desplegable -->
+                <transition 
+                    enter-active-class="transition ease-out duration-200"
+                    enter-from-class="opacity-0 scale-95 translate-y-1"
+                    enter-to-class="opacity-100 scale-100 translate-y-0"
+                    leave-active-class="transition ease-in duration-150"
+                    leave-from-class="opacity-100 scale-100 translate-y-0"
+                    leave-to-class="opacity-0 scale-95 translate-y-1"
+                >
+                    <div v-if="showDropdownMenu" class="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50 max-h-96 overflow-y-auto dropdown-menu">
+                        <button @click="goToHome(); showDropdownMenu = false;" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                            Inicio
+                        </button>
+                        <div class="border-t my-1"></div>
+                        <button 
+                            v-for="cat in categories" 
+                            :key="cat.id" 
+                            @click="showDropdownMenu = false; handleDropdownMenuClick(cat);" 
+                            class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center justify-between"
+                        >
+                            <span>{{ cat.name }}</span>
+                            <span v-if="cat.has_children_with_products" class="text-xs opacity-60">›</span>
+                        </button>
+                    </div>
+                </transition>
+            </div>
+
+            <!-- Menú completo - solo visible si menuType es full y NO es header Fit -->
+            <div v-if="menuType === 'full' && (headerStyle !== 'fit' || catalogUseDefault)" class="flex-1 flex items-center gap-1 sm:gap-2 md:gap-4 z-10 overflow-x-auto scrollbar-hide menu-full-container min-w-0" style="position: relative;">
+                <button @click="goToHome" class="text-xs sm:text-sm font-medium text-gray-700 hover:text-gray-900 whitespace-nowrap px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0 transition-colors rounded-md hover:bg-gray-50 active:bg-gray-100">Inicio</button>
+                <div 
+                    v-for="cat in categories" 
+                    :key="cat.id" 
+                    class="relative"
+                    @mouseenter="handleCategoryHover(cat)"
+                    @mouseleave="handleCategoryLeave"
+                >
+                    <button 
+                        @click="(e) => handleCategoryClick(e, cat)"
+                        :data-category-button-id="cat.id"
+                        class="text-xs sm:text-sm font-medium text-gray-700 hover:text-gray-900 whitespace-nowrap px-2 sm:px-3 py-1.5 sm:py-2 flex-shrink-0 transition-colors rounded-md hover:bg-gray-50 active:bg-gray-100 flex items-center gap-1"
+                        :class="{ 'bg-gray-50': openDropdownCategory === cat.id }"
+                    >
+                        {{ cat.name }}
+                        <span v-if="cat.has_children_with_products" class="text-xs opacity-60">▼</span>
+                    </button>
+                    
+                    <!-- Dropdown con subcategorías -->
+                    <div 
+                        v-if="Number(openDropdownCategory) === Number(cat.id) && cat.has_children_with_products" 
+                        class="category-dropdown fixed bg-white rounded-lg shadow-xl border border-gray-200 py-2 min-w-[280px] max-w-[400px] max-h-[500px] overflow-y-auto"
+                        @mouseenter="handleCategoryHover(cat)"
+                        @mouseleave="handleCategoryLeave"
+                        :style="getDropdownPosition(cat)"
+                        :data-cat-id="cat.id"
+                        :data-open-id="openDropdownCategory"
+                    >
+                            <div class="px-3 py-2 border-b border-gray-200">
+                                <h3 class="font-semibold text-gray-900 text-sm">{{ cat.name }}</h3>
+                            </div>
+                            <div class="py-1">
+                                <template v-if="loadingCategories.has(cat.id)">
+                                    <div class="px-4 py-3 text-sm text-gray-500">Cargando...</div>
+                                </template>
+                                <template v-else>
+                                    <div v-for="subcat in getLevelChildren(cat.id)" :key="subcat.id" class="category-dropdown-item">
+                                        <button
+                                            @click="toggleDropdownItem(subcat)"
+                                            class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-between group"
+                                        >
+                                            <span>{{ subcat.name }}</span>
+                                            <div class="flex items-center gap-2">
+                                                <span v-if="subcat.products_count" class="text-xs text-gray-400">{{ subcat.products_count }}</span>
+                                                <span v-if="subcat.has_children_with_products" class="text-gray-400 text-xs transition-transform duration-200" :class="{ 'rotate-90': dropdownExpanded[subcat.id] }">›</span>
+                                            </div>
+                                        </button>
+                                        <!-- Sub-subcategorías (nietas) -->
+                                        <transition name="submenu">
+                                            <div v-if="dropdownExpanded[subcat.id] && subcat.has_children_with_products" class="bg-gray-50/50">
+                                                <template v-if="loadingCategories.has(subcat.id)">
+                                                    <div class="px-4 py-2 pl-8 text-xs text-gray-500">Cargando...</div>
+                                                </template>
+                                                <template v-else>
+                                                    <button
+                                                        v-for="subsubcat in getLevelChildren(subcat.id)"
+                                                        :key="subsubcat.id"
+                                                        @click="applyImmediate(subsubcat.id); openDropdownCategory = null"
+                                                        class="w-full text-left px-4 py-2 pl-8 text-sm text-gray-600 hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                    >
+                                                        <span>{{ subsubcat.name }}</span>
+                                                        <span v-if="subsubcat.products_count" class="text-xs text-gray-400">{{ subsubcat.products_count }}</span>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </transition>
+                                    </div>
+                                    <div v-if="getLevelChildren(cat.id).length === 0" class="px-4 py-3 text-sm text-gray-500">No hay subcategorías disponibles</div>
+                                </template>
+                            </div>
+                        </div>
+                </div>
+            </div>
+
+            <!-- Logo - posición dinámica (oculto en header Fit) -->
+            <div v-if="headerStyle !== 'fit' || catalogUseDefault" :class="logoClasses" :style="logoStyle">
                 <img v-if="store.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-full object-cover ring-2 ring-gray-100 shadow-sm">
             </div>
 
-            <!-- Lupa / Búsqueda expandible -->
-            <div class="flex items-center justify-end flex-shrink-0 z-10">
+            <!-- Lupa / Búsqueda expandible (oculta en header Fit, ya que tiene su propia búsqueda) -->
+            <div v-if="headerStyle !== 'fit' || catalogUseDefault" class="flex items-center justify-end flex-shrink-0 z-10">
                 <transition name="search-expand">
                     <div v-if="!isSearchActive" class="flex items-center">
                         <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar">
@@ -720,6 +1377,7 @@ watch(featuredProducts, (newProducts, oldProducts) => {
                             placeholder="Buscar..." 
                             @blur="handleSearchBlur"
                             class="border border-gray-300 rounded-lg px-4 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300" 
+                            :style="inputStyleObj"
                         />
                         <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" aria-label="Cerrar búsqueda">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-500">
@@ -731,7 +1389,14 @@ watch(featuredProducts, (newProducts, oldProducts) => {
             </div>
         </nav>
     </header>
-    <main class="container mx-auto px-6 py-12" :class="hasAnyPromoGlobally ? 'pt-16 sm:pt-20' : 'pt-12'">
+    <main 
+        class="container mx-auto px-6 py-12" 
+        :class="[
+            hasAnyPromoGlobally ? 'pt-16 sm:pt-20' : 'pt-12',
+            catalogUseDefault ? '' : ''
+        ]"
+        :style="bodyStyleObj"
+    >
 
 		<!-- Galería de productos destacados con transición -->
 		<div 
@@ -802,7 +1467,7 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 												hasPromo(featuredProducts[currentSlide]) ? Math.round(featuredProducts[currentSlide].price * (100 - promoPercent(featuredProducts[currentSlide])) / 100) : featuredProducts[currentSlide].price
 											) }}
 										</p>
-										<span v-if="hasPromo(featuredProducts[currentSlide])" class="inline-flex items-center rounded bg-red-600 text-white font-bold px-2 sm:px-3 py-1 text-xs sm:text-sm whitespace-nowrap">
+										<span v-if="hasPromo(featuredProducts[currentSlide])" class="inline-flex items-center rounded text-white font-bold px-2 sm:px-3 py-1 text-xs sm:text-sm whitespace-nowrap" :class="store?.catalog_use_default ? 'bg-red-600' : ''" :style="promoBadgeStyle">
 											-{{ promoPercent(featuredProducts[currentSlide]) }}%
 										</span>
 									</div>
@@ -812,7 +1477,9 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 								<div class="flex justify-center pointer-events-auto mb-8 sm:mb-12 md:mb-16">
 									<button 
 										@click="buyNowFromGallery(featuredProducts[currentSlide])"
-										class="buy-now-gallery bg-white/80 backdrop-blur-sm text-gray-900 font-bold py-3 px-6 sm:px-8 rounded-full shadow-2xl hover:bg-white/90 transition-all transform hover:scale-105 active:scale-95 text-base sm:text-lg md:text-xl border-2 border-gray-200"
+										class="buy-now-gallery font-bold py-3 px-6 sm:px-8 rounded-full shadow-2xl transition-all transform hover:scale-105 active:scale-95 text-base sm:text-lg md:text-xl"
+										:class="store?.catalog_use_default ? 'bg-white/80 backdrop-blur-sm text-gray-900 hover:bg-white/90 border-2 border-gray-200' : 'text-white'"
+										:style="buttonStyle"
 									>
 										COMPRAR
 									</button>
@@ -843,19 +1510,39 @@ watch(featuredProducts, (newProducts, oldProducts) => {
                 <!-- Overlay con efecto cortina translúcida -->
                 <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="drawerOpen=false"></div>
                 
-                <!-- Panel del menú -->
-                <div class="relative w-[85%] max-w-sm bg-white h-full shadow-2xl rounded-r-2xl overflow-hidden">
+                <!-- Panel del menú - diseño diferente para header Fit -->
+                <div 
+                    class="relative h-full shadow-2xl overflow-hidden"
+                    :class="headerStyle === 'fit' && !catalogUseDefault ? 'w-[75%] max-w-xs bg-gradient-to-br from-gray-50 to-white rounded-r-3xl' : 'w-[85%] max-w-sm bg-white rounded-r-2xl'"
+                >
                     <!-- Header fijo -->
-                    <div class="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between">
+                    <div 
+                        class="sticky top-0 z-20 border-b px-4 py-4 flex items-center justify-between"
+                        :class="headerStyle === 'fit' && !catalogUseDefault ? 'bg-gradient-to-r from-gray-100 to-transparent border-gray-300' : 'bg-white border-gray-200'"
+                    >
                         <div class="flex items-center gap-3">
-                            <button v-if="menuStack.length" @click="goBack" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Volver">
+                            <button 
+                                v-if="menuStack.length" 
+                                @click="goBack" 
+                                class="p-1.5 rounded-lg transition-colors"
+                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50' : 'hover:bg-gray-100'"
+                                aria-label="Volver"
+                            >
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-700">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
                                 </svg>
                             </button>
-                            <h3 class="font-semibold text-gray-900 text-base">{{ currentTitle }}</h3>
+                            <h3 
+                                class="font-semibold text-base"
+                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-800' : 'text-gray-900'"
+                            >{{ currentTitle }}</h3>
                         </div>
-                        <button @click="drawerOpen=false" class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Cerrar">
+                        <button 
+                            @click="drawerOpen=false" 
+                            class="p-1.5 rounded-lg transition-colors"
+                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50' : 'hover:bg-gray-100'"
+                            aria-label="Cerrar"
+                        >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6 text-gray-700">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
@@ -866,7 +1553,7 @@ watch(featuredProducts, (newProducts, oldProducts) => {
                     <div v-if="hasAnyPromoGlobally || checkStorePromoDirect" :key="`promo-drawer-${storePromoActive || checkStorePromoDirect ? 'store' : 'products'}-${drawerItemsKey}-${promoUpdateKey}`" class="border-b border-gray-200 bg-white flex-shrink-0">
                         <button class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors" @click="goToPromo">
                             <span class="font-semibold text-red-700 uppercase text-sm">Promociones</span>
-                            <span v-if="maxPromoPercent > 0" class="text-xs bg-red-600 text-white rounded-full px-2.5 py-1 font-medium">Hasta {{ maxPromoPercent }}%</span>
+                            <span v-if="maxPromoPercent > 0" class="text-xs text-white rounded-full px-2.5 py-1 font-medium" :class="store?.catalog_use_default ? 'bg-red-600' : ''" :style="promoBadgeStyle">Hasta {{ maxPromoPercent }}%</span>
                         </button>
                         <div class="border-b border-gray-200"></div>
                     </div>
@@ -884,25 +1571,52 @@ watch(featuredProducts, (newProducts, oldProducts) => {
                             <div class="menu-slide" :style="{ width: slideWidth }">
                                 <div class="h-full overflow-y-auto flex flex-col">
                                     <!-- Botón HOME (siempre visible) -->
-                                    <div class="border-b border-gray-200 flex-shrink-0">
-                                        <button @click="goToHome" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-blue-50 active:bg-blue-100 transition-colors">
-                                            <span class="font-semibold text-blue-700 text-sm uppercase">HOME</span>
-                                            <span class="text-xs text-blue-600">›</span>
+                                    <div 
+                                        class="border-b flex-shrink-0"
+                                        :class="headerStyle === 'fit' && !catalogUseDefault ? 'border-gray-300' : 'border-gray-200'"
+                                    >
+                                        <button 
+                                            @click="goToHome" 
+                                            class="w-full flex items-center justify-between px-4 py-3.5 transition-colors"
+                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50 active:bg-gray-300/50' : 'hover:bg-blue-50 active:bg-blue-100'"
+                                        >
+                                            <span 
+                                                class="font-semibold text-sm uppercase"
+                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-800' : 'text-blue-700'"
+                                            >HOME</span>
+                                            <span 
+                                                class="text-xs"
+                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-600' : 'text-blue-600'"
+                                            >›</span>
                                         </button>
-                                        <div class="border-b border-gray-200"></div>
+                                        <div 
+                                            class="border-b"
+                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'border-gray-300' : 'border-gray-200'"
+                                        ></div>
                                     </div>
                                     <!-- Contenido de categorías -->
                                     <div class="flex-1 overflow-y-auto">
                                         <transition-group name="menu-item" tag="div" :key="drawerItemsKey">
                                             <div v-for="(cat, index) in props.categories" :key="`${cat.id}-${drawerItemsKey}`" class="menu-item-wrapper" :style="{ '--i': index }">
                                                 <button 
-                                                    class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-200" 
+                                                    class="w-full flex items-center justify-between px-4 py-3.5 transition-colors border-b" 
+                                                    :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50 active:bg-gray-300/50 border-gray-300' : 'hover:bg-gray-50 active:bg-gray-100 border-gray-200'"
                                                     @click="cat.has_children_with_products ? openNode(cat) : applyImmediate(cat.id)"
                                                 >
-                                                    <span class="font-medium text-gray-800 text-sm uppercase">{{ cat.name }}</span>
+                                                    <span 
+                                                        class="font-medium text-sm"
+                                                        :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-700' : 'text-gray-800 uppercase'"
+                                                    >{{ cat.name }}</span>
                         <div class="flex items-center gap-2">
-                                                        <span class="text-xs text-gray-500">{{ cat.products_count }}</span>
-                                                        <span v-if="cat.has_children_with_products" class="text-gray-400 text-lg leading-none">›</span>
+                                                        <span 
+                                                            class="text-xs"
+                                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-400' : 'text-gray-500'"
+                                                        >{{ cat.products_count }}</span>
+                                                        <span 
+                                                            v-if="cat.has_children_with_products" 
+                                                            class="text-lg leading-none"
+                                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-500' : 'text-gray-400'"
+                                                        >›</span>
                         </div>
                                                 </button>
                     </div>
@@ -916,12 +1630,28 @@ watch(featuredProducts, (newProducts, oldProducts) => {
                                 <div class="menu-slide" :style="{ width: slideWidth }">
                                     <div class="h-full overflow-y-auto flex flex-col">
                                         <!-- Botón HOME (siempre visible en niveles anidados) -->
-                                        <div class="border-b border-gray-200 flex-shrink-0">
-                                            <button @click="goToHome" class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-blue-50 active:bg-blue-100 transition-colors">
-                                                <span class="font-semibold text-blue-700 text-sm uppercase">HOME</span>
-                                                <span class="text-xs text-blue-600">›</span>
+                                        <div 
+                                            class="border-b flex-shrink-0"
+                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'border-gray-300' : 'border-gray-200'"
+                                        >
+                                            <button 
+                                                @click="goToHome" 
+                                                class="w-full flex items-center justify-between px-4 py-3.5 transition-colors"
+                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50 active:bg-gray-300/50' : 'hover:bg-blue-50 active:bg-blue-100'"
+                                            >
+                                                <span 
+                                                    class="font-semibold text-sm uppercase"
+                                                    :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-800' : 'text-blue-700'"
+                                                >HOME</span>
+                                                <span 
+                                                    class="text-xs"
+                                                    :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-600' : 'text-blue-600'"
+                                                >›</span>
                             </button>
-                                            <div class="border-b border-gray-200"></div>
+                                            <div 
+                                                class="border-b"
+                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'border-gray-300' : 'border-gray-200'"
+                                            ></div>
                         </div>
                                         <!-- Contenido de categorías -->
                                         <div v-if="levelData.children.length > 0" class="flex-1 overflow-y-auto">
@@ -929,19 +1659,30 @@ watch(featuredProducts, (newProducts, oldProducts) => {
                                                 <div v-for="(cat, index) in levelData.children" :key="`${cat.id}-${drawerItemsKey}`" class="menu-item-wrapper" :style="{ '--i': index }">
                                                     <!-- Acordeón para subcategorías (dentro de niveles navegados) -->
                                                     <button 
-                                                        class="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-200" 
+                                                        class="w-full flex items-center justify-between px-4 py-3.5 transition-colors border-b" 
+                                                        :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50 active:bg-gray-300/50 border-gray-300' : 'hover:bg-gray-50 active:bg-gray-100 border-gray-200'"
                                                         @click="cat.has_children_with_products ? toggleNode(cat) : applyImmediate(cat.id)"
                                                     >
-                                                        <span class="font-medium text-gray-800 text-sm">{{ cat.name }}</span>
+                                                        <span 
+                                                            class="font-medium text-sm"
+                                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-700' : 'text-gray-800'"
+                                                        >{{ cat.name }}</span>
                                 <div class="flex items-center gap-3">
-                                                            <span v-if="cat.has_children_with_products" class="text-gray-800 text-lg font-light leading-none min-w-[20px] text-center">
+                                                            <span 
+                                                                v-if="cat.has_children_with_products" 
+                                                                class="text-lg font-light leading-none min-w-[20px] text-center"
+                                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-600' : 'text-gray-800'"
+                                                            >
                                                                 {{ expanded[cat.id] ? '−' : '+' }}
                                                             </span>
                                 </div>
                             </button>
                                                     <!-- Sub-subcategorías indentadas cuando está expandido -->
                                                     <transition name="submenu">
-                                                        <div v-if="expanded[cat.id] && cat.has_children_with_products" class="bg-gray-50/50">
+                                                        <div 
+                                                            v-if="expanded[cat.id] && cat.has_children_with_products" 
+                                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'bg-gray-200/30' : 'bg-gray-50/50'"
+                                                        >
                                                             <template v-if="loadingCategories.has(cat.id)">
                                                                 <div class="px-4 py-3 pl-8 text-xs text-gray-500">Cargando...</div>
                                                             </template>
@@ -949,11 +1690,15 @@ watch(featuredProducts, (newProducts, oldProducts) => {
                                                                 <button
                                                                     v-for="(subcat, subIndex) in getLevelChildren(cat.id)"
                                                                     :key="subcat.id"
-                                                                    class="submenu-item-wrapper w-full flex items-center justify-between px-4 py-2.5 pl-8 hover:bg-gray-100 active:bg-gray-150 transition-colors border-b border-gray-200/50"
+                                                                    class="submenu-item-wrapper w-full flex items-center justify-between px-4 py-2.5 pl-8 transition-colors border-b"
+                                                                    :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-300/50 active:bg-gray-400/50 border-gray-400/50' : 'hover:bg-gray-100 active:bg-gray-150 border-gray-200/50'"
                                                                     @click="applyImmediate(subcat.id)"
                                                                     :style="{ '--i': subIndex }"
                                                                 >
-                                                                    <span class="font-normal text-gray-700 text-sm">{{ subcat.name }}</span>
+                                                                    <span 
+                                                                        class="font-normal text-sm"
+                                                                        :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-600' : 'text-gray-700'"
+                                                                    >{{ subcat.name }}</span>
                                                                 </button>
                                                             </transition-group>
                         </div>
@@ -984,7 +1729,8 @@ watch(featuredProducts, (newProducts, oldProducts) => {
             </div>
         </div>
 
-		<div v-else-if="products.data.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+		<!-- Plantilla Default (Grid 3x3) -->
+		<div v-else-if="products.data.length > 0 && productTemplate === 'default'" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
 			<Link v-for="product in products.data" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group block border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
 				<div class="relative">
 					<img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-40 sm:h-48 md:h-56 object-cover transform group-hover:scale-105 transition duration-300">
@@ -992,20 +1738,99 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 					<span v-else-if="isLowStock(product)" class="absolute top-3 left-3 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">¡Pocas unidades!</span>
 				</div>
 				<div class="p-4 flex flex-col gap-3">
-					<h3 class="text-base sm:text-lg font-semibold text-gray-900 line-clamp-2">{{ product.name }}</h3>
+					<h3 class="text-base sm:text-lg font-semibold text-gray-900 line-clamp-2" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor } : {}">{{ product.name }}</h3>
 					<div class="flex items-center gap-2">
-						<p class="text-lg sm:text-xl text-gray-900 font-extrabold">
+						<p class="text-lg sm:text-xl text-gray-900 font-extrabold" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor } : {}">
 							{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
 								hasPromo(product) ? Math.round(product.price * (100 - promoPercent(product)) / 100) : product.price
 							) }}
 						</p>
-						<span v-if="hasPromo(product)" class="inline-flex items-center rounded bg-red-600 text-white font-bold px-1.5 py-0.5 text-[11px] sm:text-xs">
+						<span v-if="hasPromo(product)" class="inline-flex items-center rounded text-white font-bold px-1.5 py-0.5 text-[11px] sm:text-xs" :class="store?.catalog_use_default ? 'bg-red-600' : ''" :style="promoBadgeStyle">
 							-{{ promoPercent(product) }}%
 						</span>
 					</div>
 					<p v-if="hasPromo(product)" class="text-xs sm:text-sm text-gray-400 line-through">
 						{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
 					</p>
+				</div>
+			</Link>
+		</div>
+		
+		<!-- Plantilla Big (Productos grandes destacados) -->
+		<div v-else-if="products.data.length > 0 && productTemplate === 'big'" class="space-y-6">
+			<Link v-for="(product, index) in products.data" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" :class="[
+				'group block border rounded-2xl shadow-lg overflow-hidden bg-white hover:shadow-xl transition',
+				index === 0 ? 'md:flex md:h-96' : 'md:flex md:h-48'
+			]">
+				<div :class="[
+					'relative',
+					index === 0 ? 'md:w-1/2 h-64 md:h-full' : 'md:w-1/3 h-48 md:h-full'
+				]">
+					<img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-full object-cover transform group-hover:scale-105 transition duration-300">
+					<span v-if="isOutOfStock(product)" class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">Agotado</span>
+					<span v-else-if="isLowStock(product)" class="absolute top-3 left-3 bg-yellow-500 text-white text-xs font-semibold px-2 py-1 rounded">¡Pocas unidades!</span>
+				</div>
+				<div :class="[
+					'p-6 flex flex-col justify-between',
+					index === 0 ? 'md:w-1/2' : 'md:w-2/3'
+				]">
+					<div>
+						<h3 :class="[
+							'font-bold line-clamp-3 mb-4',
+							index === 0 ? 'text-2xl md:text-3xl' : 'text-xl md:text-2xl'
+						]" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor } : {}">{{ product.name }}</h3>
+						<div class="flex items-center gap-3 mb-2">
+							<p :class="[
+								'font-extrabold',
+								index === 0 ? 'text-2xl md:text-3xl' : 'text-xl md:text-2xl'
+							]" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor } : {}">
+								{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
+									hasPromo(product) ? Math.round(product.price * (100 - promoPercent(product)) / 100) : product.price
+								) }}
+							</p>
+							<span v-if="hasPromo(product)" class="inline-flex items-center rounded text-white font-bold px-2 py-1 text-sm" :class="store?.catalog_use_default ? 'bg-red-600' : ''" :style="promoBadgeStyle">
+								-{{ promoPercent(product) }}%
+							</span>
+						</div>
+						<p v-if="hasPromo(product)" class="text-sm text-gray-400 line-through mb-4">
+							{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
+						</p>
+					</div>
+					<button @click.stop.prevent="buyNowFromGallery(product)" class="w-full py-3 px-6 rounded-lg font-bold text-center transition duration-300 hover:opacity-90" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
+						Comprar Ahora
+					</button>
+				</div>
+			</Link>
+		</div>
+		
+		<!-- Plantilla Full Text (Lista horizontal con texto completo) -->
+		<div v-else-if="products.data.length > 0 && productTemplate === 'full_text'" class="space-y-4">
+			<Link v-for="product in products.data" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group flex gap-4 border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
+				<div class="relative w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0">
+					<img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-full object-cover rounded-l-xl transform group-hover:scale-105 transition duration-300">
+					<span v-if="isOutOfStock(product)" class="absolute top-1 left-1 bg-red-600 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">Agotado</span>
+					<span v-else-if="isLowStock(product)" class="absolute top-1 left-1 bg-yellow-500 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">¡Pocas!</span>
+				</div>
+				<div class="flex-1 p-4 flex flex-col justify-between">
+					<div>
+						<h3 class="text-base sm:text-lg font-semibold text-gray-900 mb-2 line-clamp-2" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor } : {}">{{ product.name }}</h3>
+						<div class="flex items-center gap-2 mb-1">
+							<p class="text-lg sm:text-xl text-gray-900 font-extrabold" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor } : {}">
+								{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
+									hasPromo(product) ? Math.round(product.price * (100 - promoPercent(product)) / 100) : product.price
+								) }}
+							</p>
+							<span v-if="hasPromo(product)" class="inline-flex items-center rounded text-white font-bold px-1.5 py-0.5 text-[11px] sm:text-xs" :class="store?.catalog_use_default ? 'bg-red-600' : ''" :style="promoBadgeStyle">
+								-{{ promoPercent(product) }}%
+							</span>
+						</div>
+						<p v-if="hasPromo(product)" class="text-xs sm:text-sm text-gray-400 line-through mb-2">
+							{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
+						</p>
+						<p v-if="product.short_description" class="text-xs sm:text-sm text-gray-600 line-clamp-2" :style="!catalogUseDefault && bodyTextColor ? { color: bodyTextColor, opacity: 0.7 } : {}">
+							{{ product.short_description }}
+						</p>
+					</div>
 				</div>
 			</Link>
 		</div>
@@ -1029,8 +1854,8 @@ watch(featuredProducts, (newProducts, oldProducts) => {
         </div>
     </footer>
 
-    <!-- FAB Social (todas las vistas, móvil y desktop) -->
-    <div v-if="hasAnySocial" class="fixed bottom-6 left-6 z-50">
+    <!-- FAB Social (todas las vistas, móvil y desktop) - Oculto en header Banner & Logo -->
+    <div v-if="hasAnySocial && !(headerStyle === 'banner_logo' && !catalogUseDefault)" class="fixed bottom-6 left-6 z-[60]">
         <div class="relative">
             <!-- Burbujas -->
             <transition name="fade">
@@ -1046,7 +1871,7 @@ watch(featuredProducts, (newProducts, oldProducts) => {
             </transition>
 
             <!-- Trigger -->
-            <button @click="showSocialFab = !showSocialFab" class="w-12 h-12 rounded-full bg-blue-600/70 backdrop-blur ring-1 ring-blue-500/50 text-white flex items-center justify-center shadow-2xl active:scale-95 transition-transform duration-300" :class="{ 'scale-95': showSocialFab }">
+            <button @click="showSocialFab = !showSocialFab" class="w-12 h-12 rounded-full backdrop-blur ring-1 text-white flex items-center justify-center shadow-2xl active:scale-95 transition-transform duration-300" :class="[catalogUseDefault ? 'bg-blue-600/70 ring-blue-500/50' : '', { 'scale-95': showSocialFab }]" :style="socialButtonStyle">
                 <svg v-if="!showSocialFab" class="w-6 h-6 transition-opacity duration-200" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2c-3.18-.35-6.2-1.63-8.82-3.68a19.86 19.86 0 0 1-6.24-6.24C2.7 9.38 1.42 6.36 1.07 3.18A2 2 0 0 1 3.06 1h3a2 2 0 0 1 2 1.72c.09.74.25 1.46.46 2.16a2 2 0 0 1-.45 2.06L7.5 8.5a16 16 0 0 0 8 8l1.56-1.57a2 2 0 0 1 2.06-.45c.7.21 1.42.37 2.16.46A2 2 0 0 1 22 16.92z"/>
                 </svg>
@@ -1055,9 +1880,9 @@ watch(featuredProducts, (newProducts, oldProducts) => {
         </div>
     </div>
 
-    <!-- FAB Carrito (móvil y desktop) -->
-    <div class="fixed bottom-6 right-6 z-50">
-        <Link :href="route('cart.index', { store: store.slug })" class="relative w-12 h-12 rounded-full bg-blue-600/70 backdrop-blur ring-1 ring-blue-500/50 text-white flex items-center justify-center shadow-2xl active:scale-95">
+    <!-- FAB Carrito (móvil y desktop) - Oculto en header Banner & Logo -->
+    <div v-if="!(headerStyle === 'banner_logo' && !catalogUseDefault)" class="fixed bottom-6 right-6 z-50">
+        <Link :href="route('cart.index', { store: store.slug })" class="relative w-12 h-12 rounded-full backdrop-blur ring-1 text-white flex items-center justify-center shadow-2xl active:scale-95" :class="catalogUseDefault ? 'bg-blue-600/70 ring-blue-500/50' : ''" :style="cartBubbleStyle">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/></svg>
             <span v-if="$page.props.cart.count > 0" class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
                 {{ $page.props.cart.count }}
@@ -1323,6 +2148,68 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 .submenu-item-leave-to {
     opacity: 0;
     transform: translateX(-15px);
+}
+
+/* Estilos para menú desplegable */
+.dropdown-menu {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+.dropdown-menu::-webkit-scrollbar {
+    width: 6px;
+}
+
+.dropdown-menu::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 3px;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+}
+
+/* Estilos para menú completo en móvil */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* Menú completo responsive */
+.menu-full-container {
+    position: relative;
+}
+
+@media (max-width: 640px) {
+    .menu-full-container {
+        gap: 0.25rem;
+        padding: 0.25rem 0;
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+        max-width: calc(100vw - 8rem); /* Dejar espacio para logo y búsqueda */
+    }
+    
+    .menu-full-container button {
+        font-size: 0.75rem;
+        padding: 0.375rem 0.625rem;
+        min-width: fit-content;
+        border-radius: 0.375rem;
+        white-space: nowrap;
+    }
+}
+
+@media (min-width: 641px) {
+    .menu-full-container {
+        gap: 0.5rem;
+    }
 }
 
 .submenu-item-move {

@@ -1,0 +1,755 @@
+<script setup>
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { Head, useForm } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
+import AlertModal from '@/Components/AlertModal.vue';
+import Modal from '@/Components/Modal.vue';
+
+const props = defineProps({
+    store: {
+        type: Object,
+        required: true,
+    },
+});
+
+const form = useForm({
+    catalog_use_default: props.store.catalog_use_default ?? true,
+    catalog_product_template: props.store.catalog_product_template ?? 'default',
+    catalog_header_style: props.store.catalog_header_style ?? 'default',
+    // Colores granulares
+    catalog_header_bg_color: props.store.catalog_header_bg_color ?? '#FFFFFF',
+    catalog_header_text_color: props.store.catalog_header_text_color ?? '#1F2937',
+    catalog_button_bg_color: props.store.catalog_button_bg_color ?? '#2563EB',
+    catalog_button_text_color: props.store.catalog_button_text_color ?? '#FFFFFF',
+    catalog_body_bg_color: props.store.catalog_body_bg_color ?? '#FFFFFF',
+    catalog_body_text_color: props.store.catalog_body_text_color ?? '#1F2937',
+    catalog_input_bg_color: props.store.catalog_input_bg_color ?? '#FFFFFF',
+    catalog_input_text_color: props.store.catalog_input_text_color ?? '#1F2937',
+    // Colores específicos (legacy, mantener compatibilidad)
+    catalog_button_color: props.store.catalog_button_color ?? '#1F2937',
+    catalog_promo_banner_color: props.store.catalog_promo_banner_color ?? '#DC2626',
+    catalog_promo_banner_text_color: props.store.catalog_promo_banner_text_color ?? '#FFFFFF',
+    catalog_variant_button_color: props.store.catalog_variant_button_color ?? '#2563EB',
+    catalog_purchase_button_color: props.store.catalog_purchase_button_color ?? '#2563EB',
+    catalog_cart_bubble_color: props.store.catalog_cart_bubble_color ?? '#2563EB',
+    catalog_social_button_color: props.store.catalog_social_button_color ?? '#2563EB',
+});
+
+const showSuccessModal = ref(false);
+const showPreviewModal = ref(false);
+const previewMode = ref('mobile'); // 'mobile' | 'desktop'
+const showResetConfirm = ref(false);
+
+const submit = () => {
+    form.put(route('admin.catalog-customization.update'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showSuccessModal.value = true;
+        },
+        onError: (errors) => {
+            // Si hay errores, se mostrarán en el formulario
+        },
+    });
+};
+
+const resetToDefaults = () => {
+    // Resetear todos los valores a los por defecto
+    form.catalog_use_default = true;
+    form.catalog_product_template = 'default';
+    form.catalog_header_style = 'default';
+    // Colores granulares - valores por defecto
+    form.catalog_header_bg_color = '#FFFFFF';
+    form.catalog_header_text_color = '#1F2937';
+    form.catalog_button_bg_color = '#2563EB';
+    form.catalog_button_text_color = '#FFFFFF';
+    form.catalog_body_bg_color = '#FFFFFF';
+    form.catalog_body_text_color = '#1F2937';
+    form.catalog_input_bg_color = '#FFFFFF';
+    form.catalog_input_text_color = '#1F2937';
+    // Colores específicos (legacy) - valores por defecto
+    form.catalog_button_color = '#1F2937';
+    form.catalog_promo_banner_color = '#DC2626';
+    form.catalog_promo_banner_text_color = '#FFFFFF';
+    form.catalog_variant_button_color = '#2563EB';
+    form.catalog_purchase_button_color = '#2563EB';
+    form.catalog_cart_bubble_color = '#2563EB';
+    form.catalog_social_button_color = '#2563EB';
+    showResetConfirm.value = false;
+};
+
+// Resetear colores cuando se activa modo por defecto
+watch(() => form.catalog_use_default, (newValue) => {
+    if (newValue) {
+        form.catalog_header_bg_color = '#FFFFFF';
+        form.catalog_header_text_color = '#1F2937';
+        form.catalog_button_bg_color = '#2563EB';
+        form.catalog_button_text_color = '#FFFFFF';
+        form.catalog_body_bg_color = '#FFFFFF';
+        form.catalog_body_text_color = '#1F2937';
+        form.catalog_input_bg_color = '#FFFFFF';
+        form.catalog_input_text_color = '#1F2937';
+        form.catalog_promo_banner_color = '#DC2626';
+        form.catalog_promo_banner_text_color = '#FFFFFF';
+    }
+});
+
+// Plantillas de productos
+const productTemplates = [
+    { value: 'big', label: 'Big', description: 'Productos grandes destacados' },
+    { value: 'default', label: 'Default', description: 'Grid 3x3 compacto (recomendado)' },
+    { value: 'full_text', label: 'Full Text', description: 'Lista horizontal con texto completo' },
+];
+
+// Estilos de header
+const headerStyles = [
+    { value: 'default', label: 'Default', description: 'Header simple con logo a la izquierda' },
+    { value: 'fit', label: 'Fit', description: 'Header compacto solo con iconos' },
+    { value: 'banner_logo', label: 'Banner & Logo', description: 'Header con banner y logo centrado' },
+];
+
+// Colores granulares
+const granularColors = [
+    { 
+        group: 'Header', 
+        bg: 'catalog_header_bg_color', 
+        text: 'catalog_header_text_color',
+        bgLabel: 'Fondo del header',
+        textLabel: 'Texto del header'
+    },
+    { 
+        group: 'Botones', 
+        bg: 'catalog_button_bg_color', 
+        text: 'catalog_button_text_color',
+        bgLabel: 'Fondo de los botones',
+        textLabel: 'Texto de los botones'
+    },
+    { 
+        group: 'Body', 
+        bg: 'catalog_body_bg_color', 
+        text: 'catalog_body_text_color',
+        bgLabel: 'Fondo del body',
+        textLabel: 'Texto del body'
+    },
+    { 
+        group: 'Input', 
+        bg: 'catalog_input_bg_color', 
+        text: 'catalog_input_text_color',
+        bgLabel: 'Fondo del input',
+        textLabel: 'Texto del input'
+    },
+    { 
+        group: 'Cinta de Promoción', 
+        bg: 'catalog_promo_banner_color', 
+        text: 'catalog_promo_banner_text_color',
+        bgLabel: 'Fondo de la cinta de promoción',
+        textLabel: 'Texto de la cinta de promoción'
+    },
+];
+
+const getColorPreviewStyle = (bgColor, textColor) => {
+    if (form.catalog_use_default) {
+        return {};
+    }
+    return {
+        backgroundColor: bgColor,
+        color: textColor,
+    };
+};
+
+// Estilos para la vista previa
+const previewStyles = computed(() => {
+    if (form.catalog_use_default) {
+        return {
+            header: { backgroundColor: '#FFFFFF', color: '#1F2937' },
+            button: { backgroundColor: '#2563EB', color: '#FFFFFF' },
+            body: { backgroundColor: '#FFFFFF', color: '#1F2937' },
+            promo: { backgroundColor: '#DC2626', color: '#FFFFFF' },
+            headerStyle: 'default',
+        };
+    }
+    return {
+        header: {
+            backgroundColor: form.catalog_header_bg_color || '#FFFFFF',
+            color: form.catalog_header_text_color || '#1F2937',
+        },
+        button: {
+            backgroundColor: form.catalog_button_bg_color || '#2563EB',
+            color: form.catalog_button_text_color || '#FFFFFF',
+        },
+        body: {
+            backgroundColor: form.catalog_body_bg_color || '#FFFFFF',
+            color: form.catalog_body_text_color || '#1F2937',
+        },
+        promo: {
+            backgroundColor: form.catalog_promo_banner_color || '#DC2626',
+            color: form.catalog_promo_banner_text_color || '#FFFFFF',
+        },
+        headerStyle: form.catalog_header_style || 'default',
+    };
+});
+</script>
+
+<template>
+    <Head title="Personalizar Catálogo" />
+
+    <AuthenticatedLayout>
+        <template #header>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                Personalizar Catálogo
+            </h2>
+        </template>
+
+        <div class="py-12">
+            <div class="max-w-6xl mx-auto sm:px-6 lg:px-8">
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6 text-gray-900">
+                        <form @submit.prevent="submit">
+                            <!-- Modo por defecto -->
+                            <div class="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                                <label class="flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        v-model="form.catalog_use_default"
+                                        class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                    />
+                                    <span class="ml-3 text-sm font-medium text-gray-700">
+                                        Usar modo por defecto
+                                    </span>
+                                </label>
+                                <p class="mt-2 ml-8 text-xs text-gray-500">
+                                    Cuando está activado, se usarán los colores predeterminados del sistema.
+                                </p>
+                            </div>
+
+                            <!-- Plantillas de Productos -->
+                            <div class="mb-8 border-t pt-6">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">Plantilla de Lista de Productos</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <button
+                                        v-for="template in productTemplates"
+                                        :key="template.value"
+                                        type="button"
+                                        @click="form.catalog_product_template = template.value"
+                                        :class="[
+                                            'relative p-4 border-2 rounded-lg transition-all text-left',
+                                            form.catalog_product_template === template.value
+                                                ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
+                                                : 'border-gray-300 bg-white hover:border-gray-400'
+                                        ]"
+                                    >
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="font-semibold text-gray-800">{{ template.label }}</span>
+                                            <div v-if="form.catalog_product_template === template.value" class="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                                                <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <p class="text-xs text-gray-600 mb-3">{{ template.description }}</p>
+                                        <!-- Preview visual -->
+                                        <div class="mt-3 bg-gray-100 rounded p-2 h-24 overflow-hidden flex items-center justify-center">
+                                            <div v-if="template.value === 'big'" class="w-full space-y-1.5 px-1">
+                                                <div class="h-14 bg-blue-300 rounded"></div>
+                                                <div class="h-6 bg-blue-200 rounded"></div>
+                                            </div>
+                                            <div v-else-if="template.value === 'default'" class="grid grid-cols-3 gap-1 w-full px-1">
+                                                <div v-for="i in 9" :key="i" class="aspect-square bg-blue-300 rounded"></div>
+                                            </div>
+                                            <div v-else class="w-full space-y-1.5 px-1">
+                                                <div v-for="i in 3" :key="i" class="h-8 bg-blue-300 rounded flex items-center gap-1.5">
+                                                    <div class="w-6 h-6 bg-blue-400 rounded ml-1.5 flex-shrink-0"></div>
+                                                    <div class="flex-1 space-y-0.5 min-w-0">
+                                                        <div class="h-1.5 bg-blue-200 rounded w-3/4"></div>
+                                                        <div class="h-1.5 bg-blue-200 rounded w-1/2"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Estilos de Header -->
+                            <div class="mb-8 border-t pt-6">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">Estilo de Header</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <button
+                                        v-for="style in headerStyles"
+                                        :key="style.value"
+                                        type="button"
+                                        @click="form.catalog_header_style = style.value"
+                                        :class="[
+                                            'relative p-4 border-2 rounded-lg transition-all text-left',
+                                            form.catalog_header_style === style.value
+                                                ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
+                                                : 'border-gray-300 bg-white hover:border-gray-400'
+                                        ]"
+                                    >
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="font-semibold text-gray-800">{{ style.label }}</span>
+                                            <div v-if="form.catalog_header_style === style.value" class="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
+                                                <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <p class="text-xs text-gray-600">{{ style.description }}</p>
+                                        <!-- Preview visual -->
+                                        <div class="mt-3 bg-gray-100 rounded p-2">
+                                            <div v-if="style.value === 'default'" class="bg-blue-200 rounded p-2 flex items-center justify-between">
+                                                <div class="w-8 h-8 bg-blue-400 rounded"></div>
+                                                <div class="flex gap-1">
+                                                    <div class="w-4 h-4 bg-blue-400 rounded"></div>
+                                                    <div class="w-4 h-4 bg-blue-400 rounded"></div>
+                                                </div>
+                                            </div>
+                                            <div v-else-if="style.value === 'fit'" class="bg-blue-200 rounded p-2 flex items-center justify-between">
+                                                <div class="w-8 h-8 bg-blue-400 rounded"></div>
+                                                <div class="flex gap-1">
+                                                    <div class="w-4 h-4 bg-blue-400 rounded"></div>
+                                                    <div class="w-4 h-4 bg-blue-400 rounded"></div>
+                                                    <div class="w-4 h-4 bg-blue-400 rounded"></div>
+                                                </div>
+                                            </div>
+                                            <div v-else class="space-y-1">
+                                                <div class="bg-gray-800 rounded p-1 flex justify-end">
+                                                    <div class="w-4 h-4 bg-gray-400 rounded"></div>
+                                                </div>
+                                                <div class="bg-blue-200 rounded p-2 flex items-center justify-center">
+                                                    <div class="w-12 h-12 bg-blue-400 rounded"></div>
+                                                </div>
+                                                <div class="bg-blue-200 rounded p-1 flex items-center gap-1">
+                                                    <div class="w-4 h-4 bg-blue-400 rounded"></div>
+                                                    <div class="w-4 h-4 bg-blue-400 rounded"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Colores Granulares -->
+                            <div v-if="!form.catalog_use_default" class="mb-8 border-t pt-6">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">Editar Colores</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <template v-for="colorGroup in granularColors" :key="colorGroup.group">
+                                        <!-- Fondo -->
+                                        <div class="space-y-2">
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                                {{ colorGroup.bgLabel }}
+                                            </label>
+                                            <div class="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    v-model="form[colorGroup.bg]"
+                                                    class="h-12 w-16 rounded border-2 border-gray-300 cursor-pointer shadow-sm"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    v-model="form[colorGroup.bg]"
+                                                    class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                                                    placeholder="#FFFFFF"
+                                                />
+                                            </div>
+                                            <!-- Preview -->
+                                            <div class="p-3 rounded border border-gray-200" :style="{ backgroundColor: form[colorGroup.bg] }">
+                                                <div class="text-xs text-gray-500">Vista previa</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Texto -->
+                                        <div class="space-y-2">
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                                {{ colorGroup.textLabel }}
+                                            </label>
+                                            <div class="flex items-center gap-3">
+                                                <input
+                                                    type="color"
+                                                    v-model="form[colorGroup.text]"
+                                                    class="h-12 w-16 rounded border-2 border-gray-300 cursor-pointer shadow-sm"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    v-model="form[colorGroup.text]"
+                                                    class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                                                    placeholder="#000000"
+                                                />
+                                            </div>
+                                            <!-- Preview con fondo y texto -->
+                                            <div class="p-3 rounded border border-gray-200" :style="getColorPreviewStyle(form[colorGroup.bg], form[colorGroup.text])">
+                                                <div class="text-xs font-medium">Texto</div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Botones de acción -->
+                            <div class="mt-8 flex items-center justify-end gap-4 border-t pt-6">
+                                <button
+                                    type="button"
+                                    @click="showResetConfirm = true"
+                                    class="px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-md shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                >
+                                    Restablecer
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="form.reset()"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="showPreviewModal = true"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                >
+                                    Vista Previa
+                                </button>
+                                <button
+                                    type="submit"
+                                    :disabled="form.processing"
+                                    class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <span v-if="form.processing">Guardando...</span>
+                                    <span v-else>Guardar cambios</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </AuthenticatedLayout>
+
+    <!-- Modal de éxito -->
+    <AlertModal
+        :show="showSuccessModal"
+        type="success"
+        title="¡Cambios guardados!"
+        message="Tu personalización del catálogo se ha actualizado correctamente."
+        primary-text="Entendido"
+        @primary="showSuccessModal = false"
+        @close="showSuccessModal = false"
+    />
+
+    <!-- Modal de confirmación para restablecer -->
+    <Modal :show="showResetConfirm" @close="showResetConfirm = false" maxWidth="md">
+        <div class="p-6">
+            <div class="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6 text-red-600">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 text-center mb-2">
+                ¿Restablecer configuración?
+            </h3>
+            <p class="text-sm text-gray-600 text-center mb-6">
+                Esta acción restablecerá todos los valores de personalización a los valores por defecto del sistema. Esta acción no se puede deshacer.
+            </p>
+            <div class="flex items-center justify-center gap-3">
+                <button
+                    @click="showResetConfirm = false"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                    Cancelar
+                </button>
+                <button
+                    @click="resetToDefaults"
+                    class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                    Restablecer
+                </button>
+            </div>
+        </div>
+    </Modal>
+
+    <!-- Modal de vista previa -->
+    <Modal :show="showPreviewModal" @close="showPreviewModal = false" maxWidth="6xl">
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-bold text-gray-900">Vista Previa del Catálogo</h3>
+                <button
+                    @click="showPreviewModal = false"
+                    class="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                    aria-label="Cerrar"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6 text-gray-500">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Selector de vista -->
+            <div class="flex items-center justify-center gap-4 mb-6">
+                <button
+                    @click="previewMode = 'mobile'"
+                    :class="[
+                        'px-6 py-2 rounded-lg font-medium transition-colors',
+                        previewMode === 'mobile'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ]"
+                >
+                    📱 Móvil
+                </button>
+                <button
+                    @click="previewMode = 'desktop'"
+                    :class="[
+                        'px-6 py-2 rounded-lg font-medium transition-colors',
+                        previewMode === 'desktop'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ]"
+                >
+                    🖥️ Escritorio
+                </button>
+            </div>
+
+            <!-- Vista previa móvil -->
+            <div v-if="previewMode === 'mobile'" class="mx-auto bg-gray-100 rounded-2xl p-4" style="max-width: 375px;">
+                <div class="bg-white rounded-xl shadow-xl overflow-hidden" style="height: 600px;">
+                    <!-- Cinta de promoción (PRIMERO, antes del header) -->
+                    <div v-if="!form.catalog_use_default || form.catalog_promo_banner_color" class="relative overflow-hidden" :style="previewStyles.promo">
+                        <div class="flex whitespace-nowrap animate-scroll text-xs font-bold uppercase py-2.5 px-4">
+                            <span class="flex items-center gap-1 mx-2">🔥 Ofertas hasta 50% • Toca para ver ↗</span>
+                            <span class="flex items-center gap-1 mx-2">🔥 Ofertas hasta 50% • Toca para ver ↗</span>
+                            <span class="flex items-center gap-1 mx-2">🔥 Ofertas hasta 50% • Toca para ver ↗</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Header Default -->
+                    <div v-if="(previewStyles.headerStyle === 'default' || form.catalog_use_default) && previewStyles.headerStyle !== 'banner_logo' && previewStyles.headerStyle !== 'fit'" class="px-4 py-3 border-b flex items-center justify-between" :style="previewStyles.header">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-full bg-gray-300"></div>
+                            <span class="font-semibold text-sm">{{ props.store.name }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-6 h-6 rounded-full bg-gray-200"></div>
+                            <div class="w-6 h-6 rounded-full" :style="{ backgroundColor: previewStyles.button.backgroundColor }"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Header Fit -->
+                    <div v-else-if="previewStyles.headerStyle === 'fit'" class="px-4 py-2 border-b flex items-center justify-between" :style="previewStyles.header">
+                        <div class="w-6 h-6 rounded-full bg-gray-300"></div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-6 h-6 rounded-full bg-gray-200"></div>
+                            <div class="w-6 h-6 rounded-full" :style="{ backgroundColor: previewStyles.button.backgroundColor }"></div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-full bg-gray-300"></div>
+                            <span class="font-serif font-light text-xs tracking-wider">{{ props.store.name }}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Header Banner & Logo -->
+                    <template v-else-if="previewStyles.headerStyle === 'banner_logo'">
+                        <!-- Banner superior oscuro -->
+                        <div class="bg-gray-800 text-white py-2 px-4 flex justify-end items-center gap-2">
+                            <div class="w-5 h-5 rounded-full bg-gray-600"></div>
+                            <div class="w-5 h-5 rounded-full bg-gray-600"></div>
+                        </div>
+                        <!-- Área principal con logo centrado (con fondo personalizado) -->
+                        <div class="px-4 py-6 flex flex-col items-center gap-3" :style="previewStyles.header">
+                            <div class="w-16 h-16 rounded-full bg-gray-300 ring-2 ring-gray-200"></div>
+                            <span class="font-serif font-light text-xs tracking-wider" :style="{ color: previewStyles.header.color }">{{ props.store.name }}</span>
+                        </div>
+                        <!-- Barra de navegación inferior -->
+                        <div class="px-4 py-2 border-t flex items-center justify-between" :style="previewStyles.header">
+                            <div class="flex items-center gap-2">
+                                <div class="w-5 h-5 rounded-full bg-gray-200"></div>
+                                <div class="w-5 h-5 rounded-full bg-gray-200"></div>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <div class="w-5 h-5 rounded-full bg-gray-200"></div>
+                                <div class="w-5 h-5 rounded-full bg-gray-200"></div>
+                                <div class="w-5 h-5 rounded-full bg-gray-200"></div>
+                                <div class="w-5 h-5 rounded-full bg-gray-200"></div>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <!-- Body -->
+                    <div class="p-4 overflow-y-auto" :style="{ ...previewStyles.body, height: previewStyles.headerStyle === 'banner_logo' ? 'calc(600px - 180px)' : (previewStyles.headerStyle === 'fit' ? 'calc(600px - 80px)' : (form.catalog_promo_banner_color && !form.catalog_use_default ? 'calc(600px - 100px)' : 'calc(600px - 60px)')) }">
+                        
+                        <!-- Plantilla Big -->
+                        <div v-if="form.catalog_product_template === 'big'" class="space-y-4">
+                            <div v-for="i in 2" :key="i" class="border rounded-lg overflow-hidden">
+                                <div class="h-48 bg-gray-200"></div>
+                                <div class="p-4">
+                                    <div class="h-5 bg-gray-300 rounded mb-2"></div>
+                                    <div class="h-4 bg-gray-300 rounded w-3/4 mb-3"></div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="h-6 bg-gray-400 rounded w-24"></div>
+                                        <button class="px-5 py-2.5 rounded-lg text-sm font-bold" :style="previewStyles.button">
+                                            Comprar Ahora
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Plantilla Default -->
+                        <div v-else-if="form.catalog_product_template === 'default'" class="grid grid-cols-2 gap-3">
+                            <div v-for="i in 6" :key="i" class="border rounded-lg overflow-hidden">
+                                <div class="h-32 bg-gray-200"></div>
+                                <div class="p-2">
+                                    <div class="h-3 bg-gray-300 rounded mb-1.5"></div>
+                                    <div class="h-3 bg-gray-300 rounded w-2/3 mb-2"></div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="h-4 bg-gray-400 rounded w-16"></div>
+                                        <button class="px-3 py-1.5 rounded text-xs font-semibold" :style="previewStyles.button">
+                                            Ver
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Plantilla Full Text -->
+                        <div v-else class="space-y-3">
+                            <div v-for="i in 3" :key="i" class="flex gap-3 border rounded-lg p-3">
+                                <div class="w-20 h-20 rounded-lg bg-gray-200 flex-shrink-0"></div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="h-4 bg-gray-300 rounded mb-2"></div>
+                                    <div class="h-3 bg-gray-300 rounded w-full mb-1"></div>
+                                    <div class="h-3 bg-gray-300 rounded w-3/4 mb-3"></div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="h-4 bg-gray-400 rounded w-20"></div>
+                                        <button class="px-3 py-1.5 rounded text-xs font-semibold" :style="previewStyles.button">
+                                            Ver Detalles
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vista previa escritorio -->
+            <div v-if="previewMode === 'desktop'" class="mx-auto bg-gray-100 rounded-lg p-4">
+                <div class="bg-white rounded-lg shadow-xl overflow-hidden" style="height: 500px;">
+                    <!-- Cinta de promoción (PRIMERO, antes del header) -->
+                    <div v-if="!form.catalog_use_default || form.catalog_promo_banner_color" class="relative overflow-hidden" :style="previewStyles.promo">
+                        <div class="flex whitespace-nowrap animate-scroll text-sm font-bold uppercase py-3 px-6">
+                            <span class="flex items-center gap-2 mx-4">🔥 Ofertas hasta 50% • Toca para ver ↗</span>
+                            <span class="flex items-center gap-2 mx-4">🔥 Ofertas hasta 50% • Toca para ver ↗</span>
+                            <span class="flex items-center gap-2 mx-4">🔥 Ofertas hasta 50% • Toca para ver ↗</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Header Default -->
+                    <div v-if="(previewStyles.headerStyle === 'default' || form.catalog_use_default) && previewStyles.headerStyle !== 'banner_logo' && previewStyles.headerStyle !== 'fit'" class="px-6 py-4 border-b flex items-center justify-between" :style="previewStyles.header">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-gray-300"></div>
+                            <span class="font-semibold">{{ props.store.name }}</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-gray-200"></div>
+                            <div class="w-8 h-8 rounded-full" :style="{ backgroundColor: previewStyles.button.backgroundColor }"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Header Fit -->
+                    <div v-else-if="previewStyles.headerStyle === 'fit'" class="px-6 py-3 border-b flex items-center justify-between" :style="previewStyles.header">
+                        <div class="w-8 h-8 rounded-full bg-gray-300"></div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-gray-200"></div>
+                            <div class="w-8 h-8 rounded-full" :style="{ backgroundColor: previewStyles.button.backgroundColor }"></div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-10 h-10 rounded-full bg-gray-300"></div>
+                            <span class="font-serif font-light text-sm tracking-wider">{{ props.store.name }}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Header Banner & Logo -->
+                    <template v-else-if="previewStyles.headerStyle === 'banner_logo'">
+                        <!-- Banner superior oscuro -->
+                        <div class="bg-gray-800 text-white py-2 px-6 flex justify-end items-center gap-3">
+                            <div class="w-6 h-6 rounded-full bg-gray-600"></div>
+                            <div class="w-6 h-6 rounded-full bg-gray-600"></div>
+                        </div>
+                        <!-- Área principal con logo centrado (con fondo personalizado) -->
+                        <div class="px-6 py-6 flex flex-col items-center gap-3" :style="previewStyles.header">
+                            <div class="w-20 h-20 rounded-full bg-gray-300 ring-2 ring-gray-200"></div>
+                            <span class="font-serif font-light text-base tracking-wider" :style="{ color: previewStyles.header.color }">{{ props.store.name }}</span>
+                        </div>
+                        <!-- Barra de navegación inferior -->
+                        <div class="px-6 py-3 border-t flex items-center justify-between" :style="previewStyles.header">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-gray-200"></div>
+                                <div class="w-8 h-8 rounded-full bg-gray-200"></div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-7 h-7 rounded-full bg-gray-200"></div>
+                                <div class="w-7 h-7 rounded-full bg-gray-200"></div>
+                                <div class="w-7 h-7 rounded-full bg-gray-200"></div>
+                                <div class="w-7 h-7 rounded-full bg-gray-200"></div>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <!-- Body -->
+                    <div class="p-6 overflow-y-auto" :style="{ ...previewStyles.body, height: previewStyles.headerStyle === 'banner_logo' ? 'calc(500px - 220px)' : (previewStyles.headerStyle === 'fit' ? 'calc(500px - 100px)' : (form.catalog_promo_banner_color && !form.catalog_use_default ? 'calc(500px - 120px)' : 'calc(500px - 80px)')) }">
+                        
+                        <!-- Plantilla Big -->
+                        <div v-if="form.catalog_product_template === 'big'" class="grid grid-cols-2 gap-6">
+                            <div v-for="i in 2" :key="i" class="border rounded-lg overflow-hidden">
+                                <div class="h-56 bg-gray-200"></div>
+                                <div class="p-5">
+                                    <div class="h-5 bg-gray-300 rounded mb-2"></div>
+                                    <div class="h-4 bg-gray-300 rounded w-3/4 mb-4"></div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="h-6 bg-gray-400 rounded w-28"></div>
+                                        <button class="px-6 py-3 rounded-lg text-sm font-bold" :style="previewStyles.button">
+                                            Comprar Ahora
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Plantilla Default -->
+                        <div v-else-if="form.catalog_product_template === 'default'" class="grid grid-cols-3 gap-4">
+                            <div v-for="i in 6" :key="i" class="border rounded-lg overflow-hidden">
+                                <div class="h-40 bg-gray-200"></div>
+                                <div class="p-4">
+                                    <div class="h-4 bg-gray-300 rounded mb-2"></div>
+                                    <div class="h-4 bg-gray-300 rounded w-2/3 mb-3"></div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="h-5 bg-gray-400 rounded w-24"></div>
+                                        <button class="px-4 py-2 rounded-lg text-sm font-semibold" :style="previewStyles.button">
+                                            Ver Detalles
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Plantilla Full Text -->
+                        <div v-else class="space-y-4">
+                            <div v-for="i in 4" :key="i" class="flex gap-4 border rounded-lg p-4">
+                                <div class="w-32 h-32 rounded-lg bg-gray-200 flex-shrink-0"></div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="h-5 bg-gray-300 rounded mb-2"></div>
+                                    <div class="h-4 bg-gray-300 rounded w-full mb-1"></div>
+                                    <div class="h-4 bg-gray-300 rounded w-3/4 mb-4"></div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="h-5 bg-gray-400 rounded w-24"></div>
+                                        <button class="px-4 py-2 rounded-lg text-sm font-semibold" :style="previewStyles.button">
+                                            Ver Detalles
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </Modal>
+</template>

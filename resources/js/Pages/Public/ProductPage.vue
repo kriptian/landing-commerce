@@ -19,6 +19,120 @@ import { ref as vref } from 'vue';
 const showVariantAlert = vref(false);
 const toast = useToast();
 
+// Colores personalizados del catálogo
+const catalogUseDefault = computed(() => props.store?.catalog_use_default ?? true);
+const buttonBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_button_bg_color || '#2563EB';
+});
+const buttonTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_button_text_color || '#FFFFFF';
+});
+const bodyBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_body_bg_color || '#FFFFFF';
+});
+const bodyTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_body_text_color || '#1F2937';
+});
+const inputBgColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_input_bg_color || '#FFFFFF';
+});
+const inputTextColor = computed(() => {
+    if (catalogUseDefault.value) return null;
+    return props.store?.catalog_input_text_color || '#1F2937';
+});
+// Estilos dinámicos para botones - usando colores granulares
+const buttonStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value,
+        color: buttonTextColor.value,
+    };
+});
+
+const variantButtonStyle = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value,
+        color: buttonTextColor.value,
+        borderColor: buttonBgColor.value,
+    };
+});
+
+const variantButtonSelectedStyle = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value,
+        color: buttonTextColor.value,
+        borderColor: buttonBgColor.value,
+    };
+});
+
+const purchaseButtonStyle = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value,
+        color: buttonTextColor.value,
+    };
+});
+
+const purchaseButtonSecondaryStyle = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value + '30',
+        color: buttonBgColor.value,
+        borderColor: buttonBgColor.value + '50',
+    };
+});
+
+// Usar los colores de botones para las burbujas flotantes
+const cartBubbleStyle = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value + '70',
+        ringColor: buttonBgColor.value + '50',
+        color: buttonTextColor.value,
+    };
+});
+
+const socialButtonStyle = computed(() => {
+    if (catalogUseDefault.value) return {};
+    if (!buttonBgColor.value || !buttonTextColor.value) return {};
+    return {
+        backgroundColor: buttonBgColor.value + '70',
+        ringColor: buttonBgColor.value + '50',
+        color: buttonTextColor.value,
+    };
+});
+
+const bodyStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {}; // Modo por defecto: no aplicar estilos personalizados
+    if (!bodyBgColor.value || !bodyTextColor.value) return {};
+    return {
+        backgroundColor: bodyBgColor.value,
+        color: bodyTextColor.value,
+    };
+});
+
+const inputStyleObj = computed(() => {
+    if (catalogUseDefault.value) return {}; // Modo por defecto: no aplicar estilos personalizados
+    if (!inputBgColor.value || !inputTextColor.value) return {};
+    return {
+        backgroundColor: inputBgColor.value,
+        color: inputTextColor.value,
+    };
+});
+
 // Usar variant_options si está disponible, sino usar variants (sistema antiguo)
 const hasVariantOptions = computed(() => {
     return props.product.variant_options && Array.isArray(props.product.variant_options) && props.product.variant_options.length > 0;
@@ -703,7 +817,7 @@ const getVariantDisplayPrices = (variant) => {
             </div>
         </nav>
     </header>
-    <main class="container mx-auto px-6 py-12">
+    <main class="container mx-auto px-6 py-12 min-h-screen" :style="bodyStyleObj">
         
         
         <section class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-start">
@@ -757,12 +871,12 @@ const getVariantDisplayPrices = (variant) => {
                                     v-for="value in getValuesForKey(key)"
                                     :key="`${key}:${value}`"
                                     type="button"
-                                    class="px-3 py-1 rounded border"
+                                    class="px-3 py-1 rounded border transition-all"
                                     :class="{
-                                        'bg-blue-600 text-white border-blue-700': selectedOptions[key] === value,
-                                        'bg-white text-gray-800 border-gray-300 hover:bg-gray-50': selectedOptions[key] !== value && isOptionAllowed(key, value),
+                                        'bg-white text-gray-800 border-gray-300 hover:bg-gray-50': selectedOptions[key] !== value && isOptionAllowed(key, value) && catalogUseDefault,
                                         'bg-gray-100 text-gray-400 border-gray-200 opacity-50 cursor-not-allowed': !isOptionAllowed(key, value) || (isInventoryTracked && (computeStockForValue(key, value) === 0))
                                     }"
+                                    :style="selectedOptions[key] === value && variantButtonSelectedStyle ? variantButtonSelectedStyle : (selectedOptions[key] !== value && !catalogUseDefault && isOptionAllowed(key, value) && buttonBgColor ? { borderColor: buttonBgColor, color: buttonBgColor } : {})"
                                     :disabled="!isOptionAllowed(key, value) || (isInventoryTracked && (computeStockForValue(key, value) === 0))"
                                     @click="isOptionAllowed(key, value) ? selectOption(key, value) : null"
                                 >
@@ -780,7 +894,7 @@ const getVariantDisplayPrices = (variant) => {
                         <label class="font-semibold">Cantidad:</label>
                         <div class="flex items-center gap-2">
                             <button type="button" @click="decreaseQuantity" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">−</button>
-                            <input type="number" v-model.number="selectedQuantity" :min="1" :max="isFinite(displayStock) ? displayStock : undefined" class="w-16 h-9 text-center border rounded-md" />
+                            <input type="number" v-model.number="selectedQuantity" :min="1" :max="isFinite(displayStock) ? displayStock : undefined" class="w-16 h-9 text-center border rounded-md" :style="inputStyleObj" />
                             <button type="button" @click="increaseQuantity" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800">＋</button>
                         </div>
                 <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked" class="ml-2 text-xs md:text-sm text-gray-600 whitespace-nowrap shrink-0">{{ isFinite(displayStock) ? displayStock : '∞' }} en stock</p>
@@ -789,14 +903,20 @@ const getVariantDisplayPrices = (variant) => {
                     <button 
                         @click="addToCart"
                         :disabled="((hasVariantOptions || product.variants.length > 0) && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
-                        class="w-full mt-6 bg-blue-600/30 backdrop-blur-sm text-blue-700 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-300 disabled:text-gray-500 enabled:hover:bg-blue-600/40 border-2 border-blue-600/50">
+                        class="w-full mt-6 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-300 disabled:text-gray-500"
+                        :class="catalogUseDefault ? 'bg-blue-600/30 backdrop-blur-sm text-blue-700 enabled:hover:bg-blue-600/40 border-2 border-blue-600/50' : 'text-white border-2'"
+                        :style="!catalogUseDefault && !((hasVariantOptions || product.variants.length > 0) && !selectedVariant) && !(isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock)) ? purchaseButtonSecondaryStyle : {}"
+                    >
                         {{ (hasVariantOptions || product.variants.length > 0) && !selectedVariant ? 'Selecciona opciones' : (isInventoryTracked ? (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') : 'Agregar al Carrito') }}
                     </button>
                     
                     <button 
                         @click="buyNow"
                         :disabled="((hasVariantOptions || product.variants.length > 0) && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
-                        class="w-full mt-3 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:bg-blue-700 buy-now-button">
+                        class="w-full mt-3 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:opacity-90 buy-now-button"
+                        :class="catalogUseDefault ? 'bg-blue-600 text-white enabled:hover:bg-blue-700' : 'text-white'"
+                        :style="!catalogUseDefault && !((hasVariantOptions || product.variants.length > 0) && !selectedVariant) && !(isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock)) ? purchaseButtonStyle : {}"
+                    >
                         Comprar Ahora
                     </button>
                 </div>
@@ -908,7 +1028,14 @@ const getVariantDisplayPrices = (variant) => {
             </div>
             <div class="flex justify-end gap-2 px-4 py-3 border-t sticky bottom-0 bg-white">
                 <button class="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200" @click="showVariantsModal = false">Cerrar</button>
-                <button class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700" @click="showVariantsModal = false">Aplicar</button>
+                <button 
+                    class="px-4 py-2 rounded text-white transition-colors"
+                    :class="catalogUseDefault ? 'bg-blue-600 hover:bg-blue-700' : ''"
+                    :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}"
+                    @click="showVariantsModal = false"
+                >
+                    Aplicar
+                </button>
             </div>
         </div>
     </div>
@@ -926,7 +1053,7 @@ const getVariantDisplayPrices = (variant) => {
                     </a>
                 </div>
             </transition>
-            <button @click="showSocialFab = !showSocialFab" class="w-12 h-12 rounded-full bg-blue-600/70 backdrop-blur ring-1 ring-blue-500/50 text-white flex items-center justify-center shadow-2xl active:scale-95 transition-transform duration-300" :class="{ 'scale-95': showSocialFab }">
+            <button @click="showSocialFab = !showSocialFab" class="w-12 h-12 rounded-full backdrop-blur ring-1 text-white flex items-center justify-center shadow-2xl active:scale-95 transition-transform duration-300" :class="[catalogUseDefault ? 'bg-blue-600/70 ring-blue-500/50' : '', { 'scale-95': showSocialFab }]" :style="socialButtonStyle">
                 <svg v-if="!showSocialFab" class="w-6 h-6 transition-opacity duration-200" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2c-3.18-.35-6.2-1.63-8.82-3.68a19.86 19.86 0 0 1-6.24-6.24C2.7 9.38 1.42 6.36 1.07 3.18A2 2 0 0 1 3.06 1h3a2 2 0 0 1 2 1.72c.09.74.25 1.46.46 2.16a2 2 0 0 1-.45 2.06L7.5 8.5a16 16 0 0 0 8 8l1.56-1.57a2 2 0 0 1 2.06-.45c.7.21 1.42.37 2.16.46A2 2 0 0 1 22 16.92z"/>
                 </svg>
@@ -937,7 +1064,7 @@ const getVariantDisplayPrices = (variant) => {
 
     <!-- FAB Carrito (móvil y desktop) -->
     <div class="fixed bottom-6 right-6 z-50">
-        <Link :href="route('cart.index', { store: store.slug })" class="relative w-12 h-12 rounded-full bg-blue-600/70 backdrop-blur ring-1 ring-blue-500/50 text-white flex items-center justify-center shadow-2xl active:scale-95">
+        <Link :href="route('cart.index', { store: store.slug })" class="relative w-12 h-12 rounded-full backdrop-blur text-white flex items-center justify-center shadow-2xl active:scale-95 ring-1" :class="catalogUseDefault ? 'bg-blue-600/70 ring-blue-500/50' : ''" :style="cartBubbleStyle">
             <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/></svg>
             <span v-if="$page.props.cart.count > 0" class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
                 {{ $page.props.cart.count }}

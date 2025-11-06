@@ -71,7 +71,38 @@ class CartController extends Controller
 
             return Inertia::render('Public/CartPage', [
                 'cartItems' => $cartItems,
-                'store' => $store,
+                'store' => [
+                    'id' => $store->id,
+                    'name' => $store->name,
+                    'logo_url' => $store->logo_url,
+                    'slug' => $store->slug,
+                    'phone' => $store->phone,
+                    'facebook_url' => $store->facebook_url,
+                    'instagram_url' => $store->instagram_url,
+                    'tiktok_url' => $store->tiktok_url,
+                    'promo_active' => $store->promo_active,
+                    'promo_discount_percent' => $store->promo_discount_percent,
+                    'catalog_use_default' => $store->catalog_use_default ?? true,
+                    'catalog_button_color' => $store->catalog_button_color ?? '#1F2937',
+                    'catalog_promo_banner_color' => $store->catalog_promo_banner_color ?? '#DC2626',
+                    'catalog_promo_banner_text_color' => $store->catalog_promo_banner_text_color ?? '#FFFFFF',
+                    'catalog_variant_button_color' => $store->catalog_variant_button_color ?? '#2563EB',
+                    'catalog_purchase_button_color' => $store->catalog_purchase_button_color ?? '#2563EB',
+                    'catalog_cart_bubble_color' => $store->catalog_cart_bubble_color ?? '#2563EB',
+                    'catalog_social_button_color' => $store->catalog_social_button_color ?? '#2563EB',
+                'catalog_logo_position' => $store->catalog_logo_position ?? 'center',
+                'catalog_menu_type' => $store->catalog_menu_type ?? 'hamburger',
+                'catalog_product_template' => $store->catalog_product_template ?? 'default',
+                'catalog_header_style' => $store->catalog_header_style ?? 'default',
+                'catalog_header_bg_color' => $store->catalog_header_bg_color ?? '#FFFFFF',
+                'catalog_header_text_color' => $store->catalog_header_text_color ?? '#1F2937',
+                'catalog_button_bg_color' => $store->catalog_button_bg_color ?? '#2563EB',
+                'catalog_button_text_color' => $store->catalog_button_text_color ?? '#FFFFFF',
+                'catalog_body_bg_color' => $store->catalog_body_bg_color ?? '#FFFFFF',
+                'catalog_body_text_color' => $store->catalog_body_text_color ?? '#1F2937',
+                'catalog_input_bg_color' => $store->catalog_input_bg_color ?? '#FFFFFF',
+                'catalog_input_text_color' => $store->catalog_input_text_color ?? '#1F2937',
+            ],
             ]);
         }
 
@@ -123,9 +154,31 @@ class CartController extends Controller
             ];
         }
 
+        $freshStore = $store->fresh();
         return Inertia::render('Public/CartPage', [
             'cartItems' => $items,
-            'store' => $store->fresh(),
+            'store' => [
+                'id' => $freshStore->id,
+                'name' => $freshStore->name,
+                'logo_url' => $freshStore->logo_url,
+                'slug' => $freshStore->slug,
+                'phone' => $freshStore->phone,
+                'facebook_url' => $freshStore->facebook_url,
+                'instagram_url' => $freshStore->instagram_url,
+                'tiktok_url' => $freshStore->tiktok_url,
+                'promo_active' => $freshStore->promo_active,
+                'promo_discount_percent' => $freshStore->promo_discount_percent,
+                'catalog_use_default' => $freshStore->catalog_use_default ?? true,
+                'catalog_button_color' => $freshStore->catalog_button_color ?? '#1F2937',
+                'catalog_promo_banner_color' => $freshStore->catalog_promo_banner_color ?? '#DC2626',
+                'catalog_promo_banner_text_color' => $freshStore->catalog_promo_banner_text_color ?? '#FFFFFF',
+                'catalog_variant_button_color' => $freshStore->catalog_variant_button_color ?? '#2563EB',
+                'catalog_purchase_button_color' => $freshStore->catalog_purchase_button_color ?? '#2563EB',
+                'catalog_cart_bubble_color' => $freshStore->catalog_cart_bubble_color ?? '#2563EB',
+                'catalog_social_button_color' => $freshStore->catalog_social_button_color ?? '#2563EB',
+                'catalog_logo_position' => $freshStore->catalog_logo_position ?? 'center',
+                'catalog_menu_type' => $freshStore->catalog_menu_type ?? 'hamburger',
+            ],
         ]);
     }
 
