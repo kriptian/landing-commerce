@@ -40,7 +40,7 @@ class ProductController extends Controller
             }
         }
 
-        $products = $query->get();
+        $products = $query->paginate(15)->withQueryString();
 
         return Inertia::render('Products/Index', [
             'products' => $products,

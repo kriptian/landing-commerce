@@ -94,9 +94,13 @@ const hydratePath = async () => {
         if (i > 0 && levels.value[i].options.length === 0) {
             const prevSelectedId = levels.value[i-1].selected;
             if (prevSelectedId) {
-                const res = await fetch(route('admin.categories.children', prevSelectedId));
-                const json = await res.json();
-                levels.value[i].options = Array.isArray(json.data) ? json.data : [];
+                try {
+                    const response = await window.axios.get(route('admin.categories.children', prevSelectedId));
+                    levels.value[i].options = Array.isArray(response.data?.data) ? response.data.data : [];
+                } catch (error) {
+                    console.error('Error cargando categorías hijas:', error);
+                    levels.value[i].options = [];
+                }
             }
         }
         // Establecer selección del nivel i
@@ -110,11 +114,14 @@ const hydratePath = async () => {
     // Finalmente, ofrecer hijos del último seleccionado
     const lastId = form.category_id;
     if (lastId) {
-        const res = await fetch(route('admin.categories.children', lastId));
-        const json = await res.json();
-        const children = Array.isArray(json.data) ? json.data : [];
-        if (children.length > 0) {
-            levels.value.push({ options: children, selected: null });
+        try {
+            const response = await window.axios.get(route('admin.categories.children', lastId));
+            const children = Array.isArray(response.data?.data) ? response.data.data : [];
+            if (children.length > 0) {
+                levels.value.push({ options: children, selected: null });
+            }
+        } catch (error) {
+            console.error('Error cargando categorías hijas:', error);
         }
     }
 };
@@ -127,14 +134,16 @@ const onSelectAtLevel = async (levelIndex) => {
     removeDeeperLevels(levelIndex);
     form.category_id = selectedId || null;
     if (!selectedId) return;
-    const res = await fetch(route('admin.categories.children', selectedId));
-    if (!res.ok) return;
-    const json = await res.json();
-    const children = Array.isArray(json.data) ? json.data : [];
-    if (children.length > 0) {
-        levels.value.push({ options: children, selected: null });
-        // Limpiar category_id para forzar selección de subcategoría
-        form.category_id = null;
+    try {
+        const response = await window.axios.get(route('admin.categories.children', selectedId));
+        const children = Array.isArray(response.data?.data) ? response.data.data : [];
+        if (children.length > 0) {
+            levels.value.push({ options: children, selected: null });
+            // Limpiar category_id para forzar selección de subcategoría
+            form.category_id = null;
+        }
+    } catch (error) {
+        console.error('Error cargando categorías hijas:', error);
     }
 };
 // --- FIN Selects en cascada ---

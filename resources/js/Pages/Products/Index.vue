@@ -7,10 +7,11 @@ import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import AlertModal from '@/Components/AlertModal.vue';
+import Pagination from '@/Components/Pagination.vue';
 // ---------------------------------------------
 
 const props = defineProps({
-    products: Array,
+    products: Object,
     categories: Array,
     store: Object,
     filters: Object,
@@ -62,7 +63,15 @@ const updateStorePromoPercent = (val) => {
     router.put(route('admin.products.store_promo'), { promo_active: true, promo_discount_percent: pct }, { preserveScroll: true });
 };
 const applyFilters = () => {
-    router.get(route('admin.products.index'), { search: search.value, category: selectedCategory.value, status: selectedStatus.value }, { preserveState: true, replace: true, preserveScroll: true });
+    router.get(route('admin.products.index'), { 
+        search: search.value, 
+        category: selectedCategory.value, 
+        status: selectedStatus.value 
+    }, { 
+        preserveState: true, 
+        replace: true, 
+        preserveScroll: true 
+    });
 };
 // ---------------------------------------------
 
@@ -184,10 +193,10 @@ const startResize = (e) => {
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-if="products.length === 0">
-                                        <td colspan="6" class="px-3 py-3 sm:px-6 sm:py-4 text-center text-gray-500">No hay productos creados.</td>
+                                    <tr v-if="!products.data || products.data.length === 0">
+                                        <td colspan="7" class="px-3 py-3 sm:px-6 sm:py-4 text-center text-gray-500">No hay productos creados.</td>
                                     </tr>
-                                    <tr v-for="(product, idx) in products" :key="product.id" class="odd:bg-white even:bg-gray-100">
+                                    <tr v-for="(product, idx) in products.data" :key="product.id" class="odd:bg-white even:bg-gray-100">
                                         <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap border-r truncate" :style="firstColStyle" :title="product.name" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">
                                             <span>{{ product.name }}</span>
                                             <span v-if="!product.is_active" class="ml-2 inline-flex items-center rounded bg-gray-200 text-gray-700 text-xs font-semibold px-2 py-0.5">Inactivo</span>
@@ -223,6 +232,11 @@ const startResize = (e) => {
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- Paginación -->
+                        <div v-if="products && products.links" class="mt-6">
+                            <Pagination :links="products.links" />
                         </div>
 
                     </div>

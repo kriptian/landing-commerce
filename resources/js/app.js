@@ -41,12 +41,18 @@ createInertiaApp({
         // --- 2. AQUÍ REGISTRAMOS EL COMPONENTE ---
         app.component('ProductGallery', ProductGallery);
 
-        // Mantenemos los redireccionamientos simples para 401/403 (las páginas pueden mostrar AlertModal locales)
+        // Mantenemos los redireccionamientos simples para 401/403/419 (las páginas pueden mostrar AlertModal locales)
         if (window.axios) {
             window.axios.interceptors.response.use(
                 (response) => response,
                 (error) => {
                     const status = error?.response?.status;
+                    // Error 419: CSRF token mismatch - recargar la página para obtener nuevo token
+                    if (status === 419) {
+                        console.warn('CSRF token expirado, recargando página...');
+                        window.location.reload();
+                        return Promise.resolve();
+                    }
                     if (status === 403) {
                         try { window.location.href = route('dashboard'); } catch (e) { window.location.href = '/'; }
                         return Promise.resolve();

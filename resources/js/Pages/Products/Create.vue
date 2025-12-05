@@ -180,15 +180,17 @@ const onSelectAtLevel = async (levelIndex) => {
     form.category_id = selectedId; // por defecto, si no hay hijos, esto será la categoría elegida
     if (!selectedId) return;
     // Cargar hijos
-    const res = await fetch(route('admin.categories.children', selectedId));
-    if (!res.ok) return;
-    const json = await res.json();
-    const children = Array.isArray(json.data) ? json.data : [];
-    if (children.length > 0) {
-        // Añadir nuevo nivel con los hijos
-        levels.value.push({ options: children, selected: null });
-        // Limpiar category_id para forzar selección de subcategoría
-        form.category_id = null;
+    try {
+        const response = await window.axios.get(route('admin.categories.children', selectedId));
+        const children = Array.isArray(response.data?.data) ? response.data.data : [];
+        if (children.length > 0) {
+            // Añadir nuevo nivel con los hijos
+            levels.value.push({ options: children, selected: null });
+            // Limpiar category_id para forzar selección de subcategoría
+            form.category_id = null;
+        }
+    } catch (error) {
+        console.error('Error cargando categorías hijas:', error);
     }
 };
 // --- FIN Selects en cascada ---

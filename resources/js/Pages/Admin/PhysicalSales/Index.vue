@@ -206,9 +206,10 @@ const searchProducts = async () => {
 
     isSearching.value = true;
     try {
-        const response = await fetch(route('admin.physical-sales.search-products') + '?q=' + encodeURIComponent(searchQuery.value));
-        const data = await response.json();
-        searchResults.value = data.products || [];
+        const response = await window.axios.get(route('admin.physical-sales.search-products'), {
+            params: { q: searchQuery.value }
+        });
+        searchResults.value = response.data?.products || [];
     } catch (error) {
         console.error('Error buscando productos:', error);
         searchResults.value = [];
@@ -222,11 +223,12 @@ const searchByBarcode = async (barcode) => {
     if (!barcode.trim()) return;
 
     try {
-        const response = await fetch(route('admin.physical-sales.get-product-by-barcode') + '?barcode=' + encodeURIComponent(barcode));
-        const data = await response.json();
+        const response = await window.axios.get(route('admin.physical-sales.get-product-by-barcode'), {
+            params: { barcode: barcode }
+        });
         
-        if (data.product) {
-            addToCart(data.product);
+        if (response.data?.product) {
+            addToCart(response.data.product);
             barcodeInput.value = '';
         } else {
             alert('Producto no encontrado con ese código de barras');
