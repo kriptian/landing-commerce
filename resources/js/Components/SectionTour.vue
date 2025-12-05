@@ -374,71 +374,83 @@ const skipTour = () => {
 };
 
 const remindLater = async () => {
+  // Cerrar el tour inmediatamente para evitar errores
+  showTour.value = false;
+  emit('complete');
+  
   try {
     await router.post(route('tour.remind-later'), {
       section: props.section
     }, {
       preserveScroll: true,
-      onSuccess: () => {
-        showTour.value = false;
-        emit('complete');
-      },
+      preserveState: true,
+      only: [],
       onError: (errors) => {
-        console.error('Error al programar recordatorio:', errors);
-        showTour.value = false;
-        emit('complete');
+        // Si hay error 419, recargar la página para obtener nuevo token
+        if (errors && (errors.status === 419 || errors.response?.status === 419)) {
+          window.location.reload();
+        }
       }
     });
   } catch (error) {
-    console.error('Error al programar recordatorio:', error);
-    showTour.value = false;
-    emit('complete');
+    // Si hay error 419, recargar la página para obtener nuevo token
+    if (error?.response?.status === 419 || error?.status === 419) {
+      window.location.reload();
+    }
   }
 };
 
 const neverShowAgain = async () => {
+  // Cerrar el tour inmediatamente para evitar errores
+  showTour.value = false;
+  emit('complete');
+  
   try {
     await router.post(route('tour.never-show'), {
       section: props.section
     }, {
       preserveScroll: true,
-      onSuccess: () => {
-        showTour.value = false;
-        emit('complete');
-      },
+      preserveState: true,
+      only: [],
       onError: (errors) => {
-        console.error('Error al desactivar tour:', errors);
-        showTour.value = false;
-        emit('complete');
+        // Si hay error 419, recargar la página para obtener nuevo token
+        if (errors && (errors.status === 419 || errors.response?.status === 419)) {
+          window.location.reload();
+        }
       }
     });
   } catch (error) {
-    console.error('Error al desactivar tour:', error);
-    showTour.value = false;
-    emit('complete');
+    // Si hay error 419, recargar la página para obtener nuevo token
+    if (error?.response?.status === 419 || error?.status === 419) {
+      window.location.reload();
+    }
   }
 };
 
 const completeTour = async () => {
+  // Cerrar el tour inmediatamente para evitar errores
+  showTour.value = false;
+  emit('complete');
+  
   try {
     await router.post(route('tour.complete'), {
       section: props.section
     }, {
       preserveScroll: true,
-      onSuccess: () => {
-        showTour.value = false;
-        emit('complete');
-      },
+      preserveState: true,
+      only: [],
       onError: (errors) => {
-        console.error('Error completing tour:', errors);
-        showTour.value = false;
-        emit('complete');
+        // Si hay error 419, recargar la página para obtener nuevo token
+        if (errors && (errors.status === 419 || errors.response?.status === 419)) {
+          window.location.reload();
+        }
       }
     });
   } catch (error) {
-    console.error('Error completing tour:', error);
-    showTour.value = false;
-    emit('complete');
+    // Si hay error 419, recargar la página para obtener nuevo token
+    if (error?.response?.status === 419 || error?.status === 419) {
+      window.location.reload();
+    }
   }
 };
 
