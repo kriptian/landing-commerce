@@ -23,6 +23,7 @@ use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
+use App\Http\Controllers\Admin\PhysicalSaleController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
@@ -134,6 +135,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('categories/{category}/children', [CategoryController::class, 'children'])->name('categories.children');
         Route::resource('products', AdminProductController::class);
         Route::put('products-store/promo', [AdminProductController::class, 'updateStorePromo'])->name('products.store_promo');
+        
+        // Ventas físicas
+        Route::get('physical-sales', [PhysicalSaleController::class, 'index'])->name('physical-sales.index');
+        Route::get('physical-sales/search-products', [PhysicalSaleController::class, 'searchProducts'])->name('physical-sales.search-products');
+        Route::get('physical-sales/get-product-by-barcode', [PhysicalSaleController::class, 'getProductByBarcode'])->name('physical-sales.get-product-by-barcode');
+        Route::post('physical-sales', [PhysicalSaleController::class, 'store'])->name('physical-sales.store');
+        Route::get('physical-sales/{physicalSale}', [PhysicalSaleController::class, 'show'])->name('physical-sales.show');
+        Route::get('physical-sales/export/excel', [PhysicalSaleController::class, 'export'])->name('physical-sales.export');
 
         // ===== RUTAS AVANZADAS (solo plan negociantes) =====
         Route::middleware('plan:negociante')->group(function () {

@@ -100,6 +100,14 @@ class Store extends Model
     }
 
     /**
+     * Una tienda tiene muchas ventas físicas.
+     */
+    public function physicalSales()
+    {
+        return $this->hasMany(\App\Models\PhysicalSale::class);
+    }
+
+    /**
      * Devuelve el logo de la tienda o, si no existe, el logo principal de la app.
      */
     protected function logoUrl(): Attribute

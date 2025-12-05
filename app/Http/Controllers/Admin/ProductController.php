@@ -83,6 +83,7 @@ class ProductController extends Controller
         // ===== 1. VALIDACIÓN: inventario + nuevos campos de precios =====
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'barcode' => 'nullable|string|max:255',
             'price' => 'required|numeric|min:0',
             'purchase_price' => 'nullable|numeric|min:0',
             // precios retirados de UI, pero mantenemos validación por compatibilidad antigua
@@ -386,6 +387,7 @@ class ProductController extends Controller
         // ===== 3. VALIDACIÓN EN UPDATE: inventario + nuevos precios =====
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'barcode' => 'nullable|string|max:255',
             'price' => 'required|numeric|min:0',
             'purchase_price' => 'sometimes|nullable|numeric|min:0',
             'wholesale_price' => 'sometimes|nullable|numeric|min:0',

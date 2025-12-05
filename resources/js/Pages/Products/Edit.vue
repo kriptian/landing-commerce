@@ -4,6 +4,7 @@ import { Head, useForm, usePage, router } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 
@@ -19,6 +20,13 @@ const successMessage = ref(page?.props?.flash?.success || '');
 const confirmingSave = ref(false);
 const showErrors = ref(false);
 const errorMessages = ref([]);
+
+// Escáner de código de barras
+const showBarcodeScanner = ref(false);
+const barcodeScannerVideo = ref(null);
+const barcodeScannerStream = ref(null);
+const isScanning = ref(false);
+const barcodeDetector = ref(null);
 
 // Validación previa en el navegador
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -147,6 +155,7 @@ const initialVariants = props.product.variants.map(variant => {
 const form = useForm({
     _method: 'PUT', // Incluir desde el principio, igual que UpdateProfileInformationForm.vue
     name: props.product.name,
+    barcode: props.product.barcode ?? '',
     price: props.product.price,
     purchase_price: props.product.purchase_price ?? null,
     // retail_price eliminado
@@ -715,7 +724,7 @@ const showGalleryModal = ref(false);
 const currentImageIndex = ref(0);
 const isMobile = ref(false);
 function updateIsMobile() { isMobile.value = window.innerWidth < 768; }
-onMounted(() => { 
+onMounted(async () => { 
     updateIsMobile(); 
     window.addEventListener('resize', updateIsMobile);
     // Preseleccionar la cadena de categorías del producto
@@ -728,8 +737,118 @@ onMounted(() => {
         hydrateAttributesFromVariants();
         hydrateDependenciesFromProduct();
     }
+    
+    // Inicializar BarcodeDetector si está disponible
+    if ('BarcodeDetector' in window) {
+        try {
+            barcodeDetector.value = new BarcodeDetector({
+                formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
+            });
+        } catch (e) {
+            console.warn('BarcodeDetector no disponible:', e);
+        }
+    }
 });
-onBeforeUnmount(() => window.removeEventListener('resize', updateIsMobile));
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', updateIsMobile);
+    stopBarcodeScanner();
+});
+
+// Iniciar escáner de código de barras
+const startBarcodeScanner = async () => {
+    try {
+        showBarcodeScanner.value = true;
+        isScanning.value = true;
+        
+        await nextTick();
+        
+        const video = barcodeScannerVideo.value;
+        if (!video) return;
+
+        // Obtener acceso a la cámara
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: 'environment', // Cámara trasera
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
+        });
+
+        barcodeScannerStream.value = stream;
+        video.srcObject = stream;
+        video.play();
+
+        // Iniciar detección de códigos de barras
+        if (barcodeDetector.value) {
+            detectBarcode();
+        } else {
+            // Fallback: usar input manual si BarcodeDetector no está disponible
+            console.warn('BarcodeDetector no disponible. Usa el input manual.');
+        }
+    } catch (error) {
+        console.error('Error accediendo a la cámara:', error);
+        alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara en la configuración del navegador.');
+        showBarcodeScanner.value = false;
+        isScanning.value = false;
+    }
+};
+
+// Detectar código de barras
+let animationFrameId = null;
+const detectBarcode = async () => {
+    if (!barcodeDetector.value || !isScanning.value) return;
+    
+    const video = barcodeScannerVideo.value;
+    if (!video || !video.parentNode) {
+        // El elemento ya no existe, detener escaneo
+        stopBarcodeScanner();
+        return;
+    }
+
+    try {
+        const barcodes = await barcodeDetector.value.detect(video);
+
+        if (barcodes.length > 0) {
+            const barcode = barcodes[0].rawValue;
+            form.barcode = barcode;
+            stopBarcodeScanner();
+            alert('Código de barras escaneado: ' + barcode);
+            return;
+        }
+    } catch (error) {
+        console.error('Error detectando código de barras:', error);
+        // Si hay error, detener el escaneo
+        stopBarcodeScanner();
+        return;
+    }
+
+    // Continuar escaneando solo si aún está activo
+    if (isScanning.value && video && video.parentNode) {
+        animationFrameId = requestAnimationFrame(detectBarcode);
+    }
+};
+
+// Detener escáner
+const stopBarcodeScanner = () => {
+    isScanning.value = false;
+    
+    // Cancelar cualquier frame de animación pendiente
+    if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    
+    if (barcodeScannerStream.value) {
+        barcodeScannerStream.value.getTracks().forEach(track => track.stop());
+        barcodeScannerStream.value = null;
+    }
+
+    if (barcodeScannerVideo.value) {
+        barcodeScannerVideo.value.srcObject = null;
+    }
+
+    showBarcodeScanner.value = false;
+};
 
 const visibleCount = computed(() => isMobile.value ? 1 : 4);
 const visibleEditImages = computed(() => currentImages.value.slice(0, visibleCount.value));
@@ -948,6 +1067,23 @@ const confirmSave = () => {
                                     <div class="mb-4">
                                         <label for="name" class="block font-medium text-sm text-gray-700">Nombre</label>
                                         <input id="name" v-model="form.name" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
+                                    </div>
+                                    <div class="mb-4">
+                                        <label for="barcode" class="block font-medium text-sm text-gray-700 mb-1">Código de Barras (Opcional)</label>
+                                        <div class="flex gap-2">
+                                            <input id="barcode" v-model="form.barcode" type="text" class="flex-1 block mt-1 rounded-md shadow-sm border-gray-300" placeholder="Ej: 1234567890123">
+                                            <button
+                                                type="button"
+                                                @click="startBarcodeScanner"
+                                                class="px-4 py-2 mt-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2 whitespace-nowrap"
+                                                title="Escanear código de barras"
+                                            >
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+                                                </svg>
+                                                Escanear
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="mb-4">
                                         <label for="price" class="block font-medium text-sm text-gray-700">Precio (Principal)</label>
@@ -1409,4 +1545,35 @@ const confirmSave = () => {
         @primary="showImageInfoModal = false"
         @close="showImageInfoModal = false"
     />
+
+    <!-- Modal de escáner de código de barras -->
+    <Modal :show="showBarcodeScanner" @close="stopBarcodeScanner">
+        <div class="p-6">
+            <h2 class="text-lg font-semibold mb-4">Escanear Código de Barras</h2>
+            
+            <div class="mb-4">
+                <p class="text-sm text-gray-600 mb-4">
+                    Apunta la cámara hacia el código de barras. El código se detectará automáticamente.
+                </p>
+                <div class="relative bg-black rounded-lg overflow-hidden" style="aspect-ratio: 16/9;">
+                    <video
+                        ref="barcodeScannerVideo"
+                        autoplay
+                        playsinline
+                        class="w-full h-full object-cover"
+                    ></video>
+                    <div v-if="!barcodeDetector" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75 text-white p-4">
+                        <div class="text-center">
+                            <p class="mb-2">Tu navegador no soporta escaneo automático.</p>
+                            <p class="text-sm">Ingresa el código de barras manualmente en el campo.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <SecondaryButton @click="stopBarcodeScanner">Cerrar</SecondaryButton>
+            </div>
+        </div>
+    </Modal>
 </template>
