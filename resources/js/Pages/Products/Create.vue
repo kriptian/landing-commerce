@@ -21,117 +21,108 @@ const errorMessages = ref([]);
 
 // Escáner de código de barras
 const showBarcodeScanner = ref(false);
-const barcodeScannerVideo = ref(null);
-const barcodeScannerStream = ref(null);
-const isScanning = ref(false);
-const barcodeDetector = ref(null);
+const html5QrCode = ref(null);
+const showBarcodeSuccessModal = ref(false);
+const scannedBarcode = ref('');
 
-// Inicializar BarcodeDetector si está disponible
-onMounted(async () => {
-    if ('BarcodeDetector' in window) {
-        try {
-            barcodeDetector.value = new BarcodeDetector({
-                formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
-            });
-        } catch (e) {
-            console.warn('BarcodeDetector no disponible:', e);
-        }
+// Función para reproducir beep
+const playBeep = () => {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 800; // Frecuencia del beep
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.2);
+    } catch (error) {
+        console.warn('No se pudo reproducir el beep:', error);
     }
-});
+};
 
 // Iniciar escáner de código de barras
 const startBarcodeScanner = async () => {
     try {
         showBarcodeScanner.value = true;
-        isScanning.value = true;
-        
         await nextTick();
         
-        const video = barcodeScannerVideo.value;
-        if (!video) return;
+        const { Html5Qrcode } = await import('html5-qrcode');
+        const scannerElement = document.getElementById('barcode-scanner-create');
+        if (!scannerElement) return;
 
-        // Obtener acceso a la cámara
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: 'environment', // Cámara trasera
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+        html5QrCode.value = new Html5Qrcode(scannerElement.id);
+        
+        // Configuración para códigos de barras
+        const config = {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+        };
+
+        // Intentar usar cámara trasera primero, luego frontal
+        try {
+            await html5QrCode.value.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText) => {
+                    playBeep();
+                    form.barcode = decodedText;
+                    scannedBarcode.value = decodedText;
+                    stopBarcodeScanner();
+                    showBarcodeSuccessModal.value = true;
+                },
+                (errorMessage) => {
+                    // Ignorar errores de escaneo continuo
+                }
+            );
+        } catch (err) {
+            // Si falla con cámara trasera, intentar frontal
+            try {
+                await html5QrCode.value.start(
+                    { facingMode: "user" },
+                    config,
+                    (decodedText) => {
+                        playBeep();
+                        form.barcode = decodedText;
+                        scannedBarcode.value = decodedText;
+                        stopBarcodeScanner();
+                        showBarcodeSuccessModal.value = true;
+                    },
+                    (errorMessage) => {
+                        // Ignorar errores de escaneo continuo
+                    }
+                );
+            } catch (err2) {
+                console.error('Error accediendo a la cámara:', err2);
+                alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara en la configuración del navegador.');
+                showBarcodeScanner.value = false;
             }
-        });
-
-        barcodeScannerStream.value = stream;
-        video.srcObject = stream;
-        video.play();
-
-        // Iniciar detección de códigos de barras
-        if (barcodeDetector.value) {
-            detectBarcode();
-        } else {
-            // Fallback: usar input manual si BarcodeDetector no está disponible
-            console.warn('BarcodeDetector no disponible. Usa el input manual.');
         }
     } catch (error) {
-        console.error('Error accediendo a la cámara:', error);
-        alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara en la configuración del navegador.');
+        console.error('Error inicializando escáner:', error);
+        alert('Error al inicializar el escáner. Por favor, intenta nuevamente.');
         showBarcodeScanner.value = false;
-        isScanning.value = false;
-    }
-};
-
-// Detectar código de barras
-let animationFrameId = null;
-const detectBarcode = async () => {
-    if (!barcodeDetector.value || !isScanning.value) return;
-    
-    const video = barcodeScannerVideo.value;
-    if (!video || !video.parentNode) {
-        // El elemento ya no existe, detener escaneo
-        stopBarcodeScanner();
-        return;
-    }
-
-    try {
-        const barcodes = await barcodeDetector.value.detect(video);
-
-        if (barcodes.length > 0) {
-            const barcode = barcodes[0].rawValue;
-            form.barcode = barcode;
-            stopBarcodeScanner();
-            alert('Código de barras escaneado: ' + barcode);
-            return;
-        }
-    } catch (error) {
-        console.error('Error detectando código de barras:', error);
-        // Si hay error, detener el escaneo
-        stopBarcodeScanner();
-        return;
-    }
-
-    // Continuar escaneando solo si aún está activo
-    if (isScanning.value && video && video.parentNode) {
-        animationFrameId = requestAnimationFrame(detectBarcode);
     }
 };
 
 // Detener escáner
-const stopBarcodeScanner = () => {
-    isScanning.value = false;
-    
-    // Cancelar cualquier frame de animación pendiente
-    if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
+const stopBarcodeScanner = async () => {
+    if (html5QrCode.value) {
+        try {
+            await html5QrCode.value.stop();
+            await html5QrCode.value.clear();
+        } catch (err) {
+            console.error('Error deteniendo escáner:', err);
+        }
+        html5QrCode.value = null;
     }
-    
-    if (barcodeScannerStream.value) {
-        barcodeScannerStream.value.getTracks().forEach(track => track.stop());
-        barcodeScannerStream.value = null;
-    }
-
-    if (barcodeScannerVideo.value) {
-        barcodeScannerVideo.value.srcObject = null;
-    }
-
     showBarcodeScanner.value = false;
 };
 
@@ -1252,24 +1243,31 @@ const submit = () => {
                 <p class="text-sm text-gray-600 mb-4">
                     Apunta la cámara hacia el código de barras. El código se detectará automáticamente.
                 </p>
-                <div class="relative bg-black rounded-lg overflow-hidden" style="aspect-ratio: 16/9;">
-                    <video
-                        ref="barcodeScannerVideo"
-                        autoplay
-                        playsinline
-                        class="w-full h-full object-cover"
-                    ></video>
-                    <div v-if="!barcodeDetector" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75 text-white p-4">
-                        <div class="text-center">
-                            <p class="mb-2">Tu navegador no soporta escaneo automático.</p>
-                            <p class="text-sm">Ingresa el código de barras manualmente en el campo.</p>
-                        </div>
-                    </div>
-                </div>
+                <div id="barcode-scanner-create" class="w-full rounded-lg overflow-hidden" style="min-height: 300px;"></div>
             </div>
 
             <div class="flex gap-3">
                 <SecondaryButton @click="stopBarcodeScanner">Cerrar</SecondaryButton>
+            </div>
+        </div>
+    </Modal>
+
+    <!-- Modal de éxito al escanear código de barras -->
+    <Modal :show="showBarcodeSuccessModal" @close="showBarcodeSuccessModal = false">
+        <div class="p-6">
+            <h2 class="text-lg font-semibold mb-4 text-green-600">¡Código de barras escaneado!</h2>
+            
+            <div class="mb-4">
+                <p class="text-sm text-gray-600 mb-2">
+                    Código escaneado:
+                </p>
+                <p class="text-lg font-semibold text-gray-900">
+                    {{ scannedBarcode }}
+                </p>
+            </div>
+
+            <div class="flex gap-3">
+                <PrimaryButton @click="showBarcodeSuccessModal = false">Aceptar</PrimaryButton>
             </div>
         </div>
     </Modal>

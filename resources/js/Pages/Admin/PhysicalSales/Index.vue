@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm, Link } from '@inertiajs/vue3';
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -163,8 +163,30 @@ const paymentMethod = ref('efectivo');
 const saleNotes = ref('');
 const discount = ref(0);
 // Referencias para el escáner de código de barras
-let barcodeScanner = null;
-let stream = null;
+const html5QrCode = ref(null);
+
+// Función para reproducir beep
+const playBeep = () => {
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 800; // Frecuencia del beep
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.2);
+    } catch (error) {
+        console.warn('No se pudo reproducir el beep:', error);
+    }
+};
 
 // Calcular totales
 const subtotal = computed(() => {
@@ -281,27 +303,77 @@ const updateQuantity = (index, delta) => {
 // Inicializar escáner de código de barras
 const initBarcodeScanner = async () => {
     try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                facingMode: 'environment' // Cámara trasera
-            } 
-        });
-        
         showBarcodeScanner.value = true;
+        await nextTick();
         
-        // Aquí podrías integrar una librería como QuaggaJS o ZXing
-        // Por ahora, usaremos un input manual para el código de barras
+        const { Html5Qrcode } = await import('html5-qrcode');
+        const scannerElement = document.getElementById('barcode-scanner-sales');
+        if (!scannerElement) return;
+
+        html5QrCode.value = new Html5Qrcode(scannerElement.id);
+        
+        // Configuración para códigos de barras
+        const config = {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+        };
+
+        // Intentar usar cámara trasera primero, luego frontal
+        try {
+            await html5QrCode.value.start(
+                { facingMode: "environment" },
+                config,
+                async (decodedText) => {
+                    // Reproducir beep al detectar código
+                    playBeep();
+                    // Cuando se detecta un código, buscar el producto y agregarlo al carrito
+                    await searchByBarcode(decodedText);
+                    closeBarcodeScanner();
+                },
+                (errorMessage) => {
+                    // Ignorar errores de escaneo continuo
+                }
+            );
+        } catch (err) {
+            // Si falla con cámara trasera, intentar frontal
+            try {
+                await html5QrCode.value.start(
+                    { facingMode: "user" },
+                    config,
+                    async (decodedText) => {
+                        // Reproducir beep al detectar código
+                        playBeep();
+                        // Cuando se detecta un código, buscar el producto y agregarlo al carrito
+                        await searchByBarcode(decodedText);
+                        closeBarcodeScanner();
+                    },
+                    (errorMessage) => {
+                        // Ignorar errores de escaneo continuo
+                    }
+                );
+            } catch (err2) {
+                console.error('Error accediendo a la cámara:', err2);
+                alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara en la configuración del navegador.');
+                showBarcodeScanner.value = false;
+            }
+        }
     } catch (error) {
-        console.error('Error accediendo a la cámara:', error);
-        alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara en la configuración del navegador.');
+        console.error('Error inicializando escáner:', error);
+        alert('Error al inicializar el escáner. Por favor, intenta nuevamente.');
+        showBarcodeScanner.value = false;
     }
 };
 
 // Cerrar escáner
-const closeBarcodeScanner = () => {
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
+const closeBarcodeScanner = async () => {
+    if (html5QrCode.value) {
+        try {
+            await html5QrCode.value.stop();
+            await html5QrCode.value.clear();
+        } catch (err) {
+            console.error('Error deteniendo escáner:', err);
+        }
+        html5QrCode.value = null;
     }
     showBarcodeScanner.value = false;
 };
@@ -913,28 +985,14 @@ watch(searchQuery, () => {
             </div>
         </Modal>
 
-        <!-- Modal de escáner (placeholder - necesitarías integrar una librería real) -->
+        <!-- Modal de escáner de código de barras -->
         <Modal :show="showBarcodeScanner" @close="closeBarcodeScanner">
             <div class="p-6">
                 <h2 class="text-lg font-semibold mb-4">Escanear Código de Barras</h2>
                 <p class="text-sm text-gray-600 mb-4">
-                    Por favor, ingresa el código de barras manualmente o usa un lector externo.
+                    Apunta la cámara hacia el código de barras. El producto se agregará automáticamente al carrito.
                 </p>
-                <div class="flex gap-2">
-                    <input
-                        v-model="barcodeInput"
-                        type="text"
-                        placeholder="Código de barras..."
-                        class="flex-1 rounded-md border-gray-300"
-                        @keyup.enter="searchByBarcode(barcodeInput)"
-                    />
-                    <button
-                        @click="searchByBarcode(barcodeInput)"
-                        class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                    >
-                        Buscar
-                    </button>
-                </div>
+                <div id="barcode-scanner-sales" class="w-full rounded-lg overflow-hidden" style="min-height: 300px;"></div>
                 <SecondaryButton @click="closeBarcodeScanner" class="mt-4">Cerrar</SecondaryButton>
             </div>
         </Modal>
