@@ -39,12 +39,6 @@ class CustomerAuthController extends Controller
                 'max:255',
                 // Email único solo para esta tienda en customers
                 'unique:customers,email,NULL,id,store_id,' . $store->id,
-                // IMPORTANTE: No permitir emails que ya existen en la tabla de usuarios (admin)
-                function ($attribute, $value, $fail) {
-                    if (\App\Models\User::where('email', $value)->exists()) {
-                        $fail('Este correo electrónico ya está registrado como administrador. Por favor, usa otro correo.');
-                    }
-                },
             ],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'phone' => ['nullable', 'string', 'max:20'],
