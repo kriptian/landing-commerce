@@ -144,9 +144,51 @@ class PhysicalSaleController extends Controller
         try {
             DB::beginTransaction();
 
-            // Generar número de venta
-            $lastSale = $store->physicalSales()->latest()->first();
-            $saleNumber = 'V-' . str_pad(($lastSale ? $lastSale->id : 0) + 1, 6, '0', STR_PAD_LEFT);
+            // Generar número de venta único por tienda (cada tienda tiene su propia secuencia independiente)
+            // Esto permite que la Tienda A tenga V-000001 y la Tienda B también tenga V-000001 sin conflictos
+            $maxAttempts = 10;
+            $attempt = 0;
+            $saleNumber = null;
+            
+            while ($attempt < $maxAttempts) {
+                // Obtener el último número de venta de ESTA tienda específica usando bloqueo para evitar condiciones de carrera
+                $lastSale = DB::table('physical_sales')
+                    ->where('store_id', $store->id) // CRÍTICO: Solo buscar en ventas de esta tienda
+                    ->where('sale_number', 'like', 'V-%')
+                    ->lockForUpdate() // Bloquear la fila para evitar lecturas concurrentes
+                    ->orderBy('id', 'desc')
+                    ->first();
+                
+                // Si hay una venta previa en esta tienda, extraer el número y sumar 1
+                if ($lastSale && preg_match('/V-(\d+)/', $lastSale->sale_number, $matches)) {
+                    $nextNumber = (int)$matches[1] + 1;
+                } else {
+                    // Primera venta de esta tienda
+                    $nextNumber = 1;
+                }
+                
+                $saleNumber = 'V-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+                
+                // Verificar que el número no exista en ESTA tienda (protección adicional contra condiciones de carrera)
+                // El índice único compuesto (store_id, sale_number) garantiza que esto sea único por tienda
+                $exists = DB::table('physical_sales')
+                    ->where('store_id', $store->id) // CRÍTICO: Verificar solo en esta tienda
+                    ->where('sale_number', $saleNumber)
+                    ->exists();
+                
+                if (!$exists) {
+                    break; // Número único encontrado para esta tienda
+                }
+                
+                $attempt++;
+                // Si existe, esperar un poco y reintentar con el siguiente número
+                usleep(10000); // 10ms
+            }
+            
+            if ($saleNumber === null || $attempt >= $maxAttempts) {
+                DB::rollBack();
+                throw new \Exception('No se pudo generar un número de venta único para esta tienda después de varios intentos');
+            }
 
             // Crear la venta
             $sale = $store->physicalSales()->create([

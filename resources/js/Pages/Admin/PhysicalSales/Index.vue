@@ -184,7 +184,7 @@ const playBeep = () => {
         oscillator.start(audioContext.currentTime);
         oscillator.stop(audioContext.currentTime + 0.2);
     } catch (error) {
-        console.warn('No se pudo reproducir el beep:', error);
+        // Silenciar error de beep
     }
 };
 
@@ -211,7 +211,6 @@ const searchProducts = async () => {
         });
         searchResults.value = response.data?.products || [];
     } catch (error) {
-        console.error('Error buscando productos:', error);
         searchResults.value = [];
     } finally {
         isSearching.value = false;
@@ -220,11 +219,15 @@ const searchProducts = async () => {
 
 // Buscar por código de barras
 const searchByBarcode = async (barcode) => {
-    if (!barcode.trim()) return;
+    // Limpiar el código de barras: eliminar todos los espacios
+    // Los códigos de barras pueden venir con espacios (ej: "7 898024 397861" -> "7898024397861")
+    const cleanedBarcode = barcode.replace(/\s+/g, '').trim();
+    
+    if (!cleanedBarcode) return;
 
     try {
         const response = await window.axios.get(route('admin.physical-sales.get-product-by-barcode'), {
-            params: { barcode: barcode }
+            params: { barcode: cleanedBarcode }
         });
         
         if (response.data?.product) {
@@ -234,7 +237,6 @@ const searchByBarcode = async (barcode) => {
             alert('Producto no encontrado con ese código de barras');
         }
     } catch (error) {
-        console.error('Error buscando por código de barras:', error);
         alert('Error al buscar producto');
     }
 };
@@ -354,13 +356,11 @@ const initBarcodeScanner = async () => {
                     }
                 );
             } catch (err2) {
-                console.error('Error accediendo a la cámara:', err2);
                 alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara en la configuración del navegador.');
                 showBarcodeScanner.value = false;
             }
         }
     } catch (error) {
-        console.error('Error inicializando escáner:', error);
         alert('Error al inicializar el escáner. Por favor, intenta nuevamente.');
         showBarcodeScanner.value = false;
     }
@@ -373,7 +373,7 @@ const closeBarcodeScanner = async () => {
             await html5QrCode.value.stop();
             await html5QrCode.value.clear();
         } catch (err) {
-            console.error('Error deteniendo escáner:', err);
+            // Error silenciado
         }
         html5QrCode.value = null;
     }
@@ -432,7 +432,6 @@ const processSale = async () => {
             alert('Error: ' + (response.data?.message || 'No se pudo procesar la venta'));
         }
     } catch (error) {
-        console.error('Error procesando venta:', error);
         
         let errorMessage = 'Error al procesar la venta';
         

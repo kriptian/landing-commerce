@@ -1,6 +1,14 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch, nextTick, computed, h, onMounted, onBeforeUnmount } from 'vue';
+
+// Window width para responsive
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
+const updateWindowWidth = () => {
+    if (typeof window !== 'undefined') {
+        windowWidth.value = window.innerWidth;
+    }
+};
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -72,7 +80,6 @@ const openNode = async (cat) => {
       // Forzar actualización del DOM
       await nextTick();
     } catch (error) {
-      console.error('Error loading children:', error);
       childrenCache.value.set(cat.id, []);
       cacheUpdateKey.value++; // Forzar reactividad incluso en caso de error
     } finally {
@@ -106,7 +113,6 @@ const loadSubChildren = async (categoryId) => {
         cacheUpdateKey.value++; // Forzar reactividad
         return children;
     } catch (e) {
-        console.error('Error loading children:', e);
         childrenCache.value.set(categoryId, []);
         cacheUpdateKey.value++; // Forzar reactividad incluso en caso de error
         return [];
@@ -130,7 +136,79 @@ const search = ref(props.filters.search);
 const isSearchActive = ref(false);
 const isClosingSearch = ref(false); // Bandera para evitar que blur reabra la búsqueda
 const drawerOpen = ref(false);
+const showNotifications = ref(false);
 const expanded = ref({});
+
+// Funciones para notificaciones
+const formatNotificationDate = (date) => {
+    const now = new Date();
+    const notificationDate = new Date(date);
+    const diffInSeconds = Math.floor((now - notificationDate) / 1000);
+    
+    if (diffInSeconds < 60) return 'Hace unos segundos';
+    if (diffInSeconds < 3600) return `Hace ${Math.floor(diffInSeconds / 60)} minutos`;
+    if (diffInSeconds < 86400) return `Hace ${Math.floor(diffInSeconds / 3600)} horas`;
+    if (diffInSeconds < 604800) return `Hace ${Math.floor(diffInSeconds / 86400)} días`;
+    
+    return notificationDate.toLocaleDateString('es-CO', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    });
+};
+
+const handleNotificationClick = (notification) => {
+    showNotifications.value = false;
+    
+    // Marcar como leída si no está leída
+    if (!notification.is_read) {
+        // Usar fetch directamente ya que el backend devuelve JSON
+        fetch(route('customer.notifications.mark-read', { 
+            store: props.store.slug, 
+            notificationId: notification.id 
+        }), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            credentials: 'same-origin',
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Actualizar la notificación localmente
+            notification.is_read = true;
+            
+            // Recargar los datos del customer para actualizar el contador
+            router.reload({ 
+                only: ['customer'],
+                preserveState: false,
+            });
+        })
+        .catch(error => {
+            // Intentar recargar de todas formas
+            router.reload({ 
+                only: ['customer'],
+                preserveState: false,
+            });
+        });
+        
+        // Si tiene order_id, navegar después de marcar como leída
+        if (notification.order_id) {
+            setTimeout(() => {
+                router.visit(route('customer.orders', { store: props.store.slug }));
+            }, 300);
+        }
+    } else {
+        // Si ya está leída, solo navegar
+        if (notification.order_id) {
+            router.visit(route('customer.orders', { store: props.store.slug }));
+        }
+    }
+};
+
+
 // Modo navegación: aplicamos filtro inmediato sin checkboxes/botones
 const selected = ref(new Set());
 // Dropdown para menú completo - rastrea qué categoría tiene su dropdown abierto
@@ -164,7 +242,7 @@ const handleCategoryHover = async (cat) => {
 const handleCategoryLeave = (event) => {
   // Solo cerrar si no estamos moviendo el mouse hacia el dropdown
   // Pequeño delay para permitir movimiento al dropdown (solo en desktop)
-  if (window.innerWidth >= 768) {
+  if (windowWidth.value >= 768) {
     setTimeout(() => {
       const dropdown = document.querySelector('.category-dropdown:hover');
       const relatedTarget = event.relatedTarget;
@@ -835,7 +913,6 @@ const hasAnySocial = computed(() => {
         const result = hasFacebook || hasInstagram || hasTiktok || hasPhone;
         return result;
     } catch (e) {
-        console.error('Error checking social links:', e);
         return false;
     }
 });
@@ -863,18 +940,29 @@ const fabItems = computed(() => {
     }));
 });
 
-// Galería de productos destacados con transición
-const featuredProducts = computed(() => {
+// Galería de productos destacados o imágenes personalizadas
+const galleryItems = computed(() => {
+    // Debug: verificar valores
+    
+    // Si el tipo es 'custom' y hay imágenes, usar imágenes personalizadas
+    if (props.store?.gallery_type === 'custom') {
+        if (props.store?.gallery_images && props.store.gallery_images.length > 0) {
+            return props.store.gallery_images;
+        }
+        // Si es 'custom' pero no hay imágenes, retornar array vacío para no mostrar nada
+        return [];
+    }
+    // Si es tipo 'products' o no está configurado, usar productos destacados
     const allProducts = props.products?.data || [];
-    // Tomamos los primeros 5 productos o los que tienen promoción
     const featured = allProducts.filter(p => hasPromo(p)).slice(0, 5);
-    // Si no hay suficientes con promoción, completamos con los primeros productos
     if (featured.length < 5) {
         const remaining = allProducts.filter(p => !featured.some(fp => fp.id === p.id)).slice(0, 5 - featured.length);
         return [...featured, ...remaining];
     }
     return featured.slice(0, 5);
 });
+
+const featuredProducts = computed(() => galleryItems.value);
 
 const currentSlide = ref(0);
 const autoPlayInterval = ref(null);
@@ -887,16 +975,16 @@ const dragCurrent = ref(0);
 const dragOffset = ref(0);
 
 const nextSlide = () => {
-    if (featuredProducts.value.length > 0 && !isDragging.value) {
-        currentSlide.value = (currentSlide.value + 1) % featuredProducts.value.length;
+    if (galleryItems.value.length > 0 && !isDragging.value) {
+        currentSlide.value = (currentSlide.value + 1) % galleryItems.value.length;
         // Reiniciar autoplay después de navegación manual
         resetAutoPlay();
     }
 };
 
 const prevSlide = () => {
-    if (featuredProducts.value.length > 0 && !isDragging.value) {
-        currentSlide.value = currentSlide.value === 0 ? featuredProducts.value.length - 1 : currentSlide.value - 1;
+    if (galleryItems.value.length > 0 && !isDragging.value) {
+        currentSlide.value = currentSlide.value === 0 ? galleryItems.value.length - 1 : currentSlide.value - 1;
         // Reiniciar autoplay después de navegación manual
         resetAutoPlay();
     }
@@ -911,7 +999,7 @@ const resetAutoPlay = () => {
     if (autoPlayInterval.value) {
         clearInterval(autoPlayInterval.value);
     }
-    if (featuredProducts.value.length > 1 && !isDragging.value) {
+    if (galleryItems.value.length > 1 && !isDragging.value) {
         autoPlayInterval.value = setInterval(nextSlide, 3000); // Cambia cada 3 segundos
     }
 };
@@ -919,7 +1007,7 @@ const resetAutoPlay = () => {
 // Funciones para el swipe/drag manual
 const handleDragStart = (e) => {
     // Ignorar si es un clic en el botón (excepto en móvil donde sí queremos arrastrar)
-    if (e.target.closest('button') && window.innerWidth >= 768) return;
+    if (e.target.closest('button') && windowWidth.value >= 768) return;
     
     isDragging.value = true;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -980,6 +1068,16 @@ const handleDragEnd = (e) => {
     }, 300);
 };
 
+const handleGalleryBuy = (item) => {
+    // Si es una imagen personalizada con producto linkeado
+    if (props.store?.gallery_type === 'custom' && item.product_id && item.product) {
+        router.visit(route('catalogo.show', { store: props.store.slug, product: item.product.id }));
+    } else if (props.store?.gallery_type === 'products') {
+        // Si es un producto normal
+        buyNowFromGallery(item);
+    }
+};
+
 const buyNowFromGallery = (product) => {
     router.post(route('cart.store'), {
         product_id: product.id,
@@ -1012,6 +1110,20 @@ const handleClickOutside = (event) => {
 onMounted(() => {
     resetAutoPlay();
     document.addEventListener('click', handleClickOutside);
+    
+    // Cerrar dropdown de notificaciones al hacer clic fuera
+    window.handleClickOutsideNotifications = (e) => {
+        if (showNotifications.value && !e.target.closest('.notification-dropdown-container')) {
+            showNotifications.value = false;
+        }
+    };
+    document.addEventListener('click', window.handleClickOutsideNotifications);
+    
+    // Configurar listener para window width
+    if (typeof window !== 'undefined') {
+        window.addEventListener('resize', updateWindowWidth);
+        updateWindowWidth();
+    }
 });
 
 onBeforeUnmount(() => {
@@ -1019,13 +1131,19 @@ onBeforeUnmount(() => {
         clearInterval(autoPlayInterval.value);
     }
     // Limpiar listener del menú desplegable
+    if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', updateWindowWidth);
+        if (window.handleClickOutsideNotifications) {
+            document.removeEventListener('click', window.handleClickOutsideNotifications);
+        }
+    }
     document.removeEventListener('click', handleClickOutside);
 });
 
-// Reset autoplay cuando cambian los productos destacados y resetear slide actual
-watch(featuredProducts, (newProducts, oldProducts) => {
-    // Resetear currentSlide a 0 cuando cambian los productos para evitar índices fuera de rango
-    if (newProducts.length > 0) {
+// Reset autoplay cuando cambian los items de la galería y resetear slide actual
+watch(galleryItems, (newItems, oldItems) => {
+    // Resetear currentSlide a 0 cuando cambian los items para evitar índices fuera de rango
+    if (newItems.length > 0) {
         currentSlide.value = 0;
     }
     resetAutoPlay();
@@ -1083,19 +1201,52 @@ watch(featuredProducts, (newProducts, oldProducts) => {
     >
         <!-- Header Banner & Logo (estilo especial) - SOLO si NO está en modo por defecto -->
         <template v-if="headerStyle === 'banner_logo' && !catalogUseDefault">
-            <!-- Banner superior oscuro con menú y carrito -->
-            <div class="bg-gray-800 text-white py-2 px-4 flex justify-end items-center gap-3">
-                <Link :href="route('cart.index', { store: store.slug })" class="relative p-1.5 rounded-lg hover:bg-gray-700 transition-colors" aria-label="Carrito de compras">
-                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/></svg>
-                    <span v-if="$page.props.cart.count > 0" class="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center">
-                        {{ $page.props.cart.count }}
-                    </span>
-                </Link>
-                <button @click="openDrawer" class="p-1.5 rounded-lg hover:bg-gray-700 transition-colors" aria-label="Abrir menú">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/>
+            <!-- Banner superior oscuro con dirección, menú y carrito -->
+            <div class="bg-gray-800 text-white py-2 px-4">
+                <!-- Dirección del cliente si está logueado -->
+                <div v-if="$page.props.customer?.user && $page.props.customer?.defaultAddress" class="mb-2 text-xs sm:text-sm flex items-center gap-2">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
-                </button>
+                    <span class="truncate">{{ $page.props.customer.defaultAddress.address_line_1 }}, {{ $page.props.customer.defaultAddress.city }}</span>
+                </div>
+                <div class="flex justify-between items-center gap-3">
+                    <div class="flex items-center gap-3">
+                        <!-- Botones de autenticación -->
+                        <template v-if="!$page.props.customer?.user">
+                            <Link :href="route('customer.login', { store: store.slug })" class="text-xs sm:text-sm hover:underline">
+                                Iniciar sesión
+                            </Link>
+                            <Link :href="route('customer.register', { store: store.slug })" class="text-xs sm:text-sm hover:underline">
+                                Registrarse
+                            </Link>
+                        </template>
+                        <template v-else>
+                            <Link :href="route('customer.account', { store: store.slug })" class="text-xs sm:text-sm hover:underline">
+                                Mi Cuenta
+                            </Link>
+                            <form @submit.prevent="router.post(route('customer.logout', { store: store.slug }))" class="inline">
+                                <button type="submit" class="text-xs sm:text-sm hover:underline">
+                                    Cerrar sesión
+                                </button>
+                            </form>
+                        </template>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <Link :href="route('cart.index', { store: store.slug })" class="relative p-1.5 rounded-lg hover:bg-gray-700 transition-colors" aria-label="Carrito de compras">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/></svg>
+                            <span v-if="$page.props.cart.count > 0" class="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center">
+                                {{ $page.props.cart.count }}
+                            </span>
+                        </Link>
+                        <button @click="openDrawer" class="p-1.5 rounded-lg hover:bg-gray-700 transition-colors" aria-label="Abrir menú">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- Área principal con logo centrado -->
@@ -1177,6 +1328,16 @@ watch(featuredProducts, (newProducts, oldProducts) => {
         
         <!-- Header Default y Fit (estilos normales) -->
         <nav v-else class="container mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 relative" :class="{ 'flex-wrap': menuType === 'full' && categories.length > 5 }">
+            <!-- Dirección del cliente si está logueado (solo en móvil o header fit) -->
+            <div v-if="$page.props.customer?.user && $page.props.customer?.defaultAddress && (headerStyle === 'fit' || windowWidth < 768)" class="flex items-center gap-2 text-xs sm:text-sm flex-shrink-0 max-w-[40%] sm:max-w-none" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : { color: '#6B7280' }">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <span class="truncate hidden sm:inline">{{ $page.props.customer.defaultAddress.city }}</span>
+                <span class="truncate sm:hidden">{{ $page.props.customer.defaultAddress.city }}</span>
+            </div>
+            
             <!-- Menú hamburguesa - solo visible si menuType es hamburger -->
             <button v-if="menuType === 'hamburger' && headerStyle !== 'fit'" @click="openDrawer" class="p-2 rounded-lg hover:bg-gray-100 transition-colors z-10 flex-shrink-0 text-gray-700" aria-label="Abrir menú" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
@@ -1360,32 +1521,107 @@ watch(featuredProducts, (newProducts, oldProducts) => {
             </div>
 
             <!-- Lupa / Búsqueda expandible (oculta en header Fit, ya que tiene su propia búsqueda) -->
-            <div v-if="headerStyle !== 'fit' || catalogUseDefault" class="flex items-center justify-end flex-shrink-0 z-10">
-                <transition name="search-expand">
-                    <div v-if="!isSearchActive" class="flex items-center">
-                        <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6 text-gray-700">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
+            <div v-if="headerStyle !== 'fit' || catalogUseDefault" class="flex items-center justify-end gap-2 flex-shrink-0 z-10">
+                <!-- Dirección del cliente si está logueado (solo desktop) -->
+                <div v-if="$page.props.customer?.user && $page.props.customer?.defaultAddress" class="hidden md:flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-gray-100" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor, backgroundColor: 'rgba(0,0,0,0.05)' } : {}">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <span class="truncate max-w-[150px]">{{ $page.props.customer.defaultAddress.city }}</span>
+                </div>
+                
+                <!-- Botones de autenticación -->
+                <div class="hidden sm:flex items-center gap-2 text-xs" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : { color: '#6B7280' }">
+                    <template v-if="!$page.props.customer?.user">
+                        <Link :href="route('customer.login', { store: store.slug })" class="hover:underline px-2 py-1">
+                            Iniciar sesión
+                        </Link>
+                        <span>|</span>
+                        <Link :href="route('customer.register', { store: store.slug })" class="hover:underline px-2 py-1">
+                            Registrarse
+                        </Link>
+                    </template>
+                    <template v-else>
+                        <Link :href="route('customer.account', { store: store.slug })" class="hover:underline px-2 py-1">
+                            Mi Cuenta
+                        </Link>
+                        <span>|</span>
+                        <form @submit.prevent="router.post(route('customer.logout', { store: store.slug }))" class="inline">
+                            <button type="submit" class="hover:underline px-2 py-1">
+                                Salir
+                            </button>
+                        </form>
+                    </template>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <!-- Campanita de notificaciones (solo si el cliente está logueado) -->
+                    <div v-if="$page.props.customer?.user" class="relative notification-dropdown-container">
+                        <button 
+                            @click.stop="showNotifications = !showNotifications" 
+                            class="relative p-2 rounded-lg hover:bg-gray-100 transition-colors" 
+                            aria-label="Notificaciones"
+                            :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
                             </svg>
+                            <span v-if="$page.props.customer?.notificationsCount > 0" 
+                                  class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white min-w-[1.25rem]">
+                                {{ $page.props.customer.notificationsCount > 99 ? '99+' : $page.props.customer.notificationsCount }}
+                            </span>
                         </button>
+                        
+                        <!-- Dropdown de notificaciones -->
+                        <div v-if="showNotifications" class="notification-dropdown-container absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-96 overflow-y-auto">
+                            <div class="p-4 border-b border-gray-200">
+                                <h3 class="font-semibold text-gray-900">Notificaciones</h3>
+                            </div>
+                            <div v-if="$page.props.customer?.notifications && $page.props.customer.notifications.length > 0" class="divide-y divide-gray-200">
+                                <div 
+                                    v-for="notification in $page.props.customer.notifications" 
+                                    :key="notification.id"
+                                    class="p-4 hover:bg-gray-50 cursor-pointer"
+                                    @click="handleNotificationClick(notification)"
+                                >
+                                    <p class="text-sm font-medium text-gray-900">{{ notification.title }}</p>
+                                    <p class="text-xs text-gray-600 mt-1">{{ notification.message }}</p>
+                                    <p class="text-xs text-gray-400 mt-2">{{ formatNotificationDate(notification.created_at) }}</p>
+                                </div>
+                            </div>
+                            <div v-else class="p-8 text-center text-sm text-gray-500">
+                                No tienes notificaciones
+                            </div>
                         </div>
-                    <div v-else class="flex items-center gap-2 min-w-[200px] sm:min-w-[280px]">
-                        <input 
-                            ref="searchInput" 
-                            v-model="search" 
-                            type="text" 
-                            placeholder="Buscar..." 
-                            @blur="handleSearchBlur"
-                            class="border border-gray-300 rounded-lg px-4 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300" 
-                            :style="inputStyleObj"
-                        />
-                        <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" aria-label="Cerrar búsqueda">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-500">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                        </button>
                     </div>
-                </transition>
+                    
+                    <transition name="search-expand">
+                        <div v-if="!isSearchActive" class="flex items-center">
+                            <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
+                                </svg>
+                            </button>
+                            </div>
+                        <div v-else class="flex items-center gap-2 min-w-[200px] sm:min-w-[280px]">
+                            <input 
+                                ref="searchInput" 
+                                v-model="search" 
+                                type="text" 
+                                placeholder="Buscar..." 
+                                @blur="handleSearchBlur"
+                                class="border border-gray-300 rounded-lg px-4 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300" 
+                                :style="inputStyleObj"
+                            />
+                            <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0" aria-label="Cerrar búsqueda">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-gray-500">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </transition>
+                </div>
             </div>
         </nav>
     </header>
@@ -1398,11 +1634,11 @@ watch(featuredProducts, (newProducts, oldProducts) => {
         :style="bodyStyleObj"
     >
 
-		<!-- Galería de productos destacados con transición -->
+		<!-- Galería de productos destacados o imágenes personalizadas -->
 		<div 
-			v-if="featuredProducts.length > 0 && !isSearchActive && !search" 
+			v-if="galleryItems.length > 0 && !isSearchActive && !search" 
 			ref="galleryContainer"
-			class="mb-8 relative overflow-hidden rounded-2xl shadow-xl md:cursor-default cursor-grab active:cursor-grabbing"
+			class="mb-8 relative overflow-hidden w-full md:cursor-default cursor-grab active:cursor-grabbing"
 			@touchstart="handleDragStart"
 			@touchmove="handleDragMove"
 			@touchend="handleDragEnd"
@@ -1413,7 +1649,7 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 		>
 			<!-- Flechas de navegación - visibles en web y móvil -->
 			<button 
-				v-if="featuredProducts.length > 1"
+				v-if="galleryItems.length > 1"
 				@click="prevSlide"
 				class="flex absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-800 p-2 sm:p-3 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-110 active:scale-95"
 				aria-label="Anterior"
@@ -1423,7 +1659,7 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 				</svg>
 			</button>
 			<button 
-				v-if="featuredProducts.length > 1"
+				v-if="galleryItems.length > 1"
 				@click="nextSlide"
 				class="flex absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm hover:bg-white text-gray-800 p-2 sm:p-3 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-110 active:scale-95"
 				aria-label="Siguiente"
@@ -1432,56 +1668,69 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 					<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
 				</svg>
 			</button>
-			<div class="relative h-[300px] sm:h-[400px] md:h-[500px]">
+			<div class="relative h-[300px] sm:h-[400px] md:h-[500px] lg:h-[600px]">
 				<!-- Slides -->
 				<div class="relative h-full overflow-hidden">
 					<transition name="slide-fade" mode="out-in">
 						<div 
-							v-if="featuredProducts[currentSlide]"
-							:key="`${featuredProducts[currentSlide].id}-${currentSlide}`"
+							v-if="galleryItems[currentSlide]"
+							:key="`${galleryItems[currentSlide].id || galleryItems[currentSlide].slug || currentSlide}-${currentSlide}`"
 							class="absolute inset-0 gallery-slide"
 							:style="isDragging ? { 
 								transform: `translateX(${dragOffset}px)`,
 								transition: 'none'
 							} : {}"
 						>
-						<div v-if="featuredProducts[currentSlide]" class="relative h-full bg-white/90 backdrop-blur-sm overflow-hidden">
-							<!-- Imagen del producto -->
-							<div class="absolute inset-0 flex items-center justify-center p-4 sm:p-6 md:p-8">
+						<div class="relative h-full w-full overflow-hidden">
+							<!-- Imagen o Video -->
+							<div class="absolute inset-0">
+								<!-- Imagen -->
 								<img 
-									v-if="featuredProducts[currentSlide].main_image_url" 
-									:src="featuredProducts[currentSlide].main_image_url" 
-									:alt="featuredProducts[currentSlide].name"
+									v-if="store?.gallery_type === 'custom' ? (galleryItems[currentSlide].media_type === 'image' || !galleryItems[currentSlide].media_type) : true"
+									:src="store?.gallery_type === 'custom' ? galleryItems[currentSlide].image_url : galleryItems[currentSlide].main_image_url" 
+									:alt="store?.gallery_type === 'custom' ? (galleryItems[currentSlide].title || 'Imagen') : galleryItems[currentSlide].name"
 									class="w-full h-full object-cover object-center"
 								>
+								<!-- Video local -->
+								<video 
+									v-else-if="store?.gallery_type === 'custom' && galleryItems[currentSlide].media_type === 'video' && galleryItems[currentSlide].video_url"
+									:src="galleryItems[currentSlide].video_url"
+									class="w-full h-full object-cover object-center"
+									autoplay
+									loop
+									muted
+									playsinline
+								></video>
 							</div>
 							
 							<!-- Overlay con información y botón -->
-							<div class="absolute inset-0 flex flex-col justify-between p-4 sm:p-6 md:p-8 pointer-events-none">
-								<!-- Título del producto -->
-								<div class="text-gray-900 bg-white/70 backdrop-blur-sm rounded-lg px-4 py-3 max-w-full pointer-events-auto">
-									<h3 class="text-xl sm:text-2xl md:text-3xl font-bold mb-2 truncate">{{ featuredProducts[currentSlide].name }}</h3>
-									<div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+							<div v-if="store?.gallery_type === 'products' || (store?.gallery_type === 'custom' && (galleryItems[currentSlide].title || galleryItems[currentSlide].description))" class="absolute inset-0 flex flex-col justify-between p-4 sm:p-6 md:p-8 pointer-events-none">
+								<!-- Título/Información -->
+								<div v-if="store?.gallery_type === 'products' || galleryItems[currentSlide].title" class="text-gray-900 bg-white/70 backdrop-blur-sm rounded-lg px-4 py-3 max-w-full pointer-events-auto">
+									<h3 v-if="store?.gallery_type === 'products'" class="text-xl sm:text-2xl md:text-3xl font-bold mb-2 truncate">{{ galleryItems[currentSlide].name }}</h3>
+									<h3 v-else-if="galleryItems[currentSlide].title" class="text-xl sm:text-2xl md:text-3xl font-bold mb-2 truncate">{{ galleryItems[currentSlide].title }}</h3>
+									<div v-if="store?.gallery_type === 'products'" class="flex items-center gap-2 sm:gap-3 flex-wrap">
 										<p class="text-lg sm:text-xl md:text-2xl font-extrabold whitespace-nowrap">
 											{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(
-												hasPromo(featuredProducts[currentSlide]) ? Math.round(featuredProducts[currentSlide].price * (100 - promoPercent(featuredProducts[currentSlide])) / 100) : featuredProducts[currentSlide].price
+												hasPromo(galleryItems[currentSlide]) ? Math.round(galleryItems[currentSlide].price * (100 - promoPercent(galleryItems[currentSlide])) / 100) : galleryItems[currentSlide].price
 											) }}
 										</p>
-										<span v-if="hasPromo(featuredProducts[currentSlide])" class="inline-flex items-center rounded text-white font-bold px-2 sm:px-3 py-1 text-xs sm:text-sm whitespace-nowrap" :class="store?.catalog_use_default ? 'bg-red-600' : ''" :style="promoBadgeStyle">
-											-{{ promoPercent(featuredProducts[currentSlide]) }}%
+										<span v-if="hasPromo(galleryItems[currentSlide])" class="inline-flex items-center rounded text-white font-bold px-2 sm:px-3 py-1 text-xs sm:text-sm whitespace-nowrap" :class="store?.catalog_use_default ? 'bg-red-600' : ''" :style="promoBadgeStyle">
+											-{{ promoPercent(galleryItems[currentSlide]) }}%
 										</span>
 									</div>
+									<p v-if="store?.gallery_type === 'custom' && galleryItems[currentSlide].description" class="text-sm sm:text-base text-gray-700 mt-1">{{ galleryItems[currentSlide].description }}</p>
 								</div>
 								
 								<!-- Botón comprar -->
-								<div class="flex justify-center pointer-events-auto mb-8 sm:mb-12 md:mb-16">
+								<div v-if="(store?.gallery_type === 'products' && store?.gallery_show_buy_button !== false) || (store?.gallery_type === 'custom' && galleryItems[currentSlide].show_buy_button && galleryItems[currentSlide].product_id)" class="flex justify-center pointer-events-auto mb-8 sm:mb-12 md:mb-16">
 									<button 
-										@click="buyNowFromGallery(featuredProducts[currentSlide])"
+										@click="handleGalleryBuy(galleryItems[currentSlide])"
 										class="buy-now-gallery font-bold py-3 px-6 sm:px-8 rounded-full shadow-2xl transition-all transform hover:scale-105 active:scale-95 text-base sm:text-lg md:text-xl"
 										:class="store?.catalog_use_default ? 'bg-white/80 backdrop-blur-sm text-gray-900 hover:bg-white/90 border-2 border-gray-200' : 'text-white'"
 										:style="buttonStyle"
 									>
-										COMPRAR
+										COMPRAR AHORA
 									</button>
 								</div>
 							</div>
@@ -1492,10 +1741,10 @@ watch(featuredProducts, (newProducts, oldProducts) => {
 				</div>
 				
 				<!-- Indicadores de paginación -->
-				<div v-if="featuredProducts.length > 1" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
+				<div v-if="galleryItems.length > 1" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-10">
 					<button 
-						v-for="(product, index) in featuredProducts" 
-						:key="product.id"
+						v-for="(item, index) in galleryItems" 
+						:key="item.id || item.slug || index"
 						@click="goToSlide(index)"
 						:class="currentSlide === index ? 'bg-white w-8' : 'bg-white/50 w-2'"
 						class="h-2 rounded-full transition-all duration-300"
@@ -1547,6 +1796,50 @@ watch(featuredProducts, (newProducts, oldProducts) => {
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
                         </button>
+                    </div>
+                    
+                    <!-- Información del cliente y autenticación -->
+                    <div class="border-b border-gray-200 bg-gray-50 px-4 py-3 flex-shrink-0">
+                        <div v-if="$page.props.customer?.user" class="space-y-2">
+                            <div class="flex items-center gap-2 text-sm">
+                                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                </svg>
+                                <span class="font-medium text-gray-900">{{ $page.props.customer.user.name }}</span>
+                            </div>
+                            <div v-if="$page.props.customer?.defaultAddress" class="flex items-start gap-2 text-xs text-gray-600">
+                                <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                <span class="flex-1">{{ $page.props.customer.defaultAddress.address_line_1 }}, {{ $page.props.customer.defaultAddress.city }}</span>
+                            </div>
+                            <div class="flex flex-col gap-2 pt-1">
+                                <div class="flex gap-2">
+                                    <Link :href="route('customer.account', { store: store.slug })" @click="drawerOpen=false" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                                        Mi Cuenta
+                                    </Link>
+                                    <span class="text-gray-400">|</span>
+                                    <Link :href="route('customer.orders', { store: store.slug })" @click="drawerOpen=false" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                                        Mis Pedidos
+                                    </Link>
+                                </div>
+                                <form @submit.prevent="router.post(route('customer.logout', { store: store.slug }))" class="inline">
+                                    <button type="submit" @click="drawerOpen=false" class="text-xs text-red-600 hover:text-red-700 font-medium">
+                                        Cerrar sesión
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <div v-else class="flex gap-3">
+                            <Link :href="route('customer.login', { store: store.slug })" @click="drawerOpen=false" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                                Iniciar sesión
+                            </Link>
+                            <span class="text-gray-400">|</span>
+                            <Link :href="route('customer.register', { store: store.slug })" @click="drawerOpen=false" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                                Registrarse
+                            </Link>
+                        </div>
                     </div>
                     
                     <!-- Banner de Promociones (siempre visible en todos los niveles cuando hay promociones activas) -->

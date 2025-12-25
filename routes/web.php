@@ -27,7 +27,13 @@ use App\Http\Controllers\Admin\PhysicalSaleController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\CouponController;
+use App\Http\Controllers\Admin\CustomerController as AdminCustomerController;
 use App\Http\Controllers\CartController; // Este es global pero se usa en rutas auth
+// Controladores de Clientes
+use App\Http\Controllers\Customer\CustomerAuthController;
+use App\Http\Controllers\Customer\CustomerController;
+use App\Http\Controllers\Customer\AddressController;
 use Illuminate\Support\Facades\Artisan;
 
 /*
@@ -156,6 +162,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
             Route::get('catalog-customization', [CatalogCustomizationController::class, 'index'])->name('catalog-customization.index');
             Route::put('catalog-customization', [CatalogCustomizationController::class, 'update'])->name('catalog-customization.update');
+            
+            // Galería de imágenes
+            Route::resource('gallery-images', \App\Http\Controllers\Admin\GalleryImageController::class)->names([
+                'index' => 'gallery-images.index',
+                'store' => 'gallery-images.store',
+                'update' => 'gallery-images.update',
+                'destroy' => 'gallery-images.destroy',
+            ]);
+            
+            // Gestión de clientes
+            Route::get('customers', [AdminCustomerController::class, 'index'])->name('customers.index');
+            Route::get('customers/{customer}', [AdminCustomerController::class, 'show'])->name('customers.show');
+            
+            // Gestión de cupones
+            Route::resource('coupons', CouponController::class);
+            Route::put('coupons/{coupon}/toggle-active', [CouponController::class, 'toggleActive'])->name('coupons.toggle-active');
         });
     });
 
@@ -183,7 +205,7 @@ Route::get('/crear-link-de-almacenamiento', function () {
 
 // Slugs reservados para no colisionar con rutas del sistema cuando usamos la raíz
 $reservedSlugs = implode('|', [
-    'admin','login','register','logout','profile','dashboard','tiendas','cart','checkout','api','storage','crear-link-de-almacenamiento'
+    'admin','login','register','logout','profile','dashboard','tiendas','cart','checkout','api','storage','crear-link-de-almacenamiento','customer','mi-cuenta','notifications'
 ]);
 Route::pattern('store', "^(?!($reservedSlugs)$)[A-Za-z0-9\-_.]+$");
 
@@ -197,8 +219,37 @@ Route::get('/{store:slug}/cart', [CartController::class, 'index'])->name('cart.i
 Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
 Route::delete('/guest-cart/{key}', [CartController::class, 'destroyGuest'])->name('cart.guest.destroy');
 
+// Autenticación de clientes (público)
+Route::middleware('guest:customer')->group(function () {
+    Route::get('/{store:slug}/customer/register', [CustomerAuthController::class, 'showRegisterForm'])->name('customer.register');
+    Route::post('/{store:slug}/customer/register', [CustomerAuthController::class, 'register'])->name('customer.register.store');
+    Route::get('/{store:slug}/customer/login', [CustomerAuthController::class, 'showLoginForm'])->name('customer.login');
+    Route::post('/{store:slug}/customer/login', [CustomerAuthController::class, 'login'])->name('customer.login.store');
+});
+
+// Área de cliente (requiere autenticación)
+Route::middleware('auth:customer')->group(function () {
+    Route::get('/{store:slug}/mi-cuenta', [CustomerController::class, 'index'])->name('customer.account');
+    Route::get('/{store:slug}/mis-pedidos', [CustomerController::class, 'orders'])->name('customer.orders');
+    Route::put('/{store:slug}/mi-cuenta/profile', [CustomerController::class, 'updateProfile'])->name('customer.profile.update');
+    Route::put('/{store:slug}/mi-cuenta/password', [CustomerController::class, 'updatePassword'])->name('customer.password.update');
+    
+    // Direcciones
+    Route::post('/{store:slug}/addresses', [AddressController::class, 'store'])->name('customer.addresses.store');
+    Route::put('/{store:slug}/addresses/{address}', [AddressController::class, 'update'])->name('customer.addresses.update');
+    Route::delete('/{store:slug}/addresses/{address}', [AddressController::class, 'destroy'])->name('customer.addresses.destroy');
+    Route::post('/{store:slug}/addresses/{address}/set-default', [AddressController::class, 'setDefault'])->name('customer.addresses.set-default');
+    
+    // Notificaciones
+    Route::post('/{store:slug}/notifications/{notificationId}/read', [\App\Http\Controllers\Customer\NotificationController::class, 'markAsRead'])->name('customer.notifications.mark-read');
+});
+
+// Logout de cliente (público pero requiere autenticación)
+Route::post('/{store:slug}/customer/logout', [CustomerAuthController::class, 'logout'])->name('customer.logout');
+
 // Checkout público (no requiere autenticación)
 Route::get('/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
+Route::post('/{store:slug}/checkout/validate-coupon', [CheckoutController::class, 'validateCoupon'])->name('checkout.validate-coupon');
 Route::post('/{store:slug}/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 
 // REDIRECCIONES legacy desde "/tienda/..." a las nuevas URLs en raíz (301)

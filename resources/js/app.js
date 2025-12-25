@@ -49,7 +49,7 @@ createInertiaApp({
                     const status = error?.response?.status;
                     // Error 419: CSRF token mismatch - recargar la página para obtener nuevo token
                     if (status === 419) {
-                        console.warn('CSRF token expirado, recargando página...');
+                        // CSRF token expirado, recargando página
                         window.location.reload();
                         return Promise.resolve();
                     }

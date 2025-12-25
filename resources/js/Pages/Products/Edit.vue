@@ -46,7 +46,7 @@ const playBeep = () => {
         oscillator.start(audioContext.currentTime);
         oscillator.stop(audioContext.currentTime + 0.2);
     } catch (error) {
-        console.warn('No se pudo reproducir el beep:', error);
+        // Silenciar error de beep
     }
 };
 
@@ -98,7 +98,6 @@ const hydratePath = async () => {
                     const response = await window.axios.get(route('admin.categories.children', prevSelectedId));
                     levels.value[i].options = Array.isArray(response.data?.data) ? response.data.data : [];
                 } catch (error) {
-                    console.error('Error cargando categorías hijas:', error);
                     levels.value[i].options = [];
                 }
             }
@@ -121,7 +120,7 @@ const hydratePath = async () => {
                 levels.value.push({ options: children, selected: null });
             }
         } catch (error) {
-            console.error('Error cargando categorías hijas:', error);
+            // Error silenciado
         }
     }
 };
@@ -143,7 +142,7 @@ const onSelectAtLevel = async (levelIndex) => {
             form.category_id = null;
         }
     } catch (error) {
-        console.error('Error cargando categorías hijas:', error);
+        // Error silenciado
     }
 };
 // --- FIN Selects en cascada ---
@@ -218,12 +217,10 @@ const toggleExpandVariant = (parentIndex) => {
 // Hidratar variantParents desde los datos del producto
 const hydrateVariantParents = () => {
     if (!props.product.variant_options || !Array.isArray(props.product.variant_options)) {
-        console.log('🔍 EDIT - No hay variant_options para hidratar');
         return;
     }
     
     // DEBUG: Log de lo que llega del backend
-    console.log('🔍 EDIT - Variant options recibidas del backend', JSON.stringify(props.product.variant_options, null, 2));
     
     // Mapa de dependencias desde variant_attributes
     const dependencyMap = {};
@@ -244,27 +241,12 @@ const hydrateVariantParents = () => {
             // Normalizar la ruta de la imagen para que sea accesible
             let imagePath = child.image_path || null;
             
-            // DEBUG: Log de cada child recibido
-            console.log('🔍 EDIT - Hidratando child', {
-                id: child.id,
-                name: child.name,
-                image_path_raw: child.image_path,
-                image_path_type: typeof child.image_path,
-            });
-            
             if (imagePath) {
                 // Si no empieza con /storage/ y no es una URL completa, agregar /storage/
                 if (!imagePath.startsWith('/storage/') && !imagePath.startsWith('http://') && !imagePath.startsWith('https://')) {
                     imagePath = '/storage/' + imagePath.replace(/^\/+/, '');
                 }
             }
-            
-            // DEBUG: Log de la ruta normalizada
-            console.log('🔍 EDIT - Child hidratado', {
-                id: child.id,
-                name: child.name,
-                imagePath_normalized: imagePath,
-            });
             
             return {
                 id: child.id,
@@ -431,15 +413,6 @@ const prepareVariantOptions = () => {
                     }
                 }
                 
-                // DEBUG: Log temporal para ver qué se está enviando
-                console.log('🔍 EDIT - Preparando variant option child', {
-                    childId: child.id,
-                    name: child.name,
-                    hasNewImage: !!child.image,
-                    imagePath: child.imagePath,
-                    imagePathToSend: imagePathToSend,
-                });
-                
                 parentOption.children.push({
                     id: child.id, // Para actualizar si existe
                     name: child.name.trim(),
@@ -456,9 +429,6 @@ const prepareVariantOptions = () => {
             options.push(parentOption);
         }
     });
-    
-    // DEBUG: Log completo de variant_options antes de enviar
-    console.log('🔍 EDIT - Variant options preparadas para enviar', JSON.stringify(options, null, 2));
     
     return options;
 };
@@ -797,10 +767,19 @@ const startBarcodeScanner = async () => {
             await html5QrCode.value.start(
                 { facingMode: "environment" },
                 config,
-                (decodedText) => {
+                async (decodedText) => {
                     playBeep();
-                    form.barcode = decodedText;
-                    scannedBarcode.value = decodedText;
+                    // Limpiar el código de barras: eliminar todos los espacios y caracteres no deseados
+                    // Los códigos de barras pueden venir con espacios (ej: "7 898024 397861" -> "7898024397861")
+                    const cleanedBarcode = decodedText.replace(/\s+/g, '').trim();
+                    
+                    // Actualizar el código de barras en el formulario
+                    form.barcode = cleanedBarcode;
+                    // Usar nextTick para asegurar que Vue detecte el cambio antes de continuar
+                    await nextTick();
+                    // Forzar que el formulario sepa que hay un cambio
+                    form.clearErrors('barcode');
+                    scannedBarcode.value = cleanedBarcode;
                     stopBarcodeScanner();
                     showBarcodeSuccessModal.value = true;
                 },
@@ -814,10 +793,19 @@ const startBarcodeScanner = async () => {
                 await html5QrCode.value.start(
                     { facingMode: "user" },
                     config,
-                    (decodedText) => {
+                    async (decodedText) => {
                         playBeep();
-                        form.barcode = decodedText;
-                        scannedBarcode.value = decodedText;
+                        // Limpiar el código de barras: eliminar todos los espacios y caracteres no deseados
+                        // Los códigos de barras pueden venir con espacios (ej: "7 898024 397861" -> "7898024397861")
+                        const cleanedBarcode = decodedText.replace(/\s+/g, '').trim();
+                        
+                        // Actualizar el código de barras en el formulario
+                        form.barcode = cleanedBarcode;
+                        // Usar nextTick para asegurar que Vue detecte el cambio antes de continuar
+                        await nextTick();
+                        // Forzar que el formulario sepa que hay un cambio
+                        form.clearErrors('barcode');
+                        scannedBarcode.value = cleanedBarcode;
                         stopBarcodeScanner();
                         showBarcodeSuccessModal.value = true;
                     },
@@ -826,13 +814,11 @@ const startBarcodeScanner = async () => {
                     }
                 );
             } catch (err2) {
-                console.error('Error accediendo a la cámara:', err2);
                 alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara en la configuración del navegador.');
                 showBarcodeScanner.value = false;
             }
         }
     } catch (error) {
-        console.error('Error inicializando escáner:', error);
         alert('Error al inicializar el escáner. Por favor, intenta nuevamente.');
         showBarcodeScanner.value = false;
     }
@@ -845,7 +831,7 @@ const stopBarcodeScanner = async () => {
             await html5QrCode.value.stop();
             await html5QrCode.value.clear();
         } catch (err) {
-            console.error('Error deteniendo escáner:', err);
+            // Error silenciado
         }
         html5QrCode.value = null;
     }
@@ -992,9 +978,32 @@ const closeSaveModal = () => {
 };
 
 const confirmSave = () => {
+    // Asegurar que el barcode siempre se envíe, incluso si solo cambió ese campo
+    // Esto soluciona el problema donde el formulario no detecta cambios cuando solo se modifica el barcode
+    // Normalizar el barcode y forzar actualización en el formulario
+    const originalBarcode = props.product.barcode ?? '';
+    const normalizedBarcode = form.barcode !== undefined && form.barcode !== null 
+        ? String(form.barcode).trim() 
+        : '';
+    
+    // Actualizar directamente en el formulario para que Inertia detecte el cambio
+    form.barcode = normalizedBarcode;
+    
+    // Verificar si hay un cambio real en el barcode
+    const barcodeChanged = normalizedBarcode !== originalBarcode;
+    
+    // Si cambió el barcode, limpiar errores para asegurar que se detecte el cambio
+    if (barcodeChanged) {
+        // Forzar que el formulario sepa que hay un cambio
+        form.clearErrors('barcode');
+    }
+    
     // Usar form.transform() para agregar archivos dinámicos ANTES de enviar
     // Esto hace que Inertia los detecte automáticamente
     form.transform((data) => {
+        // Asegurar que barcode esté presente en los datos transformados
+        data.barcode = normalizedBarcode;
+        
         // Agregar archivos de variantes al objeto de datos
         variantParents.value.forEach((parent, parentIndex) => {
             if (parent.children && parent.children.length > 0) {
@@ -1021,6 +1030,12 @@ const confirmSave = () => {
     // Opciones comunes para el envío
     const options = {
         preserveScroll: true,
+        onSuccess: () => {
+            // Mostrar mensaje de éxito
+            showSaved.value = true;
+            successMessage.value = 'Producto actualizado exitosamente';
+            confirmingSave.value = false;
+        },
         onError: async () => {
             // Construir mensajes legibles
             const msgs = [];
@@ -1033,6 +1048,7 @@ const confirmSave = () => {
             }
             errorMessages.value = msgs;
             showErrors.value = msgs.length > 0;
+            confirmingSave.value = false;
         },
         onFinish: () => { 
             confirmingSave.value = false;

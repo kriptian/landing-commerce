@@ -157,12 +157,6 @@ const showTour = computed(() => {
   return Boolean(value);
 });
 
-// Debug: Log para verificar si el tour debe mostrarse (solo en desarrollo)
-if (import.meta.env.DEV) {
-  console.log('UserTour - props.show:', props.show);
-  console.log('UserTour - page.props.show_tour:', page.props.show_tour);
-  console.log('UserTour - showTour.value:', showTour.value);
-}
 
 const currentStepIndex = ref(0);
 
@@ -363,11 +357,11 @@ const completeTour = async () => {
     await router.post(route('tour.complete'), {}, {
       preserveScroll: true,
       onError: (errors) => {
-        console.error('Error completing tour:', errors);
+        // Error silenciado
       }
     });
   } catch (error) {
-    console.error('Error completing tour:', error);
+    // Error silenciado
   }
 };
 
@@ -380,11 +374,11 @@ const remindLater = async () => {
     await router.post(route('tour.remind-later'), { section: 'main' }, {
       preserveScroll: true,
       onError: (errors) => {
-        console.error('Error setting remind later:', errors);
+        // Error silenciado
       }
     });
   } catch (error) {
-    console.error('Error setting remind later:', error);
+    // Error silenciado
   }
 };
 
@@ -397,11 +391,11 @@ const neverShowAgain = async () => {
     await router.post(route('tour.never-show'), { section: 'main' }, {
       preserveScroll: true,
       onError: (errors) => {
-        console.error('Error setting never show:', errors);
+        // Error silenciado
       }
     });
   } catch (error) {
-    console.error('Error setting never show:', error);
+    // Error silenciado
   }
 };
 

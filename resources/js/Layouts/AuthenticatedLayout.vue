@@ -33,12 +33,6 @@ const showTour = computed(() => {
   return Boolean(value);
 });
 
-// Debug: Log para verificar el estado del tour (solo en desarrollo)
-if (import.meta.env.DEV) {
-  console.log('AuthenticatedLayout - props.show_tour:', props.show_tour);
-  console.log('AuthenticatedLayout - page.props.show_tour:', page.props.show_tour);
-  console.log('AuthenticatedLayout - showTour.value:', showTour.value);
-}
 const showUpgradeStep1 = ref(false);
 const showUpgradeStep2 = ref(false);
 
@@ -133,6 +127,10 @@ const handleTourComplete = () => {
                                 <button v-else type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500 cursor-pointer">
                                     Órdenes
                                 </button>
+
+                                <NavLink v-if="isNegociante" :href="route('admin.customers.index')" :active="route().current('admin.customers.*') || route().current('admin.coupons.*')">
+                                    Clientes
+                                </NavLink>
 
                                 <NavLink v-if="isNegociante && can('ver reportes')" :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">Reportes</NavLink>
                                 <button v-else type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500">Reportes</button>
@@ -269,6 +267,8 @@ const handleTourComplete = () => {
                             </div>
                         </ResponsiveNavLink>
                         <button v-else type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Órdenes</button>
+
+                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.customers.index')" :active="route().current('admin.customers.*') || route().current('admin.coupons.*')">Clientes</ResponsiveNavLink>
 
                         <ResponsiveNavLink v-if="isNegociante" :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">Reportes</ResponsiveNavLink>
                         <button v-else type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Reportes</button>

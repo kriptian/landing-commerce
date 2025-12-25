@@ -113,10 +113,132 @@ class CheckoutController extends Controller
             return redirect()->route('catalogo.index', ['store' => $store->slug]);
         }
 
+        // Obtener datos del cliente si está autenticado
+        $customer = $request->user('customer');
+        $addresses = [];
+        if ($customer && $customer->store_id === $store->id) {
+            $addresses = $customer->addresses()->get()->map(function ($address) {
+                return [
+                    'id' => $address->id,
+                    'label' => $address->label,
+                    'address_line_1' => $address->address_line_1,
+                    'address_line_2' => $address->address_line_2,
+                    'city' => $address->city,
+                    'state' => $address->state,
+                    'postal_code' => $address->postal_code,
+                    'country' => $address->country,
+                    'is_default' => $address->is_default,
+                    'full_address' => $address->full_address,
+                ];
+            });
+        }
+
         return Inertia::render('Public/CheckoutPage', [
             'cartItems' => $cartItems,
             'store' => $store,
+            'customer' => $customer ? [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'email' => $customer->email,
+                'phone' => $customer->phone,
+            ] : null,
+            'addresses' => $addresses,
         ]);
+    }
+
+    /**
+     * Validar código de cupón
+     */
+    public function validateCoupon(Request $request, Store $store)
+    {
+        $validated = $request->validate([
+            'code' => 'required|string|max:50',
+        ]);
+
+        $coupon = \App\Models\Coupon::where('store_id', $store->id)
+            ->where('code', $validated['code'])
+            ->first();
+
+        if (!$coupon) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'Código de cupón no encontrado',
+            ]);
+        }
+
+        $customerId = $request->user('customer')?->id;
+        $cartTotal = $this->calculateCartTotal($request, $store);
+
+        if (!$coupon->isValid($customerId, $cartTotal)) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'Este cupón no es válido o ha expirado',
+            ]);
+        }
+
+        return response()->json([
+            'valid' => true,
+            'coupon' => [
+                'id' => $coupon->id,
+                'code' => $coupon->code,
+                'type' => $coupon->type,
+                'value' => $coupon->value,
+                'max_discount' => $coupon->max_discount,
+                'min_purchase' => $coupon->min_purchase,
+            ],
+        ]);
+    }
+
+    /**
+     * Calcular total del carrito
+     */
+    public function calculateCartTotal(Request $request, Store $store)
+    {
+        $cartItems = collect();
+        
+        if ($request->user()) {
+            $cartItems = $request->user()->cart()
+                ->whereRelation('product', 'store_id', $store->id)
+                ->with(['product', 'variant'])
+                ->get();
+        } else {
+            $sessionCart = $request->session()->get('guest_cart', []);
+            foreach ($sessionCart as $row) {
+                $product = \App\Models\Product::find($row['product_id'] ?? null);
+                if ($product && $product->store_id === $store->id) {
+                    $variant = isset($row['product_variant_id']) 
+                        ? \App\Models\ProductVariant::find($row['product_variant_id']) 
+                        : null;
+                    $cartItems->push((object) [
+                        'product' => $product,
+                        'variant' => $variant,
+                        'quantity' => (int) ($row['quantity'] ?? 1),
+                    ]);
+                }
+            }
+        }
+
+        $total = 0;
+        foreach ($cartItems as $item) {
+            $basePrice = $item->variant && $item->variant->price 
+                ? (float) $item->variant->price 
+                : (float) $item->product->price;
+            
+            $discountPercent = 0;
+            if ($store->promo_active && $store->promo_discount_percent > 0) {
+                $discountPercent = $store->promo_discount_percent;
+            } elseif ($item->product->promo_active && $item->product->promo_discount_percent > 0) {
+                $discountPercent = $item->product->promo_discount_percent;
+            }
+            
+            $unitPrice = $discountPercent > 0 
+                ? round($basePrice * (100 - $discountPercent) / 100) 
+                : round($basePrice);
+            
+            $total += $unitPrice * $item->quantity;
+        }
+
+        return $total;
     }
 
     public function store(Request $request, Store $store)
@@ -127,6 +249,8 @@ class CheckoutController extends Controller
             'customer_phone' => 'required|string|max:20',
             'customer_email' => 'required|email|max:255',
             'customer_address' => 'required|string|max:1000',
+            'address_id' => 'nullable|exists:addresses,id',
+            'coupon_code' => 'nullable|string|max:50',
         ]);
 
         // Forzar recarga de store desde DB para obtener promociones actualizadas
@@ -261,18 +385,67 @@ class CheckoutController extends Controller
             return $total + ($unit * $item->quantity);
         }, 0);
 
+        // Validar y aplicar cupón si existe
+        $coupon = null;
+        $discountAmount = 0;
+        if (!empty($validated['coupon_code'])) {
+            $coupon = \App\Models\Coupon::where('store_id', $store->id)
+                ->where('code', $validated['coupon_code'])
+                ->first();
+            
+            if ($coupon) {
+                $customerId = $request->user('customer')?->id;
+                if ($coupon->isValid($customerId, $totalPrice)) {
+                    $discountAmount = $coupon->calculateDiscount($totalPrice);
+                    $totalPrice = max(0, $totalPrice - $discountAmount);
+                } else {
+                    $coupon = null; // Cupón inválido, no aplicar
+                }
+            }
+        }
+
+        // Obtener cliente autenticado
+        $customer = $request->user('customer');
+        if ($customer && $customer->store_id !== $store->id) {
+            $customer = null; // Cliente no pertenece a esta tienda
+        }
+
+        // Verificar que la dirección pertenece al cliente si se proporciona
+        $address = null;
+        if (!empty($validated['address_id'])) {
+            $address = \App\Models\Address::find($validated['address_id']);
+            if ($address && (!$customer || $address->customer_id !== $customer->id)) {
+                $address = null; // Dirección no pertenece al cliente
+            }
+        }
+
         // Store ya se recargó arriba con fresh(), no es necesario volver a recargarlo
         $nextSequence = ((int) ($store->order_sequence ?? 0)) + 1;
         $order = $store->orders()->create([
             'sequence_number' => $nextSequence,
+            'customer_id' => $customer?->id,
+            'address_id' => $address?->id,
+            'coupon_id' => $coupon?->id,
             'customer_name' => $validated['customer_name'],
             'customer_phone' => $validated['customer_phone'],
             'customer_email' => $validated['customer_email'],
             'customer_address' => $validated['customer_address'],
             'total_price' => $totalPrice,
+            'discount_amount' => $discountAmount,
             'status' => 'recibido',
         ]);
         $store->forceFill(['order_sequence' => $nextSequence])->save();
+
+        // Registrar uso del cupón si se aplicó
+        if ($coupon && $discountAmount > 0) {
+            \App\Models\CouponUsage::create([
+                'coupon_id' => $coupon->id,
+                'customer_id' => $customer?->id,
+                'order_id' => $order->id,
+                'discount_amount' => $discountAmount,
+                'used_at' => now(),
+            ]);
+        }
 
         foreach ($cartItems as $item) {
             $base = $computeBaseUnit($item);
@@ -318,6 +491,20 @@ class CheckoutController extends Controller
             $whatsappMessage .= "   - Cantidad: {$item->quantity}\n";
             $whatsappMessage .= "   - Precio unitario: $" . number_format($item->unit_price, 0, ',', '.') . "\n\n";
         }
+        
+        // Calcular subtotal (suma de todos los items)
+        $subtotal = $order->items->sum(fn($item) => $item->unit_price * $item->quantity);
+        
+        $whatsappMessage .= "*Subtotal:* $" . number_format($subtotal, 0, ',', '.') . "\n";
+        
+        // Mostrar descuento del cupón si existe
+        if ($coupon && $discountAmount > 0) {
+            $discountType = $coupon->type === 'percentage' 
+                ? $coupon->value . '%' 
+                : '$' . number_format($coupon->value, 0, ',', '.');
+            $whatsappMessage .= "*Descuento (Cupón: {$coupon->code} - {$discountType}):* -$" . number_format($discountAmount, 0, ',', '.') . "\n";
+        }
+        
         $whatsappMessage .= "*Total del Pedido:* $" . number_format($order->total_price, 0, ',', '.') . "\n\n";
         $whatsappMessage .= "*Datos de Envío:*\n";
         $whatsappMessage .= "• *Nombre:* {$validated['customer_name']}\n";

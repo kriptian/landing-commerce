@@ -121,6 +121,28 @@ class ProductController extends Controller
             ->where('promo_discount_percent', '>', 0)
             ->max('promo_discount_percent') ?? 0;
 
+        // Cargar imágenes de galería si el tipo es 'custom'
+        $galleryImages = [];
+        if ($store->gallery_type === 'custom') {
+            // Usar la relación que ya filtra por is_active
+            $galleryImages = $store->galleryImages()->with('product')->get()->map(function ($img) {
+                return [
+                    'id' => $img->id,
+                    'media_type' => $img->media_type ?? 'image',
+                    'image_url' => $img->image_url,
+                    'video_url' => $img->video_url,
+                    'title' => $img->title,
+                    'description' => $img->description,
+                    'product_id' => $img->product_id,
+                    'product' => $img->product ? [
+                        'id' => $img->product->id,
+                        'name' => $img->product->name,
+                    ] : null,
+                    'show_buy_button' => $img->show_buy_button,
+                ];
+            })->toArray();
+        }
+
         return Inertia::render('Public/ProductList', [
             'products' => $productsQuery->latest()->paginate(36)->withQueryString(),
             'store' => [
@@ -134,6 +156,9 @@ class ProductController extends Controller
                 'tiktok_url' => $store->tiktok_url,
                 'promo_active' => $store->promo_active,
                 'promo_discount_percent' => $store->promo_discount_percent,
+                'gallery_type' => $store->gallery_type ?? 'products',
+                'gallery_show_buy_button' => $store->gallery_show_buy_button ?? true,
+                'gallery_images' => $galleryImages,
                 'catalog_use_default' => $store->catalog_use_default ?? true,
                 'catalog_product_template' => $store->catalog_product_template ?? 'default',
                 'catalog_show_buy_button' => $store->catalog_show_buy_button ?? false,

@@ -96,7 +96,7 @@ class OrderController extends Controller
 
         // Validamos que el estado que nos mandan sea uno de los permitidos
         $request->validate([
-            'status' => ['required', 'string', Rule::in(['recibido', 'en_preparacion', 'despachado', 'entregado', 'cancelado'])],
+            'status' => ['required', 'string', Rule::in(['recibido', 'en_preparacion', 'en_proceso', 'despachado', 'en_camino', 'entregado', 'cancelado'])],
         ]);
 
         // Estados
@@ -109,7 +109,7 @@ class OrderController extends Controller
         $shouldReturn = in_array($previousStatus, ['despachado', 'entregado']) && !in_array($newStatus, ['despachado', 'entregado']);
 
         try {
-            DB::transaction(function () use ($order, $newStatus, $shouldSubtract, $shouldReturn) {
+            DB::transaction(function () use ($order, $previousStatus, $newStatus, $shouldSubtract, $shouldReturn) {
                 $order->load('items.variant', 'items.product');
 
                 if ($shouldSubtract) {
@@ -166,6 +166,30 @@ class OrderController extends Controller
 
                 // Finalmente actualizamos el estado
                 $order->update(['status' => $newStatus]);
+
+                // Crear notificación para el cliente si existe
+                if ($order->customer_id && $previousStatus !== $newStatus) {
+                    $statusMessages = [
+                        'recibido' => 'Tu pedido ha sido recibido por la tienda',
+                        'en_preparacion' => 'Tu pedido está en preparación',
+                        'en_proceso' => 'Tu pedido está en preparación',
+                        'despachado' => 'Tu pedido ha sido despachado',
+                        'en_camino' => 'Tu pedido está en camino a tu dirección',
+                        'entregado' => 'Tu pedido ha sido entregado',
+                        'cancelado' => 'Tu pedido ha sido cancelado',
+                    ];
+
+                    $title = 'Actualización de pedido #' . $order->sequence_number;
+                    $message = $statusMessages[$newStatus] ?? 'El estado de tu pedido ha cambiado';
+
+                    \App\Models\CustomerNotification::create([
+                        'customer_id' => $order->customer_id,
+                        'order_id' => $order->id,
+                        'type' => 'order_status',
+                        'title' => $title,
+                        'message' => $message,
+                    ]);
+                }
             });
         } catch (\Exception $e) {
             return back()->withErrors(['status' => $e->getMessage()]);

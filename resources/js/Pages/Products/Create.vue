@@ -44,7 +44,7 @@ const playBeep = () => {
         oscillator.start(audioContext.currentTime);
         oscillator.stop(audioContext.currentTime + 0.2);
     } catch (error) {
-        console.warn('No se pudo reproducir el beep:', error);
+        // Silenciar error de beep
     }
 };
 
@@ -100,13 +100,11 @@ const startBarcodeScanner = async () => {
                     }
                 );
             } catch (err2) {
-                console.error('Error accediendo a la cámara:', err2);
                 alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara en la configuración del navegador.');
                 showBarcodeScanner.value = false;
             }
         }
     } catch (error) {
-        console.error('Error inicializando escáner:', error);
         alert('Error al inicializar el escáner. Por favor, intenta nuevamente.');
         showBarcodeScanner.value = false;
     }
@@ -119,7 +117,7 @@ const stopBarcodeScanner = async () => {
             await html5QrCode.value.stop();
             await html5QrCode.value.clear();
         } catch (err) {
-            console.error('Error deteniendo escáner:', err);
+            // Error silenciado
         }
         html5QrCode.value = null;
     }
@@ -190,7 +188,7 @@ const onSelectAtLevel = async (levelIndex) => {
             form.category_id = null;
         }
     } catch (error) {
-        console.error('Error cargando categorías hijas:', error);
+        // Error silenciado
     }
 };
 // --- FIN Selects en cascada ---
@@ -734,15 +732,6 @@ const submit = () => {
         return data;
     });
 
-    // DEBUG: Log antes de enviar
-    console.log('🔍 CREATE - Enviando formulario', {
-        hasVariantOptions: form.variant_options?.length > 0,
-        variantOptionsCount: form.variant_options?.length || 0,
-        hasVariantAttributes: form.variant_attributes?.length > 0,
-        variantAttributesCount: form.variant_attributes?.length || 0,
-        hasGalleryFiles: form.gallery_files?.length > 0,
-        formKeys: Object.keys(form.data()),
-    });
 
     form.post(route('admin.products.store'), {
         preserveScroll: true,

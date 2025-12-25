@@ -24,6 +24,8 @@ class CatalogCustomizationController extends Controller
         return Inertia::render('Admin/CatalogCustomization/Index', [
             'store' => [
                 'id' => $store->id,
+                'gallery_type' => $store->gallery_type ?? 'products',
+                'gallery_show_buy_button' => $store->gallery_show_buy_button ?? true,
                 'catalog_use_default' => $store->catalog_use_default ?? true,
                 'catalog_button_color' => $store->catalog_button_color ?? '#1F2937',
                 'catalog_promo_banner_color' => $store->catalog_promo_banner_color ?? '#DC2626',
@@ -53,6 +55,8 @@ class CatalogCustomizationController extends Controller
     public function update(Request $request)
     {
         $validated = $request->validate([
+            'gallery_type' => 'required|in:products,custom',
+            'gallery_show_buy_button' => 'required|boolean',
             'catalog_use_default' => 'required|boolean',
             'catalog_button_color' => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',
             'catalog_promo_banner_color' => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',

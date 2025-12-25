@@ -34,23 +34,87 @@ class HandleInertiaRequests extends Middleware
     {
         return array_merge(parent::share($request), [
             'auth' => [
-                'user' => $request->user(),
+                // IMPORTANTE: Solo usar el guard 'web' explícitamente para evitar mezclar con customers
+                'user' => Auth::guard('web')->user(),
                 // Enviamos un arreglo plano de permisos (directos y vía roles)
-                'permissions' => $request->user()
-                    ? $request->user()->getAllPermissions()->pluck('name')->values()->toArray()
-                    : [],
+                // Solo para usuarios del guard 'web' (admin), no para customers
+                'permissions' => (function () use ($request) {
+                    $user = Auth::guard('web')->user(); // Guard 'web' explícito
+                    if (!$user || !method_exists($user, 'getAllPermissions')) {
+                        return [];
+                    }
+                    return $user->getAllPermissions()->pluck('name')->values()->toArray();
+                })(),
                 // Opcional: roles por nombre para debug UI si se requiere
-                'roles' => $request->user()
-                    ? $request->user()->roles->pluck('name')->values()->toArray()
-                    : [],
+                'roles' => (function () use ($request) {
+                    $user = Auth::guard('web')->user(); // Guard 'web' explícito
+                    if (!$user || !method_exists($user, 'roles')) {
+                        return [];
+                    }
+                    return $user->roles->pluck('name')->values()->toArray();
+                })(),
                 // Flag explícito para súper admin real (por lista de correos)
                 'isSuperAdmin' => (function () use ($request) {
-                    $user = $request->user();
+                    $user = Auth::guard('web')->user(); // Guard 'web' explícito
                     if (! $user) return false;
                     $single = (string) config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
                     $list = (array) config('app.super_admin_emails', []);
                     $allowed = collect([$single])->filter()->merge($list)->map(fn($e) => strtolower(trim($e)))->unique()->all();
                     return in_array(strtolower($user->email), $allowed, true);
+                })(),
+            ],
+            'customer' => [
+                'user' => $request->user('customer'),
+                'defaultAddress' => (function () use ($request) {
+                    $customer = $request->user('customer');
+                    if (!$customer) {
+                        return null;
+                    }
+                    // Cargar la relación defaultAddress
+                    $defaultAddress = $customer->addresses()->where('is_default', true)->first();
+                    if (!$defaultAddress) {
+                        return null;
+                    }
+                    return [
+                        'id' => $defaultAddress->id,
+                        'label' => $defaultAddress->label,
+                        'address_line_1' => $defaultAddress->address_line_1,
+                        'address_line_2' => $defaultAddress->address_line_2,
+                        'city' => $defaultAddress->city,
+                        'state' => $defaultAddress->state,
+                        'postal_code' => $defaultAddress->postal_code,
+                        'country' => $defaultAddress->country,
+                        'is_default' => $defaultAddress->is_default,
+                    ];
+                })(),
+                'notifications' => (function () use ($request) {
+                    $customer = $request->user('customer');
+                    if (!$customer) {
+                        return [];
+                    }
+                    return $customer->notifications()
+                        ->where('is_read', false)
+                        ->orderBy('created_at', 'desc')
+                        ->limit(10)
+                        ->get()
+                        ->map(function ($notification) {
+                            return [
+                                'id' => $notification->id,
+                                'order_id' => $notification->order_id,
+                                'type' => $notification->type,
+                                'title' => $notification->title,
+                                'message' => $notification->message,
+                                'created_at' => $notification->created_at->toISOString(),
+                            ];
+                        })
+                        ->toArray();
+                })(),
+                'notificationsCount' => (function () use ($request) {
+                    $customer = $request->user('customer');
+                    if (!$customer) {
+                        return 0;
+                    }
+                    return $customer->notifications()->where('is_read', false)->count();
                 })(),
             ],
             'flash' => [
@@ -73,11 +137,15 @@ class HandleInertiaRequests extends Middleware
                         return 0; // fuera del catálogo público no mostramos conteo global
                     }
 
-                    if (Auth::check()) {
-                        // Contar únicamente items del carrito pertenecientes a esta tienda
-                        return Auth::user()->cart()
-                            ->whereRelation('product', 'store_id', $storeId)
-                            ->sum('quantity');
+                    // Solo contar carrito para usuarios del guard 'web' (admin), no para customers
+                    if (Auth::guard('web')->check()) {
+                        $user = Auth::guard('web')->user();
+                        if ($user && method_exists($user, 'cart')) {
+                            // Contar únicamente items del carrito pertenecientes a esta tienda
+                            return $user->cart()
+                                ->whereRelation('product', 'store_id', $storeId)
+                                ->sum('quantity');
+                        }
                     }
 
                     // Invitado: filtrar por productos de la tienda actual

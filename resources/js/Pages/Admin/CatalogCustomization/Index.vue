@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
@@ -13,6 +13,8 @@ const props = defineProps({
 });
 
 const form = useForm({
+    gallery_type: props.store.gallery_type ?? 'products',
+    gallery_show_buy_button: props.store.gallery_show_buy_button ?? true,
     catalog_use_default: props.store.catalog_use_default ?? true,
     catalog_product_template: props.store.catalog_product_template ?? 'default',
     catalog_show_buy_button: props.store.catalog_show_buy_button ?? false,
@@ -206,6 +208,68 @@ const previewStyles = computed(() => {
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
                         <form @submit.prevent="submit">
+                            <!-- Configuración de Galería -->
+                            <div class="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">Galería Principal</h3>
+                                
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        Tipo de Galería
+                                    </label>
+                                    <div class="flex gap-4">
+                                        <label class="flex items-center">
+                                            <input
+                                                type="radio"
+                                                v-model="form.gallery_type"
+                                                value="products"
+                                                class="mr-2"
+                                            />
+                                            <span class="text-sm text-gray-700">Productos Destacados</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input
+                                                type="radio"
+                                                v-model="form.gallery_type"
+                                                value="custom"
+                                                class="mr-2"
+                                            />
+                                            <span class="text-sm text-gray-700">Imágenes Personalizadas</span>
+                                        </label>
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-500">
+                                        Selecciona si quieres mostrar productos destacados o imágenes personalizadas en la galería principal del catálogo.
+                                    </p>
+                                </div>
+
+                                <div v-if="form.gallery_type === 'products'" class="mb-4">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            v-model="form.gallery_show_buy_button"
+                                            class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                        />
+                                        <span class="ml-3 text-sm font-medium text-gray-700">
+                                            Mostrar botón "Comprar ahora" en la galería
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <div v-if="form.gallery_type === 'custom'" class="mb-4">
+                                    <Link 
+                                        :href="route('admin.gallery-images.index')"
+                                        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                    >
+                                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                        </svg>
+                                        Gestionar Imágenes de la Galería
+                                    </Link>
+                                    <p class="mt-2 text-xs text-gray-500">
+                                        Agrega, edita y organiza las imágenes personalizadas de tu galería. Puedes linkear cada imagen a un producto específico.
+                                    </p>
+                                </div>
+                            </div>
+
                             <!-- Modo por defecto -->
                             <div class="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
                                 <label class="flex items-center cursor-pointer">
@@ -351,7 +415,7 @@ const previewStyles = computed(() => {
                             <div v-if="!form.catalog_use_default" class="mb-8 border-t pt-6">
                                 <h3 class="text-lg font-semibold text-gray-800 mb-4">Editar Colores</h3>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <template v-for="colorGroup in granularColors" :key="colorGroup.group">
+                                    <template v-for="colorGroup in (granularColors || [])" :key="colorGroup.group">
                                         <!-- Fondo -->
                                         <div class="space-y-2">
                                             <label class="block text-sm font-medium text-gray-700 mb-1">

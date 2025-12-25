@@ -50,6 +50,8 @@ class Store extends Model
             'catalog_input_bg_color',
             'catalog_input_text_color',
             'catalog_promo_banner_text_color',
+            'gallery_type',
+            'gallery_show_buy_button',
         ];
 
     /**
@@ -105,6 +107,27 @@ class Store extends Model
     public function physicalSales()
     {
         return $this->hasMany(\App\Models\PhysicalSale::class);
+    }
+
+    /**
+     * Una tienda tiene muchos clientes.
+     */
+    public function customers()
+    {
+        return $this->hasMany(\App\Models\Customer::class);
+    }
+
+    /**
+     * Una tienda tiene muchos cupones.
+     */
+    public function coupons()
+    {
+        return $this->hasMany(\App\Models\Coupon::class);
+    }
+
+    public function galleryImages()
+    {
+        return $this->hasMany(\App\Models\GalleryImage::class)->where('is_active', true)->orderBy('order');
     }
 
     /**

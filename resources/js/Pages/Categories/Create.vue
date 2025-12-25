@@ -57,7 +57,7 @@ const submit = () => {
             errorMessages.value = [];
         },
         onError: (errors) => {
-            console.error('Error al crear categoría:', errors);
+            // Error silenciado
             // Construir mensajes de error legibles en español
             const msgs = [];
             for (const [key, val] of Object.entries(form.errors)) {

@@ -188,7 +188,7 @@ const findElement = (target) => {
       const element = document.querySelector(target);
       if (element) return element;
     } catch (error) {
-      console.log('❌ Selector inválido:', target, error);
+      // Selector inválido
     }
     
     // Si el target parece ser un ID simple (empieza con #), intentar selectores alternativos
@@ -205,11 +205,10 @@ const findElement = (target) => {
         try {
           const el = document.querySelector(alt);
           if (el) {
-            console.log(`✅ Elemento encontrado con selector alternativo: ${alt}`);
             return el;
           }
         } catch (error) {
-          console.log('❌ Selector alternativo inválido:', alt, error);
+          // Selector alternativo inválido
         }
       }
     }
@@ -251,14 +250,10 @@ const tooltipStyle = computed(() => {
   
   const element = findElement(currentStep.value.target);
   if (!element) {
-    console.log('❌ Elemento no encontrado:', currentStep.value.target);
+    // Elemento no encontrado
     return {};
   }
   
-  // Debug temporal
-  if (import.meta.env.DEV) {
-    console.log('✅ Elemento encontrado:', element, 'Target:', currentStep.value.target, 'Step:', currentStepIndex.value + 1);
-  }
   
   const rect = element.getBoundingClientRect();
   const position = currentStep.value.position || 'bottom';

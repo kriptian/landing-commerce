@@ -6,6 +6,8 @@ import AlertModal from '@/Components/AlertModal.vue';
 const props = defineProps({
     cartItems: Array,
     store: Object,
+    customer: Object,
+    addresses: Array,
 });
 
 // Colores personalizados del catálogo
@@ -104,14 +106,113 @@ const getDisplayUnitPrice = (item) => {
 };
 
 // Calculamos el precio total con promoción si aplica
-const totalPrice = computed(() => props.cartItems.reduce((t, item) => t + (getDisplayUnitPrice(item) * item.quantity), 0));
+const subtotal = computed(() => props.cartItems.reduce((t, item) => t + (getDisplayUnitPrice(item) * item.quantity), 0));
 
-// Creamos el formulario (sigue igual)
+// Cupón de descuento
+const couponCode = ref('');
+const coupon = ref(null);
+const couponError = ref('');
+const couponLoading = ref(false);
+const discountAmount = computed(() => {
+    if (!coupon.value) return 0;
+    if (coupon.value.type === 'percentage') {
+        const discount = (subtotal.value * coupon.value.value) / 100;
+        return coupon.value.max_discount ? Math.min(discount, coupon.value.max_discount) : discount;
+    } else {
+        return Math.min(coupon.value.value, subtotal.value);
+    }
+});
+
+// Precio total con descuento
+const totalPrice = computed(() => Math.max(0, subtotal.value - discountAmount.value));
+
+// Aplicar cupón
+const applyCoupon = async () => {
+    if (!couponCode.value.trim()) {
+        couponError.value = 'Ingresa un código de cupón';
+        return;
+    }
+    
+    couponLoading.value = true;
+    couponError.value = '';
+    
+    try {
+        const response = await window.axios.post(route('checkout.validate-coupon', { store: props.store.slug }), {
+            code: couponCode.value.trim(),
+        });
+        
+        if (response.data.valid) {
+            coupon.value = response.data.coupon;
+            couponError.value = '';
+        } else {
+            couponError.value = response.data.message || 'Cupón inválido';
+            coupon.value = null;
+        }
+    } catch (error) {
+        couponError.value = error.response?.data?.message || 'Error al validar el cupón';
+        coupon.value = null;
+    } finally {
+        couponLoading.value = false;
+    }
+};
+
+// Remover cupón
+const removeCoupon = () => {
+    couponCode.value = '';
+    coupon.value = null;
+    couponError.value = '';
+};
+
+// Dirección seleccionada
+const selectedAddressId = ref(null);
+const useCustomAddress = ref(false);
+const customAddress = ref('');
+
+// Prellenar datos si el cliente está logueado
+const customer = computed(() => props.customer || null);
+const addresses = computed(() => props.addresses || []);
+
+// Inicializar formulario con datos del cliente
+const initializeForm = () => {
+    if (customer.value) {
+        form.customer_name = customer.value.name || '';
+        form.customer_phone = customer.value.phone || '';
+        form.customer_email = customer.value.email || '';
+        
+        // Si tiene dirección predeterminada, usarla
+        const defaultAddress = addresses.value.find(addr => addr.is_default);
+        if (defaultAddress) {
+            selectedAddressId.value = defaultAddress.id;
+            form.customer_address = defaultAddress.full_address || `${defaultAddress.address_line_1}, ${defaultAddress.city}`;
+        }
+    }
+};
+
+// Inicializar al montar
+import { onMounted } from 'vue';
+onMounted(() => {
+    initializeForm();
+});
+
+// Cuando cambia la dirección seleccionada
+const onAddressChange = (addressId) => {
+    if (addressId) {
+        const address = addresses.value.find(addr => addr.id === addressId);
+        if (address) {
+            form.customer_address = address.full_address || `${address.address_line_1}, ${address.city}`;
+            useCustomAddress.value = false;
+        }
+    }
+};
+
+// Creamos el formulario
 const form = useForm({
     customer_name: '',
     customer_phone: '',
     customer_email: '',
     customer_address: '',
+    address_id: null,
+    coupon_code: null,
 });
 
 // ===== ESTA ES LA FUNCIÓN QUE CAMBIA =====
@@ -119,6 +220,10 @@ const showError = ref(false);
 const errorMessage = ref('');
 
 const submitOrder = () => {
+    // Agregar datos adicionales al formulario
+    form.address_id = selectedAddressId.value;
+    form.coupon_code = coupon.value ? couponCode.value : null;
+    
     // Usamos el 'post' de Inertia para enviar los datos del 'form'
     // a la ruta 'checkout.store' que creamos.
     form.post(route('checkout.store', { store: props.store.slug }), {
@@ -154,6 +259,14 @@ const submitOrder = () => {
             
             <div>
                 <h1 class="text-xl sm:text-2xl font-medium text-gray-600 mb-6">Datos de Envío</h1>
+                
+                <!-- Mensaje si no está logueado -->
+                <div v-if="!customer" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p class="text-sm text-blue-800 mb-2">
+                        ¿Ya tienes cuenta? <Link :href="route('customer.login', { store: store.slug })" class="font-semibold underline">Inicia sesión</Link> para prellenar tus datos o <Link :href="route('customer.register', { store: store.slug })" class="font-semibold underline">regístrate</Link> para guardar tus direcciones.
+                    </p>
+                </div>
+
                 <form @submit.prevent="submitOrder" class="space-y-6 bg-white p-8 lg:p-10 shadow-2xl rounded-2xl border border-gray-100 backdrop-blur-sm transform transition-all hover:shadow-3xl">
                     <div>
                         <label for="customer_name" class="block font-medium text-sm text-gray-700 mb-2">Nombre Completo</label>
@@ -170,9 +283,47 @@ const submitOrder = () => {
                         <input id="customer_email" v-model="form.customer_email" type="email" class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4" :class="catalogUseDefault ? 'bg-gray-50 hover:bg-white' : ''" :style="inputStyleObj" required>
                     </div>
 
+                    <!-- Selector de direcciones si el cliente está logueado -->
+                    <div v-if="customer && addresses.length > 0">
+                        <label class="block font-medium text-sm text-gray-700 mb-2">Dirección de Envío</label>
+                        <select 
+                            v-model="selectedAddressId" 
+                            @change="onAddressChange(selectedAddressId)"
+                            class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4 mb-3" 
+                            :class="catalogUseDefault ? 'bg-gray-50 hover:bg-white' : ''" 
+                            :style="inputStyleObj"
+                        >
+                            <option :value="null">Seleccionar dirección guardada</option>
+                            <option v-for="address in addresses" :key="address.id" :value="address.id">
+                                {{ address.label }} - {{ address.address_line_1 }}, {{ address.city }}
+                            </option>
+                        </select>
+                        <button 
+                            type="button" 
+                            @click="useCustomAddress = !useCustomAddress"
+                            class="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                            {{ useCustomAddress ? 'Usar dirección guardada' : 'Usar dirección diferente' }}
+                        </button>
+                    </div>
+
                     <div>
-                        <label for="customer_address" class="block font-medium text-sm text-gray-700 mb-2">Dirección Completa (con ciudad y detalles)</label>
-                        <textarea id="customer_address" v-model="form.customer_address" class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4 resize-none" :class="catalogUseDefault ? 'bg-gray-50 hover:bg-white' : ''" :style="inputStyleObj" rows="3" required></textarea>
+                        <label for="customer_address" class="block font-medium text-sm text-gray-700 mb-2">
+                            {{ customer && addresses.length > 0 && !useCustomAddress ? 'Dirección (seleccionada arriba)' : 'Dirección Completa (con ciudad y detalles)' }}
+                        </label>
+                        <textarea 
+                            id="customer_address" 
+                            v-model="form.customer_address" 
+                            :disabled="customer && addresses.length > 0 && !useCustomAddress && selectedAddressId"
+                            class="block w-full rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4 resize-none" 
+                            :class="[
+                                catalogUseDefault ? 'bg-gray-50 hover:bg-white' : '',
+                                customer && addresses.length > 0 && !useCustomAddress && selectedAddressId ? 'bg-gray-100 cursor-not-allowed' : ''
+                            ]" 
+                            :style="inputStyleObj" 
+                            rows="3" 
+                            required
+                        ></textarea>
                     </div>
                     
                     <button type="submit" :disabled="form.processing" class="w-full font-bold py-4 px-6 rounded-xl text-center disabled:opacity-50 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl" :class="catalogUseDefault ? 'bg-green-600 text-white hover:bg-green-700' : ''" :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}">
@@ -203,9 +354,56 @@ const submitOrder = () => {
                     </div>
                 </div>
                 
-                <div class="border-t border-gray-200 mt-6 pt-6">
+                <!-- Campo de cupón -->
+                <div class="border-t border-gray-200 pt-6">
+                    <label class="block font-medium text-sm text-gray-700 mb-2">Código de Cupón (Opcional)</label>
+                    <div class="flex gap-2">
+                        <input 
+                            v-model="couponCode" 
+                            type="text" 
+                            placeholder="Ingresa el código"
+                            :disabled="couponLoading || !!coupon"
+                            class="flex-1 block rounded-xl shadow-sm border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all py-3 px-4" 
+                            :class="catalogUseDefault ? 'bg-gray-50 hover:bg-white' : ''" 
+                            :style="inputStyleObj"
+                        >
+                        <button 
+                            v-if="!coupon"
+                            type="button"
+                            @click="applyCoupon"
+                            :disabled="couponLoading || !couponCode.trim()"
+                            class="px-6 py-3 rounded-xl font-medium transition-all disabled:opacity-50"
+                            :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''"
+                            :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}"
+                        >
+                            {{ couponLoading ? '...' : 'Aplicar' }}
+                        </button>
+                        <button 
+                            v-else
+                            type="button"
+                            @click="removeCoupon"
+                            class="px-6 py-3 rounded-xl font-medium bg-red-600 text-white hover:bg-red-700 transition-all"
+                        >
+                            Quitar
+                        </button>
+                    </div>
+                    <p v-if="couponError" class="mt-2 text-sm text-red-600">{{ couponError }}</p>
+                    <p v-if="coupon" class="mt-2 text-sm text-green-600">
+                        ✓ Cupón aplicado: {{ coupon.type === 'percentage' ? coupon.value + '%' : '$' + coupon.value }} de descuento
+                    </p>
+                </div>
+
+                <div class="border-t border-gray-200 mt-6 pt-6 space-y-3">
                     <div class="flex justify-between items-center">
-                        <span class="text-lg font-medium text-gray-600">Total</span>
+                        <span class="text-lg font-medium text-gray-600">Subtotal</span>
+                        <span class="text-lg font-semibold text-gray-900">{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(subtotal) }}</span>
+                    </div>
+                    <div v-if="discountAmount > 0" class="flex justify-between items-center text-green-600">
+                        <span class="text-lg font-medium">Descuento</span>
+                        <span class="text-lg font-semibold">-{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(discountAmount) }}</span>
+                    </div>
+                    <div class="flex justify-between items-center border-t border-gray-200 pt-3">
+                        <span class="text-xl font-bold text-gray-900">Total</span>
                         <span class="text-2xl font-bold text-gray-900">{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalPrice) }}</span>
                     </div>
                 </div>

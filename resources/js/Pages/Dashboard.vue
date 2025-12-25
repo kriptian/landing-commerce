@@ -36,10 +36,6 @@ const plan = computed(() => page.props.auth?.user?.store?.plan || 'emprendedor')
 const isNegociante = computed(() => plan.value === 'negociante' || page.props.auth?.isSuperAdmin === true);
 const openUpgrade = () => { try { window.dispatchEvent(new CustomEvent('open-upgrade-plan')); } catch(e) {} };
 
-// Debug: Log para verificar la prop show_tour (solo en desarrollo)
-if (import.meta.env.DEV) {
-  console.log('Dashboard - props.show_tour:', props.show_tour);
-}
 </script>
 
 <template>
