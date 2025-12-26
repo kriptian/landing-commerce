@@ -2,8 +2,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
-import SectionTour from '@/Components/SectionTour.vue';
-import { useSectionTour } from '@/utils/useSectionTour.js';
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 
 const props = defineProps({
@@ -11,8 +9,6 @@ const props = defineProps({
     filters: Object,
 });
 
-// Tour de la sección de órdenes
-const { showTour, steps, handleTourComplete } = useSectionTour('orders');
 
 // Buscador reactivo con debounce
 const q = ref(props.filters?.q || '');
@@ -264,12 +260,5 @@ const startResize = (e) => {
             </div>
         </div>
         
-        <!-- Tour de la sección de órdenes -->
-        <SectionTour 
-            :show="showTour" 
-            section="orders" 
-            :steps="steps" 
-            @complete="handleTourComplete" 
-        />
     </AuthenticatedLayout>
 </template>

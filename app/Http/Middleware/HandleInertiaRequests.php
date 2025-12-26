@@ -33,8 +33,11 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         // Incluir el token CSRF en las props compartidas para que Inertia lo tenga disponible
+        // También actualizar el meta tag en el frontend después de cada petición
+        $csrfToken = csrf_token();
+        
         return array_merge(parent::share($request), [
-            'csrf_token' => csrf_token(),
+            'csrf_token' => $csrfToken,
             'auth' => [
                 // IMPORTANTE: Solo usar el guard 'web' explícitamente para evitar mezclar con customers
                 'user' => Auth::guard('web')->user(),

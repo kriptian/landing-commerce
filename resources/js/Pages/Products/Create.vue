@@ -6,8 +6,6 @@ import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
-import SectionTour from '@/Components/SectionTour.vue';
-import { useSectionTour } from '@/utils/useSectionTour.js';
 
 const props = defineProps({
     categories: Array, 
@@ -129,8 +127,6 @@ onBeforeUnmount(() => {
     stopBarcodeScanner();
 });
 
-// Tour de sección para crear productos
-const { showTour, steps, handleTourComplete } = useSectionTour('products-create');
 
 // Validación previa en el navegador
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -1217,13 +1213,6 @@ const submit = () => {
         @close="showImageInfoModal = false"
     />
 
-    <!-- Tour de sección para crear productos -->
-    <SectionTour 
-        :show="showTour" 
-        section="products-create"
-        :steps="steps"
-        @complete="handleTourComplete"
-    />
 
     <!-- Modal de escáner de código de barras -->
     <Modal :show="showBarcodeScanner" @close="stopBarcodeScanner">

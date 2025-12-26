@@ -371,11 +371,17 @@ class PhysicalSaleController extends Controller
 
             DB::commit();
 
-            return response()->json([
+            $response = response()->json([
                 'success' => true,
                 'sale' => $sale->load('items.product'),
                 'message' => 'Venta registrada exitosamente',
             ]);
+            
+            // Incluir el token CSRF en los headers de la respuesta para que el frontend lo actualice
+            $response->header('X-CSRF-TOKEN', csrf_token());
+            $response->header('Access-Control-Expose-Headers', 'X-CSRF-TOKEN');
+            
+            return $response;
 
         } catch (\Exception $e) {
             DB::rollBack();

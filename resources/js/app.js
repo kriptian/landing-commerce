@@ -95,15 +95,22 @@ createInertiaApp({
                 if (token) {
                     // Actualizar el meta tag si es necesario
                     let metaTag = document.head.querySelector('meta[name="csrf-token"]');
-                    if (metaTag && metaTag.content !== token) {
+                    if (metaTag) {
+                        // SIEMPRE actualizar el contenido del meta tag con el token actual
                         metaTag.setAttribute('content', token);
                     }
                     // Actualizar axios
                     if (window.axios) {
                         window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+                        // También actualizar X-XSRF-TOKEN por si acaso
+                        window.axios.defaults.headers.common['X-XSRF-TOKEN'] = token;
+                    }
+                    // También actualizar la función global si existe
+                    if (window.updateCsrfToken) {
+                        window.updateCsrfToken();
                     }
                 }
-            }, 100);
+            }, 150);
         });
 
         // También actualizar el token antes de cada petición de Inertia
@@ -117,24 +124,35 @@ createInertiaApp({
         // Mantenemos los redireccionamientos simples para 401/403/419 (las páginas pueden mostrar AlertModal locales)
         if (window.axios) {
             // Interceptor de request para actualizar el token CSRF antes de cada petición
+            // CRÍTICO: Este interceptor se ejecuta ANTES de cada petición para asegurar token actualizado
             window.axios.interceptors.request.use(
                 (config) => {
-                    // Actualizar el token CSRF desde el meta tag o cookie antes de cada petición
-                    const token = document.head.querySelector('meta[name="csrf-token"]');
-                    if (token) {
-                        config.headers['X-CSRF-TOKEN'] = token.content;
-                    } else {
-                        // Si no hay meta tag, intentar leer de cookies (Laravel usa XSRF-TOKEN)
+                    // SIEMPRE actualizar el token CSRF antes de cada petición
+                    // Primero intentar desde el meta tag (más confiable)
+                    let token = null;
+                    const metaTag = document.head.querySelector('meta[name="csrf-token"]');
+                    if (metaTag) {
+                        token = metaTag.content;
+                        config.headers['X-CSRF-TOKEN'] = token;
+                        window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+                    }
+                    
+                    // Si no hay meta tag, leer de cookies (Laravel usa XSRF-TOKEN)
+                    if (!token) {
                         const getCookie = (name) => {
                             const value = `; ${document.cookie}`;
                             const parts = value.split(`; ${name}=`);
                             if (parts.length === 2) return parts.pop().split(';').shift();
+                            return null;
                         };
                         const xsrfToken = getCookie('XSRF-TOKEN');
                         if (xsrfToken) {
-                            config.headers['X-XSRF-TOKEN'] = decodeURIComponent(xsrfToken);
+                            token = decodeURIComponent(xsrfToken);
+                            config.headers['X-XSRF-TOKEN'] = token;
+                            window.axios.defaults.headers.common['X-XSRF-TOKEN'] = token;
                         }
                     }
+                    
                     return config;
                 },
                 (error) => Promise.reject(error)
@@ -144,10 +162,13 @@ createInertiaApp({
                 (response) => response,
                 (error) => {
                     const status = error?.response?.status;
-                    // Error 419: CSRF token mismatch - actualizar token y reintentar una vez
+                    
+                    // Error 419: CSRF token mismatch
+                    // NO reintentar automáticamente aquí, dejar que el código de la página lo maneje
                     if (status === 419) {
-                        // Actualizar el token CSRF desde la respuesta si está disponible
+                        // Solo actualizar el token si está disponible, pero no reintentar
                         const newToken = error?.response?.headers?.['x-csrf-token'] || 
+                                        error?.response?.headers?.['X-CSRF-TOKEN'] ||
                                         document.head.querySelector('meta[name="csrf-token"]')?.content;
                         if (newToken) {
                             // Actualizar el meta tag
@@ -162,19 +183,11 @@ createInertiaApp({
                             }
                             // Actualizar el header de axios
                             window.axios.defaults.headers.common['X-CSRF-TOKEN'] = newToken;
-                            
-                            // Reintentar la petición original una vez
-                            const originalRequest = error.config;
-                            if (originalRequest && !originalRequest._retry) {
-                                originalRequest._retry = true;
-                                originalRequest.headers['X-CSRF-TOKEN'] = newToken;
-                                return window.axios(originalRequest);
-                            }
                         }
-                        // Si no se pudo actualizar el token, recargar la página
-                        window.location.reload();
-                        return Promise.resolve();
+                        // Rechazar el error para que el código de la página lo maneje
+                        return Promise.reject(error);
                     }
+                    
                     if (status === 403) {
                         try { window.location.href = route('dashboard'); } catch (e) { window.location.href = '/'; }
                         return Promise.resolve();

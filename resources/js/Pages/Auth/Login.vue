@@ -16,6 +16,7 @@ defineProps({
 });
 
 const form = useForm({
+    store_name: '',
     email: '',
     password: '',
 });
@@ -53,6 +54,21 @@ const submit = () => {
 
             <form @submit.prevent="submit" class="space-y-4">
                     <div>
+                        <InputLabel for="store_name" value="Nombre de Tienda" />
+                        <TextInput
+                            id="store_name"
+                            type="text"
+                            class="mt-1 block w-full"
+                            v-model="form.store_name"
+                            required
+                            autofocus
+                            placeholder="Ej: Mi Tienda"
+                            autocomplete="organization"
+                        />
+                        <InputError class="mt-2" :message="form.errors.store_name" />
+                    </div>
+
+                    <div>
                         <InputLabel for="email" value="Email" />
                         <TextInput
                             id="email"
@@ -60,7 +76,6 @@ const submit = () => {
                             class="mt-1 block w-full"
                             v-model="form.email"
                             required
-                            autofocus
                             autocomplete="username"
                         />
                         <InputError class="mt-2" :message="form.errors.email" />

@@ -681,6 +681,84 @@ const openCashDrawer = async () => {
     }
 };
 
+// Función para asegurar que el token CSRF esté actualizado
+const ensureCsrfToken = () => {
+    // Leer directamente del meta tag
+    const metaTag = document.head.querySelector('meta[name="csrf-token"]');
+    if (metaTag && metaTag.content) {
+        if (window.axios) {
+            window.axios.defaults.headers.common['X-CSRF-TOKEN'] = metaTag.content;
+            // También actualizar X-XSRF-TOKEN por si acaso
+            window.axios.defaults.headers.common['X-XSRF-TOKEN'] = metaTag.content;
+        }
+        return metaTag.content;
+    }
+    // Fallback: leer de cookies
+    const getCookie = (name) => {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    };
+    const xsrfToken = getCookie('XSRF-TOKEN');
+    if (xsrfToken && window.axios) {
+        const decodedToken = decodeURIComponent(xsrfToken);
+        window.axios.defaults.headers.common['X-XSRF-TOKEN'] = decodedToken;
+        window.axios.defaults.headers.common['X-CSRF-TOKEN'] = decodedToken;
+        return decodedToken;
+    }
+    return null;
+};
+
+// Asegurar que el token CSRF esté actualizado cuando se carga la página
+// Esto es especialmente importante después del login cuando el token se regenera
+onMounted(() => {
+    // Esperar a que el DOM esté completamente cargado y el meta tag esté actualizado
+    // Después del login, Inertia puede tardar un momento en actualizar el meta tag
+    setTimeout(() => {
+        ensureCsrfToken();
+        // También actualizar la función global si existe
+        if (window.updateCsrfToken) {
+            window.updateCsrfToken();
+        }
+        // Forzar una segunda actualización después de un breve delay para asegurar
+        // que el token del servidor esté disponible
+        setTimeout(() => {
+            ensureCsrfToken();
+        }, 300);
+    }, 100);
+});
+
+// También escuchar cuando Inertia termina de cargar la página (después de redirecciones)
+router.on('finish', () => {
+    // Actualizar el token después de cada navegación de Inertia
+    // Esto es crítico después del login
+    setTimeout(() => {
+        // Leer el token desde las props de Inertia si está disponible (más confiable después del login)
+        const page = usePage();
+        const csrfTokenFromProps = page.props.csrf_token;
+        
+        if (csrfTokenFromProps) {
+            // Actualizar el meta tag con el token de las props
+            const metaTag = document.head.querySelector('meta[name="csrf-token"]');
+            if (metaTag) {
+                metaTag.setAttribute('content', csrfTokenFromProps);
+            }
+            // Actualizar axios
+            if (window.axios) {
+                window.axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfTokenFromProps;
+                window.axios.defaults.headers.common['X-XSRF-TOKEN'] = csrfTokenFromProps;
+            }
+        }
+        
+        // También usar la función normal como respaldo
+        ensureCsrfToken();
+        if (window.updateCsrfToken) {
+            window.updateCsrfToken();
+        }
+    }, 200);
+});
+
 // Procesar venta
 const processSale = async () => {
     if (cartItems.value.length === 0) {
@@ -734,35 +812,148 @@ const processSale = async () => {
             return;
         }
 
-        // Asegurar que el token CSRF esté actualizado antes de la petición
-        if (window.updateCsrfToken) {
-            window.updateCsrfToken();
-        } else {
-            // Fallback: actualizar manualmente
-            const token = document.head.querySelector('meta[name="csrf-token"]');
-            if (token && window.axios) {
-                window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token.content;
+        // CRÍTICO: Asegurar que el token CSRF esté actualizado ANTES de la petición
+        // Esto es especialmente importante después del login cuando el token se regenera
+        
+        // Primero intentar obtener el token de las props de Inertia (más confiable después del login)
+        const page = usePage();
+        let csrfToken = page.props.csrf_token;
+        
+        if (csrfToken) {
+            // Actualizar el meta tag con el token de las props
+            const metaTag = document.head.querySelector('meta[name="csrf-token"]');
+            if (metaTag) {
+                metaTag.setAttribute('content', csrfToken);
             }
+        } else {
+            // Si no hay token en las props, usar la función normal
+            csrfToken = ensureCsrfToken();
         }
+        
+        // Si aún no hay token, esperar un momento y volver a intentar (puede estar cargando después del login)
+        if (!csrfToken) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            csrfToken = ensureCsrfToken();
+        }
+        
+        if (!csrfToken) {
+            alert('Error: No se pudo obtener el token de seguridad. Por favor, recarga la página.');
+            return;
+        }
+        
+        // Forzar actualización del token en axios antes de la petición
+        window.axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken;
+        window.axios.defaults.headers.common['X-XSRF-TOKEN'] = csrfToken;
+
+        // Función para obtener el token CSRF directamente del DOM
+        const getCurrentCsrfToken = () => {
+            const metaTag = document.head.querySelector('meta[name="csrf-token"]');
+            if (metaTag && metaTag.content) {
+                return metaTag.content;
+            }
+            // Fallback: leer de cookies
+            const getCookie = (name) => {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+                return null;
+            };
+            const xsrfToken = getCookie('XSRF-TOKEN');
+            return xsrfToken ? decodeURIComponent(xsrfToken) : null;
+        };
 
         // Función para hacer la petición con reintento automático en caso de 419
         const makeRequest = async (retryCount = 0) => {
             try {
-                return await window.axios.post(route('admin.physical-sales.store'), saleData);
-            } catch (error) {
-                // Si es error 419 y aún no hemos reintentado, actualizar token y reintentar
-                if (error.response?.status === 419 && retryCount === 0) {
-                    // Actualizar token CSRF
-                    if (window.updateCsrfToken) {
-                        window.updateCsrfToken();
-                    } else {
-                        const token = document.head.querySelector('meta[name="csrf-token"]');
-                        if (token && window.axios) {
-                            window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token.content;
-                        }
+                // CRÍTICO: Leer el token directamente del DOM justo antes de enviar
+                // No confiar en valores en memoria
+                let csrfToken = getCurrentCsrfToken();
+                
+                // Si no hay token, intentar obtenerlo del servidor haciendo una petición GET
+                if (!csrfToken && retryCount === 0) {
+                    try {
+                        // Hacer una petición GET simple para obtener el token actualizado del servidor
+                        const tokenResponse = await window.axios.get(route('dashboard'), {
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        });
+                        // El token debería estar en el meta tag después de esta petición
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        csrfToken = getCurrentCsrfToken();
+                    } catch (e) {
+                        // Si falla, continuar con el token que tengamos
                     }
-                    // Reintentar una vez
-                    return await makeRequest(1);
+                }
+                
+                if (!csrfToken) {
+                    throw new Error('No se pudo obtener el token CSRF. Por favor, recarga la página.');
+                }
+                
+                // Configurar headers explícitamente con el token actualizado
+                window.axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken;
+                window.axios.defaults.headers.common['X-XSRF-TOKEN'] = csrfToken;
+                
+                const response = await window.axios.post(route('admin.physical-sales.store'), saleData, {
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-XSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                // Si la respuesta incluye un nuevo token CSRF, actualizarlo
+                if (response && response.headers) {
+                    const newToken = response.headers['x-csrf-token'] || response.headers['X-CSRF-TOKEN'];
+                    if (newToken) {
+                        const metaTag = document.head.querySelector('meta[name="csrf-token"]');
+                        if (metaTag) {
+                            metaTag.setAttribute('content', newToken);
+                        }
+                        window.axios.defaults.headers.common['X-CSRF-TOKEN'] = newToken;
+                    }
+                }
+                
+                return response;
+            } catch (error) {
+                // Verificar si el error tiene response (error de servidor)
+                if (error.response) {
+                    // Si es error 419 y aún no hemos reintentado, actualizar token y reintentar
+                    if (error.response.status === 419 && retryCount === 0) {
+                        // Intentar obtener el nuevo token de la respuesta del servidor
+                        const headers = error.response.headers || {};
+                        const newToken = headers['x-csrf-token'] || headers['X-CSRF-TOKEN'] || null;
+                        
+                        if (newToken) {
+                            // Actualizar el meta tag con el nuevo token
+                            const metaTag = document.head.querySelector('meta[name="csrf-token"]');
+                            if (metaTag) {
+                                metaTag.setAttribute('content', newToken);
+                            }
+                            window.axios.defaults.headers.common['X-CSRF-TOKEN'] = newToken;
+                        } else {
+                            // Si no hay token en la respuesta, forzar recarga del token desde el DOM
+                            const currentToken = getCurrentCsrfToken();
+                            if (currentToken) {
+                                window.axios.defaults.headers.common['X-CSRF-TOKEN'] = currentToken;
+                            }
+                        }
+                        // Esperar un momento para asegurar que el token se actualizó
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                        // Reintentar una vez
+                        return await makeRequest(1);
+                    }
+                } else {
+                    // Si no hay response, puede ser un error de red o de conexión
+                    // En este caso, intentar actualizar el token y reintentar una vez
+                    if (retryCount === 0) {
+                        const currentToken = getCurrentCsrfToken();
+                        if (currentToken) {
+                            window.axios.defaults.headers.common['X-CSRF-TOKEN'] = currentToken;
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                        return await makeRequest(1);
+                    }
                 }
                 // Si no es 419 o ya reintentamos, lanzar el error
                 throw error;
@@ -770,6 +961,16 @@ const processSale = async () => {
         };
 
         const response = await makeRequest();
+        
+        // Actualizar token CSRF si viene en la respuesta (después de éxito)
+        const newToken = response.headers?.['x-csrf-token'] || response.headers?.['X-CSRF-TOKEN'];
+        if (newToken) {
+            const metaTag = document.head.querySelector('meta[name="csrf-token"]');
+            if (metaTag) {
+                metaTag.setAttribute('content', newToken);
+            }
+            window.axios.defaults.headers.common['X-CSRF-TOKEN'] = newToken;
+        }
 
         if (response.data && response.data.success) {
             // Guardar la venta creada para mostrar opción de imprimir
@@ -799,20 +1000,61 @@ const processSale = async () => {
             alert('Error: ' + (response.data?.message || 'No se pudo procesar la venta'));
         }
     } catch (error) {
+        // Log completo del error para debugging
+        console.error('Error completo al procesar la venta:', {
+            error: error,
+            message: error.message,
+            response: error.response,
+            status: error.response?.status,
+            data: error.response?.data,
+            headers: error.response?.headers
+        });
         
         let errorMessage = 'Error al procesar la venta';
         
         if (error.response) {
             // El servidor respondió con un código de error
-            if (error.response.status === 419) {
-                errorMessage = 'La sesión ha expirado. Por favor, recarga la página e intenta nuevamente.';
-            } else if (error.response.status === 422) {
-                errorMessage = error.response.data?.message || 'Error de validación. Verifica los datos e intenta nuevamente.';
-            } else if (error.response.data?.message) {
-                errorMessage = error.response.data.message;
+            const status = error.response.status;
+            const data = error.response.data;
+            
+            if (status === 419) {
+                // Error 419: Token CSRF expirado o inválido
+                errorMessage = 'Tu sesión ha expirado. Por favor, recarga la página e intenta nuevamente.';
+                // Intentar actualizar el token y recargar la página después de un breve delay
+                if (window.updateCsrfToken) {
+                    window.updateCsrfToken();
+                }
+                // Recargar la página después de 2 segundos para que el usuario vea el mensaje
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else if (status === 422) {
+                // Error de validación
+                if (data?.message) {
+                    errorMessage = data.message;
+                } else if (data?.errors) {
+                    // Si hay errores de validación específicos, mostrarlos
+                    const errorMessages = Object.entries(data.errors)
+                        .map(([key, messages]) => {
+                            if (Array.isArray(messages)) {
+                                return `${key}: ${messages.join(', ')}`;
+                            }
+                            return `${key}: ${messages}`;
+                        })
+                        .join('\n');
+                    errorMessage = `Error de validación:\n${errorMessages}`;
+                } else {
+                    errorMessage = 'Error de validación. Verifica los datos e intenta nuevamente.';
+                }
+            } else if (data?.message) {
+                errorMessage = data.message;
+            } else {
+                errorMessage = `Error del servidor (${status}). Por favor, intenta nuevamente.`;
             }
         } else if (error.request) {
-            errorMessage = 'No se pudo conectar con el servidor. Verifica tu conexión.';
+            errorMessage = 'No se pudo conectar con el servidor. Verifica tu conexión a internet.';
+        } else if (error.message) {
+            errorMessage = error.message;
         }
         
         alert(errorMessage);

@@ -7,7 +7,6 @@ import { computed, ref } from 'vue';
 const props = defineProps({
     store: Object,
     metrics: Object,
-    show_tour: Boolean,
 });
 
 // URL pública de la tienda y acción de copiar
@@ -45,7 +44,7 @@ const openUpgrade = () => { try { window.dispatchEvent(new CustomEvent('open-upg
         </template>
     </Head>
 
-    <AuthenticatedLayout :show_tour="show_tour">
+    <AuthenticatedLayout>
         <template #header>
             <div class="flex items-center justify-between">
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dashboard</h2>
