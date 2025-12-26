@@ -1203,16 +1203,8 @@ watch(galleryItems, (newItems, oldItems) => {
         <template v-if="headerStyle === 'banner_logo' && !catalogUseDefault">
             <!-- Banner superior oscuro con dirección, menú y carrito -->
             <div class="bg-gray-800 text-white py-2 px-4">
-                <!-- Dirección del cliente si está logueado -->
-                <div v-if="$page.props.customer?.user && $page.props.customer?.defaultAddress" class="mb-2 text-xs sm:text-sm flex items-center gap-2">
-                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
-                    <span class="truncate">{{ $page.props.customer.defaultAddress.address_line_1 }}, {{ $page.props.customer.defaultAddress.city }}</span>
-                </div>
                 <div class="flex justify-between items-center gap-3">
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 flex-shrink-0">
                         <!-- Botones de autenticación -->
                         <template v-if="!$page.props.customer?.user">
                             <Link :href="route('customer.login', { store: store.slug })" class="text-xs sm:text-sm hover:underline">
@@ -1233,7 +1225,53 @@ watch(galleryItems, (newItems, oldItems) => {
                             </form>
                         </template>
                     </div>
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                        <!-- Dirección del cliente si está logueado (junto a los iconos) -->
+                        <div v-if="$page.props.customer?.user && $page.props.customer?.defaultAddress" class="flex items-center gap-1.5 text-xs sm:text-sm px-2 py-1 rounded bg-gray-700/50 max-w-[120px] sm:max-w-[180px]">
+                            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            <span class="truncate">{{ $page.props.customer.defaultAddress.city }}</span>
+                        </div>
+                        <!-- Campanita de notificaciones (solo si el cliente está logueado) -->
+                        <div v-if="$page.props.customer?.user" class="relative notification-dropdown-container">
+                            <button 
+                                @click.stop="showNotifications = !showNotifications" 
+                                class="relative p-1.5 rounded-lg hover:bg-gray-700 transition-colors" 
+                                aria-label="Notificaciones"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
+                                </svg>
+                                <span v-if="$page.props.customer?.notificationsCount > 0" 
+                                      class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white min-w-[1.25rem]">
+                                    {{ $page.props.customer.notificationsCount > 99 ? '99+' : $page.props.customer.notificationsCount }}
+                                </span>
+                            </button>
+                            
+                            <!-- Dropdown de notificaciones -->
+                            <div v-if="showNotifications" class="notification-dropdown-container absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-96 overflow-y-auto">
+                                <div class="p-4 border-b border-gray-200">
+                                    <h3 class="font-semibold text-gray-900">Notificaciones</h3>
+                                </div>
+                                <div v-if="$page.props.customer?.notifications && $page.props.customer.notifications.length > 0" class="divide-y divide-gray-200">
+                                    <div 
+                                        v-for="notification in $page.props.customer.notifications" 
+                                        :key="notification.id"
+                                        class="p-4 hover:bg-gray-50 cursor-pointer"
+                                        @click="handleNotificationClick(notification)"
+                                    >
+                                        <p class="text-sm font-medium text-gray-900">{{ notification.title }}</p>
+                                        <p class="text-xs text-gray-600 mt-1">{{ notification.message }}</p>
+                                        <p class="text-xs text-gray-400 mt-2">{{ formatNotificationDate(notification.created_at) }}</p>
+                                    </div>
+                                </div>
+                                <div v-else class="p-8 text-center text-sm text-gray-500">
+                                    No tienes notificaciones
+                                </div>
+                            </div>
+                        </div>
                         <Link :href="route('cart.index', { store: store.slug })" class="relative p-1.5 rounded-lg hover:bg-gray-700 transition-colors" aria-label="Carrito de compras">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/></svg>
                             <span v-if="$page.props.cart.count > 0" class="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center">
@@ -1328,16 +1366,6 @@ watch(galleryItems, (newItems, oldItems) => {
         
         <!-- Header Default y Fit (estilos normales) -->
         <nav v-else class="container mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 relative" :class="{ 'flex-wrap': menuType === 'full' && categories.length > 5 }">
-            <!-- Dirección del cliente si está logueado (solo en móvil o header fit) -->
-            <div v-if="$page.props.customer?.user && $page.props.customer?.defaultAddress && (headerStyle === 'fit' || windowWidth < 768)" class="flex items-center gap-2 text-xs sm:text-sm flex-shrink-0 max-w-[40%] sm:max-w-none" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : { color: '#6B7280' }">
-                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
-                <span class="truncate hidden sm:inline">{{ $page.props.customer.defaultAddress.city }}</span>
-                <span class="truncate sm:hidden">{{ $page.props.customer.defaultAddress.city }}</span>
-            </div>
-            
             <!-- Menú hamburguesa - solo visible si menuType es hamburger -->
             <button v-if="menuType === 'hamburger' && headerStyle !== 'fit'" @click="openDrawer" class="p-2 rounded-lg hover:bg-gray-100 transition-colors z-10 flex-shrink-0 text-gray-700" aria-label="Abrir menú" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
@@ -1522,13 +1550,13 @@ watch(galleryItems, (newItems, oldItems) => {
 
             <!-- Lupa / Búsqueda expandible (oculta en header Fit, ya que tiene su propia búsqueda) -->
             <div v-if="headerStyle !== 'fit' || catalogUseDefault" class="flex items-center justify-end gap-2 flex-shrink-0 z-10">
-                <!-- Dirección del cliente si está logueado (solo desktop) -->
-                <div v-if="$page.props.customer?.user && $page.props.customer?.defaultAddress" class="hidden md:flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-gray-100" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor, backgroundColor: 'rgba(0,0,0,0.05)' } : {}">
-                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <!-- Dirección del cliente si está logueado (móvil y desktop) -->
+                <div v-if="$page.props.customer?.user && $page.props.customer?.defaultAddress" class="flex items-center gap-1.5 sm:gap-2 text-xs px-2 sm:px-3 py-1.5 rounded-lg bg-gray-100 flex-shrink-0 max-w-[120px] sm:max-w-[150px]" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor, backgroundColor: 'rgba(0,0,0,0.05)' } : {}">
+                    <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
-                    <span class="truncate max-w-[150px]">{{ $page.props.customer.defaultAddress.city }}</span>
+                    <span class="truncate">{{ $page.props.customer.defaultAddress.city }}</span>
                 </div>
                 
                 <!-- Botones de autenticación -->
@@ -1555,7 +1583,7 @@ watch(galleryItems, (newItems, oldItems) => {
                     </template>
                 </div>
                 
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1.5 sm:gap-2">
                     <!-- Campanita de notificaciones (solo si el cliente está logueado) -->
                     <div v-if="$page.props.customer?.user" class="relative notification-dropdown-container">
                         <button 
@@ -1564,7 +1592,7 @@ watch(galleryItems, (newItems, oldItems) => {
                             aria-label="Notificaciones"
                             :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 sm:w-6 sm:h-6">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
                             </svg>
                             <span v-if="$page.props.customer?.notificationsCount > 0" 
