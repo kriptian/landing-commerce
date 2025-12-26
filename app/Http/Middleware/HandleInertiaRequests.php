@@ -33,7 +33,7 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         // Incluir el token CSRF en las props compartidas para que Inertia lo tenga disponible
-        // También actualizar el meta tag en el frontend después de cada petición
+        // El token se actualiza automáticamente en el meta tag por Laravel en cada respuesta
         $csrfToken = csrf_token();
         
         return array_merge(parent::share($request), [

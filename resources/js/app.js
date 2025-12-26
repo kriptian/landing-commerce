@@ -3,7 +3,7 @@ import '../css/app.css';
 
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
-import { router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 // Eliminamos Toast: usaremos AlertModal en las páginas específicas
@@ -26,23 +26,41 @@ export function safeRoute(name, params = {}, fallbackPath = '/') {
 
 const appName = import.meta.env.VITE_APP_NAME || 'Ondigitalsolution';
 
-// Función para obtener el token CSRF actualizado
-const getCsrfToken = () => {
+// Función para obtener el token CSRF del meta tag
+const getCsrfTokenFromMeta = () => {
     const token = document.head.querySelector('meta[name="csrf-token"]');
-    if (token) {
-        return token.content;
-    }
-    // Si no hay meta tag, intentar leer de cookies (Laravel usa XSRF-TOKEN)
+    return token ? token.content : null;
+};
+
+// Función para obtener el token CSRF de las cookies (Laravel usa XSRF-TOKEN)
+const getCsrfTokenFromCookie = () => {
     const getCookie = (name) => {
         const value = `; ${document.cookie}`;
         const parts = value.split(`; ${name}=`);
         if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
     };
     const xsrfToken = getCookie('XSRF-TOKEN');
-    if (xsrfToken) {
-        return decodeURIComponent(xsrfToken);
+    return xsrfToken ? decodeURIComponent(xsrfToken) : null;
+};
+
+// Función para actualizar el meta tag con un nuevo token
+const updateCsrfMetaTag = (token) => {
+    if (!token) return;
+    let metaTag = document.head.querySelector('meta[name="csrf-token"]');
+    if (metaTag) {
+        metaTag.setAttribute('content', token);
+    } else {
+        metaTag = document.createElement('meta');
+        metaTag.setAttribute('name', 'csrf-token');
+        metaTag.setAttribute('content', token);
+        document.head.appendChild(metaTag);
     }
-    return null;
+    // También actualizar axios por si acaso
+    if (window.axios) {
+        window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+        window.axios.defaults.headers.common['X-XSRF-TOKEN'] = token;
+    }
 };
 
 createInertiaApp({
@@ -53,10 +71,12 @@ createInertiaApp({
             `./Pages/${name}.vue`,
             import.meta.glob('./Pages/**/*.vue')
         ),
-    // Configurar headers globales para todas las peticiones de Inertia
     progress: {
         color: '#4B5563',
     },
+    // Configurar headers para todas las peticiones de Inertia
+    // Inertia lee automáticamente el token CSRF del meta tag 'csrf-token'
+    // pero también podemos configurarlo explícitamente aquí
     setup({ el, App, props, plugin }) {
         const app = createApp({ render: () => h(App, props) })
             .use(plugin)
@@ -65,135 +85,182 @@ createInertiaApp({
         // --- 2. AQUÍ REGISTRAMOS EL COMPONENTE ---
         app.component('ProductGallery', ProductGallery);
 
-        // Configurar Inertia para manejar errores 419 (CSRF token mismatch)
-        router.on('error', (errors) => {
-            if (errors.response?.status === 419) {
-                // Actualizar el token CSRF desde el meta tag
-                const newToken = getCsrfToken();
-                if (newToken) {
-                    // Actualizar el meta tag si no está actualizado
-                    let metaTag = document.head.querySelector('meta[name="csrf-token"]');
-                    if (metaTag && metaTag.content !== newToken) {
-                        metaTag.setAttribute('content', newToken);
-                    }
-                    // Recargar la página para obtener el nuevo token
-                    router.reload({ only: [] });
-                    return;
-                }
-                // Si no se pudo actualizar, recargar la página completa
-                window.location.reload();
-            }
-        });
-
-        // Actualizar el token CSRF después de cada petición exitosa de Inertia
-        // Esto asegura que el token esté siempre actualizado después de login/logout
-        router.on('finish', (event) => {
-            // Esperar un momento para que el DOM se actualice con el nuevo token
-            setTimeout(() => {
-                // Actualizar el token desde el meta tag después de cada petición
-                const token = getCsrfToken();
+        // CRÍTICO: Configurar Inertia para usar el token CSRF en cada petición
+        // Inertia lee el token CSRF del meta tag 'csrf-token' automáticamente
+        // Necesitamos asegurarnos de que el meta tag esté siempre actualizado
+        
+        // Inicializar el token CSRF desde las props al cargar la app
+        try {
+            const initialPage = usePage();
+            if (initialPage?.props?.csrf_token) {
+                updateCsrfMetaTag(initialPage.props.csrf_token);
+            } else {
+                // Fallback: leer del meta tag inicial o cookie
+                const tokenFromMeta = getCsrfTokenFromMeta();
+                const tokenFromCookie = getCsrfTokenFromCookie();
+                const token = tokenFromMeta || tokenFromCookie;
                 if (token) {
-                    // Actualizar el meta tag si es necesario
-                    let metaTag = document.head.querySelector('meta[name="csrf-token"]');
-                    if (metaTag) {
-                        // SIEMPRE actualizar el contenido del meta tag con el token actual
-                        metaTag.setAttribute('content', token);
-                    }
-                    // Actualizar axios
-                    if (window.axios) {
-                        window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
-                        // También actualizar X-XSRF-TOKEN por si acaso
-                        window.axios.defaults.headers.common['X-XSRF-TOKEN'] = token;
-                    }
-                    // También actualizar la función global si existe
-                    if (window.updateCsrfToken) {
-                        window.updateCsrfToken();
-                    }
+                    updateCsrfMetaTag(token);
                 }
-            }, 150);
-        });
-
-        // También actualizar el token antes de cada petición de Inertia
-        router.on('start', () => {
-            const token = getCsrfToken();
-            if (token && window.axios) {
-                window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
             }
-        });
-
-        // Mantenemos los redireccionamientos simples para 401/403/419 (las páginas pueden mostrar AlertModal locales)
-        if (window.axios) {
-            // Interceptor de request para actualizar el token CSRF antes de cada petición
-            // CRÍTICO: Este interceptor se ejecuta ANTES de cada petición para asegurar token actualizado
-            window.axios.interceptors.request.use(
-                (config) => {
-                    // SIEMPRE actualizar el token CSRF antes de cada petición
-                    // Primero intentar desde el meta tag (más confiable)
-                    let token = null;
-                    const metaTag = document.head.querySelector('meta[name="csrf-token"]');
-                    if (metaTag) {
-                        token = metaTag.content;
-                        config.headers['X-CSRF-TOKEN'] = token;
-                        window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
-                    }
-                    
-                    // Si no hay meta tag, leer de cookies (Laravel usa XSRF-TOKEN)
-                    if (!token) {
-                        const getCookie = (name) => {
-                            const value = `; ${document.cookie}`;
-                            const parts = value.split(`; ${name}=`);
-                            if (parts.length === 2) return parts.pop().split(';').shift();
-                            return null;
-                        };
-                        const xsrfToken = getCookie('XSRF-TOKEN');
-                        if (xsrfToken) {
-                            token = decodeURIComponent(xsrfToken);
-                            config.headers['X-XSRF-TOKEN'] = token;
-                            window.axios.defaults.headers.common['X-XSRF-TOKEN'] = token;
+        } catch (error) {
+            // Si usePage() no está disponible aún, usar el meta tag o cookie
+            const tokenFromMeta = getCsrfTokenFromMeta();
+            const tokenFromCookie = getCsrfTokenFromCookie();
+            const token = tokenFromMeta || tokenFromCookie;
+            if (token) {
+                updateCsrfMetaTag(token);
+            }
+        }
+        
+        // Actualizar el token CSRF ANTES de cada petición de Inertia
+        router.on('start', () => {
+            try {
+                // Obtener el token más reciente de las props compartidas (si está disponible)
+                const page = usePage();
+                const csrfTokenFromProps = page?.props?.csrf_token;
+                
+                if (csrfTokenFromProps) {
+                    // Actualizar el meta tag con el token de las props (más confiable)
+                    updateCsrfMetaTag(csrfTokenFromProps);
+                } else {
+                    // Fallback: intentar obtener de cookie (más confiable después de regenerar sesión)
+                    const tokenFromCookie = getCsrfTokenFromCookie();
+                    if (tokenFromCookie) {
+                        updateCsrfMetaTag(tokenFromCookie);
+                    } else {
+                        // Último fallback: leer del meta tag actual
+                        const tokenFromMeta = getCsrfTokenFromMeta();
+                        if (tokenFromMeta) {
+                            updateCsrfMetaTag(tokenFromMeta);
                         }
                     }
+                }
+            } catch (error) {
+                // Si hay error, intentar obtener de cookie o meta tag
+                const tokenFromCookie = getCsrfTokenFromCookie();
+                const tokenFromMeta = getCsrfTokenFromMeta();
+                const token = tokenFromCookie || tokenFromMeta;
+                if (token) {
+                    updateCsrfMetaTag(token);
+                }
+            }
+        });
+
+        // Actualizar el token CSRF DESPUÉS de cada respuesta exitosa de Inertia
+        router.on('finish', () => {
+            try {
+                // Obtener el nuevo token de las props compartidas (Laravel lo actualiza en cada respuesta)
+                const page = usePage();
+                const csrfTokenFromProps = page?.props?.csrf_token;
+                
+                if (csrfTokenFromProps) {
+                    // Actualizar el meta tag con el nuevo token
+                    updateCsrfMetaTag(csrfTokenFromProps);
+                } else {
+                    // Fallback: leer de cookie (Laravel actualiza la cookie XSRF-TOKEN)
+                    const tokenFromCookie = getCsrfTokenFromCookie();
+                    if (tokenFromCookie) {
+                        updateCsrfMetaTag(tokenFromCookie);
+                    }
+                }
+            } catch (error) {
+                // Si hay error, intentar obtener de cookie
+                const tokenFromCookie = getCsrfTokenFromCookie();
+                if (tokenFromCookie) {
+                    updateCsrfMetaTag(tokenFromCookie);
+                }
+            }
+        });
+
+        // Manejar errores 419 (CSRF token mismatch)
+        router.on('error', (errors) => {
+            if (errors.response?.status === 419) {
+                try {
+                    // Intentar obtener el nuevo token de las props o cookies
+                    const page = usePage();
+                    const csrfTokenFromProps = page?.props?.csrf_token;
                     
+                    if (csrfTokenFromProps) {
+                        updateCsrfMetaTag(csrfTokenFromProps);
+                        // Reintentar la petición después de actualizar el token
+                        router.reload({ only: [] });
+                    } else {
+                        // Si no hay token disponible, recargar la página completa
+                        window.location.reload();
+                    }
+                } catch (error) {
+                    // Si hay error, recargar la página completa
+                    window.location.reload();
+                }
+            }
+        });
+
+        // Configurar interceptores de axios para peticiones no-Inertia
+        if (window.axios) {
+            // Interceptor de request: actualizar token CSRF antes de cada petición axios
+            window.axios.interceptors.request.use(
+                (config) => {
+                    // Obtener el token más reciente del meta tag
+                    const token = getCsrfTokenFromMeta() || getCsrfTokenFromCookie();
+                    if (token) {
+                        config.headers['X-CSRF-TOKEN'] = token;
+                        config.headers['X-XSRF-TOKEN'] = token;
+                        window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+                        window.axios.defaults.headers.common['X-XSRF-TOKEN'] = token;
+                    }
                     return config;
                 },
                 (error) => Promise.reject(error)
             );
 
+            // Interceptor de response: manejar errores y actualizar token si viene en headers
             window.axios.interceptors.response.use(
-                (response) => response,
+                (response) => {
+                    // Si la respuesta incluye un nuevo token CSRF en los headers, actualizarlo
+                    const newToken = response.headers?.['x-csrf-token'] || 
+                                    response.headers?.['X-CSRF-TOKEN'];
+                    if (newToken) {
+                        updateCsrfMetaTag(newToken);
+                    }
+                    return response;
+                },
                 (error) => {
                     const status = error?.response?.status;
                     
                     // Error 419: CSRF token mismatch
-                    // NO reintentar automáticamente aquí, dejar que el código de la página lo maneje
                     if (status === 419) {
-                        // Solo actualizar el token si está disponible, pero no reintentar
+                        // Intentar obtener nuevo token de headers de respuesta
                         const newToken = error?.response?.headers?.['x-csrf-token'] || 
-                                        error?.response?.headers?.['X-CSRF-TOKEN'] ||
-                                        document.head.querySelector('meta[name="csrf-token"]')?.content;
+                                        error?.response?.headers?.['X-CSRF-TOKEN'];
                         if (newToken) {
-                            // Actualizar el meta tag
-                            let metaTag = document.head.querySelector('meta[name="csrf-token"]');
-                            if (metaTag) {
-                                metaTag.setAttribute('content', newToken);
-                            } else {
-                                metaTag = document.createElement('meta');
-                                metaTag.setAttribute('name', 'csrf-token');
-                                metaTag.setAttribute('content', newToken);
-                                document.head.appendChild(metaTag);
+                            updateCsrfMetaTag(newToken);
+                        } else {
+                            // Si no hay token en headers, intentar de cookie
+                            const tokenFromCookie = getCsrfTokenFromCookie();
+                            if (tokenFromCookie) {
+                                updateCsrfMetaTag(tokenFromCookie);
                             }
-                            // Actualizar el header de axios
-                            window.axios.defaults.headers.common['X-CSRF-TOKEN'] = newToken;
                         }
                         // Rechazar el error para que el código de la página lo maneje
                         return Promise.reject(error);
                     }
                     
+                    // Redireccionar en caso de errores de autorización
                     if (status === 403) {
-                        try { window.location.href = route('dashboard'); } catch (e) { window.location.href = '/'; }
+                        try { 
+                            window.location.href = route('dashboard'); 
+                        } catch (e) { 
+                            window.location.href = '/'; 
+                        }
                         return Promise.resolve();
                     }
                     if (status === 401) {
-                        window.location.href = route('login');
+                        try {
+                            window.location.href = route('login');
+                        } catch (e) {
+                            window.location.href = '/login';
+                        }
                         return Promise.resolve();
                     }
                     return Promise.reject(error);
@@ -202,8 +269,5 @@ createInertiaApp({
         }
 
         app.mount(el);
-    },
-    progress: {
-        color: '#4B5563',
     },
 });

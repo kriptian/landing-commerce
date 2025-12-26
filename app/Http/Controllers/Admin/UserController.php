@@ -70,6 +70,9 @@ class UserController extends Controller
         
         $user->assignRole($validated['role']);
 
+        // Regenerar el token CSRF después de crear el usuario para evitar errores 419
+        $request->session()->regenerateToken();
+
         return redirect()->route('admin.users.index')->with('success', '¡Usuario creado con éxito!');
     }
 
@@ -121,6 +124,9 @@ class UserController extends Controller
         $user->update($userData);
         $user->syncRoles($validated['role']);
 
+        // Regenerar el token CSRF después de actualizar el usuario para evitar errores 419
+        $request->session()->regenerateToken();
+
         return redirect()->route('admin.users.index');
     }
 
@@ -136,6 +142,9 @@ class UserController extends Controller
         }
 
         $user->delete();
+        
+        // Regenerar el token CSRF después de eliminar el usuario para evitar errores 419
+        $request->session()->regenerateToken();
         
         return back();
     }
