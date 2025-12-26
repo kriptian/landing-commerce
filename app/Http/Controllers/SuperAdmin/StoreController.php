@@ -71,6 +71,14 @@ class StoreController extends Controller
             'guard_name' => config('auth.defaults.guard', 'web'),
         ]);
         $adminRole->syncPermissions(Permission::all());
+        
+        // Crear/obtener rol "physical-sales" para la tienda (siempre debe existir)
+        Role::firstOrCreate([
+            'name' => 'physical-sales',
+            'store_id' => $store->id,
+            'guard_name' => config('auth.defaults.guard', 'web'),
+        ]);
+        
         // Limpiamos la caché de permisos para asegurar que el frontend reciba permisos actualizados
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
         // Asignamos el rol por instancia para evitar colisiones por nombre entre tiendas

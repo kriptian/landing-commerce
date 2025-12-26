@@ -31,7 +31,11 @@ class AuthenticatedSessionController extends Controller
     {
         $request->authenticate();
 
+        // Regenerar sesión ANTES de obtener el usuario para asegurar que el token CSRF se actualice
         $request->session()->regenerate();
+        
+        // Forzar la actualización del token CSRF en la respuesta
+        $request->session()->regenerateToken();
 
         // Detectar si es el primer login del usuario
         $user = Auth::user();
@@ -66,6 +70,12 @@ class AuthenticatedSessionController extends Controller
             }
         }
 
+        // Si el usuario tiene el rol "physical-sales", redirigir directamente a VENDER!
+        // Nota: El middleware AllowPhysicalSalesWithoutVerification permite el acceso sin verificación
+        if ($user->hasRole('physical-sales')) {
+            return redirect()->route('admin.physical-sales.index');
+        }
+
         return redirect()->intended(route('dashboard', [
             'show_tour' => (bool) $showTour,
             'tours_to_show' => $toursToShow
@@ -81,6 +91,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->invalidate();
 
+        // Regenerar token ANTES de redirigir para asegurar que el nuevo token esté disponible
         $request->session()->regenerateToken();
 
         // return redirect('/'); si lo hago así me muestra el listado de todas las tiendas que son mis clientes, por eso lo dejo asi

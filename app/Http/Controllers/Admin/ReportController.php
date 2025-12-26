@@ -8,6 +8,7 @@ use Inertia\Inertia;
 use Carbon\Carbon;
 use App\Exports\OrdersExport;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Models\PhysicalSale;
 
 class ReportController extends Controller
 {
@@ -21,6 +22,8 @@ class ReportController extends Controller
         $validated = $request->validate([
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
+            'type' => 'nullable|string|in:digital,physical',
+            'search' => 'nullable|string',
         ]);
 
         // Definimos el rango de fechas en la ZONA HORARIA DE LA APP (ej: America/Bogota)
@@ -81,6 +84,34 @@ class ReportController extends Controller
             $cancelled[] = (int) $dayGroup->where('status', 'cancelado')->count();
         }
 
+        // Obtener datos de ventas físicas
+        $store = $request->user()->store;
+        $physicalSalesQuery = $store->physicalSales()->with(['user', 'items.product', 'items.variant']);
+        
+        // Búsqueda por número de venta
+        if (!empty($validated['search'])) {
+            $search = $validated['search'];
+            $physicalSalesQuery->where('sale_number', 'like', "%{$search}%");
+        }
+        
+        // Aplicar filtros de fecha si existen
+        if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
+            $appTz = config('app.timezone', 'America/Bogota');
+            $startLocal = Carbon::parse($validated['start_date'], $appTz)->startOfDay();
+            $endLocal = Carbon::parse($validated['end_date'], $appTz)->endOfDay();
+            $startUtc = $startLocal->copy()->timezone('UTC');
+            $endExclusiveUtc = $endLocal->copy()->addDay()->startOfDay()->timezone('UTC');
+            
+            $physicalSalesQuery->whereBetween('created_at', [$startUtc, $endExclusiveUtc]);
+        }
+        
+        $physicalSales = $physicalSalesQuery->latest()->paginate(20)->withQueryString();
+        
+        // Calcular estadísticas de ventas físicas
+        $physicalSalesStatsQuery = clone $physicalSalesQuery;
+        $physicalTotalSales = $physicalSalesStatsQuery->sum('total');
+        $physicalTotalCount = $physicalSalesStatsQuery->count();
+
         return Inertia::render('Admin/Reports/Index', [
             'orders' => $orders,
             'stats' => [
@@ -93,8 +124,13 @@ class ReportController extends Controller
                 'delivered' => $delivered,
                 'cancelled' => $cancelled,
             ],
-
             'filters' => $request->only(['start_date', 'end_date']),
+            'physicalSales' => $physicalSales,
+            'physicalSalesStats' => [
+                'totalSales' => $physicalTotalSales,
+                'totalCount' => $physicalTotalCount,
+            ],
+            'physicalSalesFilters' => $request->only(['start_date', 'end_date', 'search']),
         ]);
     }
 

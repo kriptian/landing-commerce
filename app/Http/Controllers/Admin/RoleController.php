@@ -98,6 +98,13 @@ class RoleController extends Controller
             abort(403);
         }
 
+        // Prevenir eliminación del rol "physical-sales" (siempre debe existir)
+        if ($role->name === 'physical-sales') {
+            throw ValidationException::withMessages([
+                'delete' => 'No se puede eliminar el rol "physical-sales". Este rol es requerido por el sistema.'
+            ]);
+        }
+
         // Única restricción: si hay usuarios con este rol, no permitimos eliminar
         if (method_exists($role, 'users') && $role->users()->exists()) {
             throw ValidationException::withMessages([

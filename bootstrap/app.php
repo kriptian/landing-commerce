@@ -20,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Aliases de middlewares de la app
         $middleware->alias([
             'plan' => \App\Http\Middleware\RequirePlan::class,
+            'restrict.physical-sales' => \App\Http\Middleware\RestrictPhysicalSalesRole::class,
+            'allow.physical-sales.without-verification' => \App\Http\Middleware\AllowPhysicalSalesWithoutVerification::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

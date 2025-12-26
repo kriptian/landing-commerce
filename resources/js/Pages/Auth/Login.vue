@@ -25,6 +25,10 @@ const showPassword = ref(false);
 const submit = () => {
     form.post(route('login'), {
         onFinish: () => form.reset('password'),
+        onError: (errors) => {
+            // Los errores se mostrarán automáticamente con InputError
+            console.log('Errores de login:', errors);
+        },
     });
 };
 </script>

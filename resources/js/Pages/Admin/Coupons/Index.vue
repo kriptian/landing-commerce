@@ -295,7 +295,7 @@ const isProductSelected = (productId) => {
                                 ? 'Ingresa el porcentaje de descuento (ej: 15 para 15% de descuento)' 
                                 : 'Ingresa el monto fijo de descuento en pesos (ej: 50000 para $50.000 de descuento)' }}
                         </p>
-                        <input v-model="form.value" type="number" step="0.01" min="0" class="block w-full rounded-md border-gray-300 shadow-sm" required placeholder="Ej: {{ form.type === 'percentage' ? '15' : '50000' }}">
+                        <input v-model="form.value" type="number" step="0.01" min="0" class="block w-full rounded-md border-gray-300 shadow-sm" required :placeholder="form.type === 'percentage' ? 'Ej: 15' : 'Ej: 50000'">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Monto Mínimo de Compra (Opcional)</label>

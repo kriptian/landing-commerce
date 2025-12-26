@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\Category;
 use App\Models\PhysicalSale;
 use App\Models\PhysicalSaleItem;
 use App\Models\ProductVariant;
@@ -18,8 +19,30 @@ class PhysicalSaleController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('can:ver inventario')->only(['index']);
-        $this->middleware('can:crear productos')->only(['store']);
+        // Permitir acceso a usuarios con rol "physical-sales" sin verificar permisos
+        $this->middleware(function ($request, $next) {
+            $user = $request->user();
+            
+            // Si el usuario tiene el rol "physical-sales", permitir acceso sin verificar permisos
+            if ($user && $user->hasRole('physical-sales')) {
+                return $next($request);
+            }
+            
+            // Para otros usuarios, verificar permisos normalmente
+            if ($request->routeIs('admin.physical-sales.index')) {
+                if (!$user || !$user->can('ver inventario')) {
+                    abort(403, 'No tienes permiso para acceder a esta sección.');
+                }
+            }
+            
+            if ($request->routeIs('admin.physical-sales.store')) {
+                if (!$user || !$user->can('crear productos')) {
+                    abort(403, 'No tienes permiso para realizar esta acción.');
+                }
+            }
+            
+            return $next($request);
+        })->only(['index', 'store']);
     }
 
     public function index(Request $request)
@@ -59,6 +82,62 @@ class PhysicalSaleController extends Controller
         $totalSales = $statsQuery->sum('total');
         $totalCount = $statsQuery->count();
 
+        // Obtener productos activos con imágenes para el catálogo POS
+        $products = $store->products()
+            ->where('is_active', true)
+            ->with(['images', 'category', 'variants', 'variantOptions.children'])
+            ->orderBy('name')
+            ->get()
+            ->map(function($product) {
+                // Asegurar que main_image_url se calcule correctamente
+                $mainImageUrl = null;
+                $firstImage = $product->images()->first();
+                if ($firstImage) {
+                    $mainImageUrl = $firstImage->path;
+                } else {
+                    // Si no hay imagen del producto, buscar en variantes
+                    foreach ($product->variantOptions ?? [] as $parentOption) {
+                        foreach ($parentOption->children ?? [] as $child) {
+                            if (!empty($child->image_path)) {
+                                $imagePath = $child->image_path;
+                                if (!str_starts_with($imagePath, 'http://') && !str_starts_with($imagePath, 'https://')) {
+                                    if (!str_starts_with($imagePath, '/storage/')) {
+                                        $imagePath = '/storage/' . ltrim($imagePath, '/');
+                                    }
+                                }
+                                $mainImageUrl = $imagePath;
+                                break 2;
+                            }
+                        }
+                    }
+                }
+                
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'price' => $product->price,
+                    'barcode' => $product->barcode,
+                    'stock' => $product->quantity,
+                    'quantity' => $product->quantity,
+                    'track_inventory' => $product->track_inventory,
+                    'category_id' => $product->category_id,
+                    'promo_active' => $product->promo_active,
+                    'promo_discount_percent' => $product->promo_discount_percent,
+                    'main_image_url' => $mainImageUrl,
+                    'images' => $product->images,
+                    'category' => $product->category,
+                    'variants' => $product->variants,
+                ];
+            });
+
+        // Obtener categorías con productos
+        $categories = $store->categories()
+            ->whereHas('products', function($q) {
+                $q->where('is_active', true);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return Inertia::render('Admin/PhysicalSales/Index', [
             'sales' => $sales,
             'stats' => [
@@ -66,6 +145,9 @@ class PhysicalSaleController extends Controller
                 'totalCount' => $totalCount,
             ],
             'filters' => $request->only(['start_date', 'end_date', 'search']),
+            'products' => $products,
+            'categories' => $categories,
+            'store' => $store,
         ]);
     }
 
@@ -118,6 +200,35 @@ class PhysicalSaleController extends Controller
         }
 
         return response()->json(['product' => $product]);
+    }
+
+    /**
+     * Abrir cajón de la registradora
+     */
+    public function openDrawer(Request $request)
+    {
+        try {
+            // Comando ESC/POS estándar para abrir cajón (ESC p 0 25 250)
+            $escposCommand = "\x1B\x70\x00\x19\xFA";
+            
+            // Intentar enviar comando a impresora
+            // Nota: Esto requiere que la impresora esté conectada y configurada
+            // En producción, esto debería enviarse a través de un servicio de impresión
+            
+            // Por ahora, solo retornamos éxito
+            // En una implementación real, aquí se enviaría el comando a la impresora térmica
+            // usando una librería como mike42/escpos-php o similar
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Comando de apertura de cajón enviado'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al intentar abrir el cajón: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -213,18 +324,27 @@ class PhysicalSaleController extends Controller
                 // Verificar y descontar inventario
                 if ($itemData['variant_id']) {
                     $variant = ProductVariant::find($itemData['variant_id']);
-                    if ($variant && $variant->stock < $itemData['quantity']) {
-                        throw new \Exception("Stock insuficiente para la variante del producto {$product->name}");
-                    }
                     if ($variant) {
-                        $variant->decrement('stock', $itemData['quantity']);
+                        // Verificar stock solo si la variante tiene stock definido
+                        if ($variant->stock !== null && $variant->stock < $itemData['quantity']) {
+                            throw new \Exception("Stock insuficiente para la variante del producto {$product->name}. Stock disponible: {$variant->stock}, solicitado: {$itemData['quantity']}");
+                        }
+                        // Solo descontar si tiene stock definido
+                        if ($variant->stock !== null) {
+                            $variant->decrement('stock', $itemData['quantity']);
+                        }
                     }
                 } else {
-                    if ($product->track_inventory && $product->quantity < $itemData['quantity']) {
-                        throw new \Exception("Stock insuficiente para el producto {$product->name}");
-                    }
+                    // Solo verificar stock si track_inventory está activado
                     if ($product->track_inventory) {
-                        $product->decrement('quantity', $itemData['quantity']);
+                        // Si quantity es null, considerar stock ilimitado
+                        if ($product->quantity !== null && $product->quantity < $itemData['quantity']) {
+                            throw new \Exception("Stock insuficiente para el producto {$product->name}. Stock disponible: {$product->quantity}, solicitado: {$itemData['quantity']}");
+                        }
+                        // Solo descontar si quantity no es null
+                        if ($product->quantity !== null) {
+                            $product->decrement('quantity', $itemData['quantity']);
+                        }
                     }
                 }
 

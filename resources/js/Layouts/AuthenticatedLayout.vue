@@ -112,7 +112,7 @@ const handleTourComplete = () => {
                                 </NavLink>
                                 
                                 <NavLink v-if="can('ver inventario')" :href="route('admin.physical-sales.index')" :active="route().current('admin.physical-sales.*')">
-                                    Ventas
+                                    VENDER!
                                 </NavLink>
                                 
                                 <NavLink v-if="isNegociante && (can('ver ordenes') || can('gestionar ordenes'))" :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
@@ -254,7 +254,7 @@ const handleTourComplete = () => {
                         </ResponsiveNavLink>
 
                         <ResponsiveNavLink v-if="can('ver inventario')" :href="route('admin.physical-sales.index')" :active="route().current('admin.physical-sales.*')">
-                            Ventas
+                            VENDER!
                         </ResponsiveNavLink>
 
                         <ResponsiveNavLink v-if="isNegociante" :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">

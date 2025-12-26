@@ -62,6 +62,25 @@ class Store extends Model
         static::saving(function ($store) {
             $store->slug = Str::slug($store->name);
         });
+        
+        // Crear automáticamente el rol "physical-sales" cuando se crea una nueva tienda
+        static::created(function ($store) {
+            $existingRole = \App\Models\Role::where('name', 'physical-sales')
+                ->where('store_id', $store->id)
+                ->where('guard_name', config('auth.defaults.guard', 'web'))
+                ->first();
+            
+            if (!$existingRole) {
+                \App\Models\Role::create([
+                    'name' => 'physical-sales',
+                    'store_id' => $store->id,
+                    'guard_name' => config('auth.defaults.guard', 'web'),
+                ]);
+                
+                // Limpiar caché de permisos
+                app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+            }
+        });
     }
 
     // --- Tus otras funciones (owner, products, etc.) quedan igual ---

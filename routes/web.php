@@ -76,7 +76,7 @@ Route::get('/tiendas', function () {
 // (Rutas públicas sin "/tienda") se definen más abajo para no interferir con rutas /admin
 
 // Rutas Privadas (que requieren autenticación)
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(function () {
     Route::get('/dashboard', function (Request $request) {
         $user = $request->user();
         $store = $user?->store; // Puede ser null
@@ -142,13 +142,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('products', AdminProductController::class);
         Route::put('products-store/promo', [AdminProductController::class, 'updateStorePromo'])->name('products.store_promo');
         
-        // Ventas físicas
-        Route::get('physical-sales', [PhysicalSaleController::class, 'index'])->name('physical-sales.index');
-        Route::get('physical-sales/search-products', [PhysicalSaleController::class, 'searchProducts'])->name('physical-sales.search-products');
-        Route::get('physical-sales/get-product-by-barcode', [PhysicalSaleController::class, 'getProductByBarcode'])->name('physical-sales.get-product-by-barcode');
-        Route::post('physical-sales', [PhysicalSaleController::class, 'store'])->name('physical-sales.store');
-        Route::get('physical-sales/{physicalSale}', [PhysicalSaleController::class, 'show'])->name('physical-sales.show');
-        Route::get('physical-sales/export/excel', [PhysicalSaleController::class, 'export'])->name('physical-sales.export');
+        // Ventas físicas - Sin middleware 'verified' para permitir usuarios physical-sales sin email verificado
+        Route::middleware('allow.physical-sales.without-verification')->group(function () {
+            Route::get('physical-sales', [PhysicalSaleController::class, 'index'])->name('physical-sales.index');
+            Route::get('physical-sales/search-products', [PhysicalSaleController::class, 'searchProducts'])->name('physical-sales.search-products');
+            Route::get('physical-sales/get-product-by-barcode', [PhysicalSaleController::class, 'getProductByBarcode'])->name('physical-sales.get-product-by-barcode');
+            Route::post('physical-sales', [PhysicalSaleController::class, 'store'])->name('physical-sales.store');
+            Route::post('physical-sales/open-drawer', [PhysicalSaleController::class, 'openDrawer'])->name('physical-sales.open-drawer');
+            Route::get('physical-sales/{physicalSale}', [PhysicalSaleController::class, 'show'])->name('physical-sales.show');
+            Route::get('physical-sales/export/excel', [PhysicalSaleController::class, 'export'])->name('physical-sales.export');
+        });
 
         // ===== RUTAS AVANZADAS (solo plan negociantes) =====
         Route::middleware('plan:negociante')->group(function () {
@@ -156,8 +159,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::resource('roles', RoleController::class);
             Route::resource('orders', OrderController::class);
             Route::post('orders/{order}/confirm', [OrderController::class, 'confirm'])->name('orders.confirm');
-            Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
-            Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
+            
+            // Reportes - Permitir acceso sin verificación de email (el usuario ya está autenticado)
+            Route::middleware('allow.physical-sales.without-verification')->group(function () {
+                Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+                Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
+            });
             Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
             Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
             Route::get('catalog-customization', [CatalogCustomizationController::class, 'index'])->name('catalog-customization.index');
