@@ -734,7 +734,42 @@ const processSale = async () => {
             return;
         }
 
-        const response = await window.axios.post(route('admin.physical-sales.store'), saleData);
+        // Asegurar que el token CSRF esté actualizado antes de la petición
+        if (window.updateCsrfToken) {
+            window.updateCsrfToken();
+        } else {
+            // Fallback: actualizar manualmente
+            const token = document.head.querySelector('meta[name="csrf-token"]');
+            if (token && window.axios) {
+                window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token.content;
+            }
+        }
+
+        // Función para hacer la petición con reintento automático en caso de 419
+        const makeRequest = async (retryCount = 0) => {
+            try {
+                return await window.axios.post(route('admin.physical-sales.store'), saleData);
+            } catch (error) {
+                // Si es error 419 y aún no hemos reintentado, actualizar token y reintentar
+                if (error.response?.status === 419 && retryCount === 0) {
+                    // Actualizar token CSRF
+                    if (window.updateCsrfToken) {
+                        window.updateCsrfToken();
+                    } else {
+                        const token = document.head.querySelector('meta[name="csrf-token"]');
+                        if (token && window.axios) {
+                            window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token.content;
+                        }
+                    }
+                    // Reintentar una vez
+                    return await makeRequest(1);
+                }
+                // Si no es 419 o ya reintentamos, lanzar el error
+                throw error;
+            }
+        };
+
+        const response = await makeRequest();
 
         if (response.data && response.data.success) {
             // Guardar la venta creada para mostrar opción de imprimir
@@ -749,6 +784,11 @@ const processSale = async () => {
             saleNotes.value = '';
             paymentMethod.value = 'efectivo';
             selectedCategory.value = null;
+            
+            // Actualizar token CSRF después de una petición exitosa
+            if (window.updateCsrfToken) {
+                window.updateCsrfToken();
+            }
             
             // Mostrar modal de éxito con opción de imprimir
             showInvoiceModal.value = true;

@@ -37,14 +37,25 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
+        $store = $request->user()->store;
+        
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                // Email único solo para esta tienda
+                Rule::unique('users')->where(function ($query) use ($store) {
+                    return $query->where('store_id', $store->id);
+                }),
+            ],
             'password' => 'required|string|min:8|confirmed',
             'role' => 'required|string|exists:roles,name',
         ]);
+        
         // Limitar por cupo de usuarios de la tienda
-        $store = $request->user()->store;
         $currentUsers = $store->users()->count();
         $maxUsers = $store->max_users ?? 0;
         if ($maxUsers > 0 && $currentUsers >= $maxUsers) {
@@ -81,9 +92,19 @@ class UserController extends Controller
             abort(403);
         }
 
+        $store = $request->user()->store;
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                // Email único solo para esta tienda, ignorando el usuario actual
+                Rule::unique('users')->where(function ($query) use ($store) {
+                    return $query->where('store_id', $store->id);
+                })->ignore($user->id),
+            ],
             'password' => 'nullable|string|min:8|confirmed',
             'role' => 'required|string|exists:roles,name',
         ]);
