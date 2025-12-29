@@ -6,9 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
-use Spatie\Permission\Models\Role;
+use App\Models\Role;
 
 class UserController extends Controller
 {
@@ -52,7 +53,14 @@ class UserController extends Controller
                 }),
             ],
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|string|exists:roles,name',
+            'role' => [
+                'required',
+                'string',
+                Rule::exists('roles', 'name')->where(function ($query) use ($store) {
+                    return $query->where('store_id', $store->id)
+                                 ->where('guard_name', config('auth.defaults.guard', 'web'));
+                }),
+            ],
         ]);
         
         // Limitar por cupo de usuarios de la tienda
@@ -62,18 +70,66 @@ class UserController extends Controller
             return back()->withErrors(['limit' => 'Has alcanzado el límite de usuarios permitidos para tu plan.']);
         }
 
-        $user = $store->users()->create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-        ]);
-        
-        $user->assignRole($validated['role']);
+        try {
+            DB::beginTransaction();
 
-        // Regenerar el token CSRF después de crear el usuario para evitar errores 419
-        $request->session()->regenerateToken();
+            $user = $store->users()->create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
+                'email_verified_at' => now(), // Marcar como verificado para permitir acceso
+            ]);
+            
+            // Buscar el rol específico de la tienda (importante: debe pertenecer a esta tienda)
+            $role = Role::where('name', $validated['role'])
+                ->where('store_id', $store->id)
+                ->where('guard_name', config('auth.defaults.guard', 'web'))
+                ->first();
+            
+            if (!$role) {
+                DB::rollBack();
+                return back()->withErrors(['role' => 'El rol seleccionado no existe para esta tienda.']);
+            }
+            
+            // Asignar el rol por instancia para evitar colisiones
+            $user->assignRole($role);
 
-        return redirect()->route('admin.users.index')->with('success', '¡Usuario creado con éxito!');
+            DB::commit();
+
+            // Regenerar el token CSRF después de crear el usuario para evitar errores 419
+            $request->session()->regenerateToken();
+
+            return redirect()->route('admin.users.index')->with('success', '¡Usuario creado con éxito!');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            // Log del error para debugging
+            \Log::error('Error al crear usuario: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->except(['password', 'password_confirmation']),
+            ]);
+            // Regenerar token CSRF antes de redirigir con error
+            $request->session()->regenerateToken();
+            // En desarrollo, mostrar el error real; en producción, mensaje genérico
+            $errorMessage = config('app.debug') 
+                ? 'Error: ' . $e->getMessage() . ' (Línea: ' . $e->getLine() . ')'
+                : 'Hubo un error al crear el usuario. Por favor, intenta nuevamente.';
+            
+            // Mensajes más específicos según el tipo de error
+            if (str_contains($e->getMessage(), 'SQLSTATE')) {
+                $errorMessage = config('app.debug')
+                    ? 'Error de base de datos: ' . $e->getMessage()
+                    : 'Error de base de datos. Verifica que los datos sean correctos.';
+            } elseif (str_contains($e->getMessage(), 'Role') || str_contains($e->getMessage(), 'role')) {
+                $errorMessage = config('app.debug')
+                    ? 'Error al asignar rol: ' . $e->getMessage()
+                    : 'Error al asignar rol. Contacta al soporte.';
+            }
+            
+            return back()->withErrors(['error' => $errorMessage]);
+        }
     }
 
     public function edit(User $user)
@@ -109,7 +165,14 @@ class UserController extends Controller
                 })->ignore($user->id),
             ],
             'password' => 'nullable|string|min:8|confirmed',
-            'role' => 'required|string|exists:roles,name',
+            'role' => [
+                'required',
+                'string',
+                Rule::exists('roles', 'name')->where(function ($query) use ($store) {
+                    return $query->where('store_id', $store->id)
+                                 ->where('guard_name', config('auth.defaults.guard', 'web'));
+                }),
+            ],
         ]);
 
         $userData = [
@@ -121,13 +184,59 @@ class UserController extends Controller
             $userData['password'] = Hash::make($validated['password']);
         }
 
-        $user->update($userData);
-        $user->syncRoles($validated['role']);
+        try {
+            DB::beginTransaction();
 
-        // Regenerar el token CSRF después de actualizar el usuario para evitar errores 419
-        $request->session()->regenerateToken();
+            $user->update($userData);
+            
+            // Buscar el rol específico de la tienda
+            $role = Role::where('name', $validated['role'])
+                ->where('store_id', $store->id)
+                ->where('guard_name', config('auth.defaults.guard', 'web'))
+                ->first();
+            
+            if (!$role) {
+                DB::rollBack();
+                return back()->withErrors(['role' => 'El rol seleccionado no existe para esta tienda.']);
+            }
+            
+            // Sincronizar roles (eliminar todos y asignar solo el nuevo)
+            $user->syncRoles([$role]);
 
-        return redirect()->route('admin.users.index');
+            DB::commit();
+
+            // Regenerar el token CSRF después de actualizar el usuario para evitar errores 419
+            $request->session()->regenerateToken();
+
+            return redirect()->route('admin.users.index');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error al actualizar usuario: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $user->id,
+            ]);
+            $request->session()->regenerateToken();
+            // En desarrollo, mostrar el error real; en producción, mensaje genérico
+            $errorMessage = config('app.debug') 
+                ? 'Error: ' . $e->getMessage() . ' (Línea: ' . $e->getLine() . ')'
+                : 'Hubo un error al actualizar el usuario. Por favor, intenta nuevamente.';
+            
+            // Mensajes más específicos según el tipo de error
+            if (str_contains($e->getMessage(), 'SQLSTATE')) {
+                $errorMessage = config('app.debug')
+                    ? 'Error de base de datos: ' . $e->getMessage()
+                    : 'Error de base de datos. Verifica que los datos sean correctos.';
+            } elseif (str_contains($e->getMessage(), 'Role') || str_contains($e->getMessage(), 'role')) {
+                $errorMessage = config('app.debug')
+                    ? 'Error al asignar rol: ' . $e->getMessage()
+                    : 'Error al asignar rol. Contacta al soporte.';
+            }
+            
+            return back()->withErrors(['error' => $errorMessage]);
+        }
     }
 
     public function destroy(User $user, Request $request)

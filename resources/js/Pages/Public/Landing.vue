@@ -24,10 +24,15 @@ const submit = () => {
             open.value = false;
             showSuccess.value = true;
         },
-        onError: () => {
+        onError: (errors) => {
+            console.error('Errores del formulario:', errors);
             // Si el email ya existe, mostramos un modal amigable
-            if (form.errors?.email) {
+            if (form.errors?.email && form.errors.email.includes('ya está registrado')) {
                 showEmailExists.value = true;
+            }
+            // Si hay un error general, lo mostramos
+            if (form.errors?.error) {
+                console.error('Error al crear tienda:', form.errors.error);
             }
         },
     });
@@ -139,28 +144,64 @@ const showEmailExists = ref(false);
                     <form @submit.prevent="submit" class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Nombre de tu Tienda</label>
-                            <input v-model="form.store_name" type="text" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" required />
+                            <input 
+                                v-model="form.store_name" 
+                                type="text" 
+                                :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.store_name ? 'border-red-500' : '']" 
+                                required 
+                            />
+                            <p v-if="form.errors.store_name" class="mt-1 text-sm text-red-600">{{ form.errors.store_name }}</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Tu Nombre</label>
-                            <input v-model="form.name" type="text" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" required />
+                            <input 
+                                v-model="form.name" 
+                                type="text" 
+                                :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.name ? 'border-red-500' : '']" 
+                                required 
+                            />
+                            <p v-if="form.errors.name" class="mt-1 text-sm text-red-600">{{ form.errors.name }}</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Tu Email</label>
-                            <input v-model="form.email" type="email" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" required />
+                            <input 
+                                v-model="form.email" 
+                                type="email" 
+                                :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.email ? 'border-red-500' : '']" 
+                                required 
+                            />
+                            <p v-if="form.errors.email" class="mt-1 text-sm text-red-600">{{ form.errors.email }}</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Teléfono (WhatsApp)</label>
-                            <input v-model="form.phone" placeholder="57xxxxxxxxxx" type="tel" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" />
+                            <input 
+                                v-model="form.phone" 
+                                placeholder="57xxxxxxxxxx" 
+                                type="tel" 
+                                :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.phone ? 'border-red-500' : '']" 
+                            />
+                            <p v-if="form.errors.phone" class="mt-1 text-sm text-red-600">{{ form.errors.phone }}</p>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Contraseña</label>
-                                <input v-model="form.password" type="password" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" required />
+                                <input 
+                                    v-model="form.password" 
+                                    type="password" 
+                                    :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.password ? 'border-red-500' : '']" 
+                                    required 
+                                />
+                                <p v-if="form.errors.password" class="mt-1 text-sm text-red-600">{{ form.errors.password }}</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Confirmar contraseña</label>
-                                <input v-model="form.password_confirmation" type="password" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500" required />
+                                <input 
+                                    v-model="form.password_confirmation" 
+                                    type="password" 
+                                    :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.password_confirmation ? 'border-red-500' : '']" 
+                                    required 
+                                />
+                                <p v-if="form.errors.password_confirmation" class="mt-1 text-sm text-red-600">{{ form.errors.password_confirmation }}</p>
                             </div>
                         </div>
                         <div>
@@ -182,7 +223,14 @@ const showEmailExists = ref(false);
                                 </ul>
                             </div>
                         </transition>
-                        <p v-if="form.hasErrors" class="text-sm text-red-600">Por favor corrige los campos marcados.</p>
+                        <!-- Mostrar errores generales -->
+                        <div v-if="form.errors.error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                            <p class="text-sm text-red-600">{{ form.errors.error }}</p>
+                        </div>
+                        <!-- Mostrar mensaje genérico solo si hay errores pero no se muestran específicos -->
+                        <p v-if="form.hasErrors && !form.errors.error && !Object.keys(form.errors).some(k => ['store_name', 'name', 'email', 'phone', 'password', 'password_confirmation'].includes(k))" class="text-sm text-red-600 mt-2">
+                            Por favor corrige los campos marcados.
+                        </p>
                     </form>
                 </div>
                 </div>

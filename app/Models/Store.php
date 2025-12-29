@@ -65,20 +65,39 @@ class Store extends Model
         
         // Crear automáticamente el rol "physical-sales" cuando se crea una nueva tienda
         static::created(function ($store) {
-            $existingRole = \App\Models\Role::where('name', 'physical-sales')
-                ->where('store_id', $store->id)
-                ->where('guard_name', config('auth.defaults.guard', 'web'))
-                ->first();
-            
-            if (!$existingRole) {
-                \App\Models\Role::create([
-                    'name' => 'physical-sales',
-                    'store_id' => $store->id,
-                    'guard_name' => config('auth.defaults.guard', 'web'),
-                ]);
+            // Usar firstOrCreate para evitar conflictos de unicidad de Spatie Permission
+            // Spatie valida name + guard_name, pero nosotros necesitamos name + guard_name + store_id
+            try {
+                $role = \App\Models\Role::firstOrCreate(
+                    [
+                        'name' => 'physical-sales',
+                        'store_id' => $store->id,
+                        'guard_name' => config('auth.defaults.guard', 'web'),
+                    ]
+                );
                 
                 // Limpiar caché de permisos
                 app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+            } catch (\Exception $e) {
+                // Si firstOrCreate falla por validación de Spatie, usar inserción directa
+                $existingRole = \Illuminate\Support\Facades\DB::table('roles')
+                    ->where('name', 'physical-sales')
+                    ->where('store_id', $store->id)
+                    ->where('guard_name', config('auth.defaults.guard', 'web'))
+                    ->first();
+                
+                if (!$existingRole) {
+                    \Illuminate\Support\Facades\DB::table('roles')->insert([
+                        'name' => 'physical-sales',
+                        'store_id' => $store->id,
+                        'guard_name' => config('auth.defaults.guard', 'web'),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                    
+                    // Limpiar caché de permisos
+                    app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+                }
             }
         });
     }

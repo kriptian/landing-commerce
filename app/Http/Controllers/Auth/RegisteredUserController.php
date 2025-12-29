@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Store;
+use App\Models\Role;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,6 +20,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\StoreCredentialsMail;
 use App\Notifications\NewStoreCreated;
+use Spatie\Permission\Models\Permission;
 
 class RegisteredUserController extends Controller
 {
@@ -51,32 +54,99 @@ class RegisteredUserController extends Controller
         ]);
         // ===========================================
 
-        // 1. Creamos el usuario
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
+        // Usar transacción para asegurar consistencia
+        try {
+            DB::beginTransaction();
 
-        // 2. Creamos la tienda usando el 'store_name' que vino del formulario
-        $store = Store::create([
-            'name' => $request->store_name, // <-- Usamos el nombre del formulario
-            'user_id' => $user->id,
-            'phone' => $request->input('phone'),
-            'plan' => $request->input('plan', 'emprendedor'),
-            'plan_cycle' => $request->input('plan_cycle', 'mensual'),
-            'max_users' => $request->input('max_users', 3),
-            'plan_started_at' => now(),
-        ]);
-        
-        // 3. Le asignamos el ID de la tienda al usuario y guardamos
-        $user->store_id = $store->id;
-        $user->save();
-        
-        // Le asignamos el rol por defecto
-        $user->assignRole('Administrador');
+            // 1. Creamos el usuario
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+            ]);
 
-        event(new Registered($user));
+            // 2. Creamos la tienda usando el 'store_name' que vino del formulario
+            $store = Store::create([
+                'name' => $request->store_name, // <-- Usamos el nombre del formulario
+                'user_id' => $user->id,
+                'phone' => $request->input('phone'),
+                'plan' => $request->input('plan', 'emprendedor'),
+                'plan_cycle' => $request->input('plan_cycle', 'mensual'),
+                'max_users' => $request->input('max_users', 3),
+                'plan_started_at' => now(),
+            ]);
+            
+            // 3. Le asignamos el ID de la tienda al usuario y marcamos como verificado
+            $user->store_id = $store->id;
+            $user->email_verified_at = now(); // Marcar como verificado para permitir login
+            $user->save();
+            
+            // 4. Crear/obtener rol Administrador de la tienda y asignarle todos los permisos
+            $adminRole = Role::firstOrCreate([
+                'name' => 'Administrador',
+                'store_id' => $store->id,
+                'guard_name' => config('auth.defaults.guard', 'web'),
+            ]);
+            
+            // Sincronizar todos los permisos al rol Administrador (si existen)
+            // Nota: Los permisos son globales (sin store_id), así que los asignamos directamente
+            try {
+                $permissions = Permission::all();
+                if ($permissions->isNotEmpty()) {
+                    $adminRole->syncPermissions($permissions);
+                }
+            } catch (\Exception $e) {
+                // Si hay error con permisos, loguear pero continuar (el rol se crea igual)
+                \Log::warning('No se pudieron asignar permisos al rol Administrador: ' . $e->getMessage());
+            }
+            
+            // Limpiar caché de permisos
+            app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+            
+            // 5. Asignar el rol Administrador al usuario (por instancia para evitar colisiones)
+            $user->assignRole($adminRole);
+
+            DB::commit();
+
+            event(new Registered($user));
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            // Si es un error de validación, re-lanzarlo para que Inertia lo maneje correctamente
+            throw $e;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            // Log del error para debugging
+            \Log::error('Error al crear tienda: ' . $e->getMessage(), [
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->except(['password', 'password_confirmation']),
+            ]);
+            // Regenerar token CSRF antes de redirigir con error
+            $request->session()->regenerateToken();
+            // En desarrollo, mostrar el error real; en producción, mensaje genérico
+            $errorMessage = config('app.debug') 
+                ? 'Error: ' . $e->getMessage() . ' (Línea: ' . $e->getLine() . ')'
+                : 'Hubo un error al crear la tienda. Por favor, intenta nuevamente.';
+            
+            // Mensajes más específicos según el tipo de error
+            if (str_contains($e->getMessage(), 'SQLSTATE')) {
+                $errorMessage = config('app.debug')
+                    ? 'Error de base de datos: ' . $e->getMessage()
+                    : 'Error de base de datos. Verifica que los datos sean correctos.';
+            } elseif (str_contains($e->getMessage(), 'Permission') || str_contains($e->getMessage(), 'permission')) {
+                $errorMessage = config('app.debug')
+                    ? 'Error al asignar permisos: ' . $e->getMessage()
+                    : 'Error al asignar permisos. Contacta al soporte.';
+            } elseif (str_contains($e->getMessage(), 'Role') || str_contains($e->getMessage(), 'role')) {
+                $errorMessage = config('app.debug')
+                    ? 'Error al crear rol: ' . $e->getMessage()
+                    : 'Error al crear rol. Contacta al soporte.';
+            }
+            
+            return back()->withErrors(['error' => $errorMessage]);
+        }
 
         // En lugar de iniciar sesión automáticamente, enviamos correo y devolvemos flash para modal
 
@@ -114,6 +184,9 @@ class RegisteredUserController extends Controller
                 plainPassword: $request->password,
             ));
         } catch (\Throwable $e) {}
+
+        // Regenerar token CSRF después de crear la tienda
+        $request->session()->regenerateToken();
 
         // Guardamos un flash que el Front-end leerá para mostrar modal de éxito
         return redirect()->back()->with('store_created', [
