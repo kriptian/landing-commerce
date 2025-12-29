@@ -69,8 +69,13 @@ onMounted(() => {
                 <div class="print-store-header">
                     <h1 v-if="store?.name" class="text-center text-2xl font-bold mb-6 pb-4 border-b-2 border-black">{{ store.name }}</h1>
                 </div>
+
+                <!-- Marca de agua -->
+                <div v-if="store?.name" class="watermark-container">
+                    <div class="watermark-text">{{ store.name }}</div>
+                </div>
                 
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg relative z-10">
                     <div class="p-6">
                         <!-- Información de la venta -->
                         <div class="mb-6">
@@ -198,8 +203,13 @@ onMounted(() => {
                 <div class="print-store-header">
                     <h1 v-if="store?.name" class="text-center text-2xl font-bold mb-6 pb-4 border-b-2 border-black">{{ store.name }}</h1>
                 </div>
+
+                <!-- Marca de agua -->
+                <div v-if="store?.name" class="watermark-container">
+                    <div class="watermark-text">{{ store.name }}</div>
+                </div>
                 
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg relative z-10">
                     <div class="p-6">
                         <!-- Información de la venta -->
                         <div class="mb-6">
@@ -336,6 +346,44 @@ onMounted(() => {
     
     .shadow-sm {
         box-shadow: none !important;
+    }
+}
+
+/* Estilos de marca de agua */
+.watermark-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    opacity: 0.12; /* Ajustado para mejor visibilidad */
+    z-index: 50; /* Por encima del contenido */
+    pointer-events: none;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.watermark-text {
+    font-size: 8vw; /* Tamaño responsivo relativo al ancho */
+    font-weight: 900;
+    color: #000;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+@media print {
+    .watermark-container {
+        display: flex !important;
+        opacity: 0.08 !important; /* Un poco más sutil en impresión */
+    }
+    
+    .watermark-text {
+        font-size: 6rem; /* Tamaño fijo para impresión A4/Carta */
+        color: #000 !important;
+        -webkit-text-stroke: 1px #ccc; /* Borde opcional para mejor definición */
     }
 }
 </style>

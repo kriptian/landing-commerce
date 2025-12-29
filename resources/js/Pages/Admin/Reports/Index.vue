@@ -2,7 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
-import BarChart from '@/Components/BarChart.vue';
+// import BarChart from '@/Components/BarChart.vue';
 import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
 
 const props = defineProps({
@@ -410,7 +410,8 @@ const startResize = (e) => {
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                         <div class="p-6">
                             <h3 class="text-lg font-semibold mb-4">Ventas en el Período Seleccionado</h3>
-                            <BarChart :chart-data="formattedChartData" />
+                            <!-- <BarChart :chart-data="formattedChartData" /> -->
+                            <p>Gráfico temporalmente deshabilitado por debug</p>
                         </div>
                     </div>
                 </div>

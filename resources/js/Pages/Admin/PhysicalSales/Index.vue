@@ -477,21 +477,80 @@ const updateQuantityInput = (index, event) => {
 
 // Actualizar precio desde input
 const updatePrice = (index, event) => {
-    const value = parseFloat(event.target.value);
-    if (value >= 0) {
-        const item = cartItems.value[index];
-        // Si hay descuento aplicado, actualizar el precio original y recalcular
-        if (item.discount_percent > 0 && item.original_price) {
-            // El usuario está editando el precio final, así que actualizamos el original
-            item.original_price = value / (1 - item.discount_percent / 100);
-            item.unit_price = value;
-        } else {
-            // Sin descuento, actualizar directamente
-            item.unit_price = value;
-            if (!item.original_price) {
-                item.original_price = value;
-            }
-        }
+    // Implementación antigua reemplazada por updatePriceInput
+};
+
+// Formatear valor numérico a moneda para input (sin símbolo $)
+const formatNumberForInput = (value) => {
+    if (value === null || value === undefined || value === '') return '';
+    return new Intl.NumberFormat('es-CO', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+        useGrouping: true,
+    }).format(value);
+};
+
+// Parsear valor moneda de input a número
+const parseMoneyInput = (value) => {
+    if (typeof value === 'number') return value;
+    if (!value) return 0;
+    // Eliminar puntos y otros caracteres no numéricos excepto coma decimal si la hubiera (aunque es CO, usamos enteros mayormente)
+    const cleanValue = value.toString().replace(/\./g, '').replace(/[^0-9]/g, '');
+    return parseFloat(cleanValue) || 0;
+};
+
+// Manejar input de precio (Valor)
+const handlePriceInput = (index, event) => {
+    let value = event.target.value;
+    
+    // Guardar posición del cursor para intentar mantenerla (básico)
+    // En inputs formateados esto es complejo, pero para añadir ceros al final funciona bien
+    
+    // Parsear el valor limpio
+    const numberValue = parseMoneyInput(value);
+    
+    // Actualizar el modelo
+    const item = cartItems.value[index];
+    
+    // Si hay descuento aplicado, actualizar el precio original
+    if (item.discount_percent > 0) {
+        // Recalcular precio original basado en el nuevo precio final
+        item.unit_price = numberValue;
+        item.original_price = numberValue / (1 - item.discount_percent / 100);
+    } else {
+        item.unit_price = numberValue;
+        item.original_price = numberValue;
+    }
+
+    // Formatear el input para visualización inmediata
+    // Solo formatear si el usuario no está borrando todo (permitir campo vacío)
+    if (value !== '') {
+        event.target.value = formatNumberForInput(numberValue);
+    }
+};
+
+// Actualizar descuento desde input
+const updateDiscountFromInput = (index, event) => {
+    let value = parseFloat(event.target.value) || 0;
+    
+    // Limitar a 2 decimales
+    value = Math.round(value * 100) / 100;
+    
+    // Limitar entre 0 y 100
+    const discountPercent = Math.min(100, Math.max(0, value));
+    
+    const item = cartItems.value[index];
+    
+    if (!item.original_price) {
+        item.original_price = item.unit_price;
+    }
+    
+    item.discount_percent = discountPercent;
+    item.unit_price = item.original_price * (1 - discountPercent / 100);
+    
+    // Actualizar el valor en el input si fue modificado por las reglas
+    if (value !== discountPercent) {
+        event.target.value = discountPercent;
     }
 };
 
@@ -548,33 +607,8 @@ const applyGeneralDiscount = () => {
 };
 
 // Actualizar precio desde input (nuevo método)
-const updatePriceFromInput = (index, event) => {
-    const value = parseFloat(event.target.value);
-    if (value >= 0) {
-        const item = cartItems.value[index];
-        item.original_price = value;
-        // Recalcular precio con descuento si existe
-        if (item.discount_percent > 0) {
-            item.unit_price = value * (1 - item.discount_percent / 100);
-        } else {
-            item.unit_price = value;
-        }
-    }
-};
-
-// Actualizar descuento desde input
-const updateDiscountFromInput = (index, event) => {
-    const value = parseFloat(event.target.value) || 0;
-    const item = cartItems.value[index];
-    const discountPercent = Math.min(100, Math.max(0, value));
-    
-    if (!item.original_price) {
-        item.original_price = item.unit_price;
-    }
-    
-    item.discount_percent = discountPercent;
-    item.unit_price = item.original_price * (1 - discountPercent / 100);
-};
+// La función updatePriceFromInput ha sido reemplazada por handlePriceInput
+// La función updateDiscountFromInput ha sido movida arriba
 
 // Recalcular total del item
 const recalculateItemTotal = (index) => {
@@ -1100,6 +1134,38 @@ watch(searchQuery, async (newValue) => {
         }
     }, 300);
 });
+
+// Lógica para redimensionar paneles (Split Pane)
+const leftPanelWidth = ref(50); // Porcentaje inicial
+const isResizing = ref(false);
+
+const startResize = () => {
+    isResizing.value = true;
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', stopResize);
+    // Evitar selección de texto mientras se arrastra
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+};
+
+const handleResize = (e) => {
+    if (!isResizing.value) return;
+    const containerWidth = window.innerWidth;
+    // Calcular porcentaje basado en la posición del mouse
+    const newLeftWidth = (e.clientX / containerWidth) * 100;
+    // Limitar entre 20% y 80% para no ocultar ninguno de los dos lados
+    if (newLeftWidth > 20 && newLeftWidth < 80) {
+        leftPanelWidth.value = newLeftWidth;
+    }
+};
+
+const stopResize = () => {
+    isResizing.value = false;
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+};
 </script>
 
 <template>
@@ -1114,7 +1180,7 @@ watch(searchQuery, async (newValue) => {
         <!-- Vista Desktop -->
         <div v-if="activeTab === 'sales'" class="hidden lg:flex fixed inset-0 bg-white flex-row" style="margin-top: 0; z-index: 10;">
             <!-- Panel Izquierdo: Productos -->
-            <div class="w-2/3 h-full flex flex-col border-r border-gray-300">
+            <div :style="{ width: leftPanelWidth + '%' }" class="h-full flex flex-col border-r border-gray-300">
                 <!-- Header con búsqueda -->
                 <div class="bg-blue-50 border-b border-blue-100 px-4 py-3 flex-shrink-0">
                     <div class="flex items-center gap-3 mb-3">
@@ -1179,7 +1245,7 @@ watch(searchQuery, async (newValue) => {
                     <div v-if="filteredProducts.length === 0" class="text-center py-12 text-gray-500">
                         <p>No se encontraron productos</p>
                     </div>
-                    <div v-else class="grid grid-cols-4 xl:grid-cols-5 gap-3">
+                    <div v-else class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                         <div
                             v-for="product in filteredProducts"
                             :key="product.id"
@@ -1213,15 +1279,24 @@ watch(searchQuery, async (newValue) => {
                                         </p>
                                     </template>
                                 </div>
-                                <h3 class="font-medium text-xs text-gray-900 line-clamp-2">{{ product.name }}</h3>
+                                <h3 class="font-medium text-xs text-gray-900 line-clamp-2" :title="product.name">{{ product.name }}</h3>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
+            <!-- Resizer (Separador deslizable) -->
+            <div 
+                class="w-1 hover:w-2 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex items-center justify-center transition-all z-20 group" 
+                @mousedown="startResize"
+                title="Arrastra para ajustar el tamaño"
+            >
+                <div class="h-8 w-1 bg-gray-400 rounded-full group-hover:bg-white"></div>
+            </div>
+
             <!-- Panel Derecho: Facturación -->
-            <div class="w-1/3 h-full flex flex-col bg-white">
+            <div class="flex-1 h-full flex flex-col bg-white overflow-hidden" style="min-width: 300px;">
                 <!-- Header -->
                 <div class="bg-blue-50 border-b border-blue-100 px-4 py-3 flex-shrink-0">
                     <div class="flex items-center gap-3">
@@ -1255,28 +1330,28 @@ watch(searchQuery, async (newValue) => {
                                     <th class="px-3 py-3 text-left text-xs font-semibold text-gray-700">Producto</th>
                                     <th class="px-3 py-3 text-center text-xs font-semibold text-gray-700 w-16">Stock</th>
                                     <th class="px-3 py-3 text-center text-xs font-semibold text-gray-700 w-20">Cant</th>
-                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-28">Valor</th>
-                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-24">% Desc</th>
-                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-32">SubTotal</th>
+                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-40">Valor</th>
+                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-32">% Desc</th>
+                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-36">SubTotal</th>
                                     <th class="px-3 py-3 text-center text-xs font-semibold text-gray-700 w-16"></th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200 bg-white">
                                 <tr v-for="(item, index) in cartItems" :key="index" :class="['hover:bg-gray-50', getStockStatusClass(item)]">
-                                    <td class="px-3 py-3 text-left align-middle">
-                                        <div class="min-w-0">
+                                    <td class="px-3 py-3 text-left align-middle" :title="item.product_name">
+                                        <div class="min-w-0" style="max-width: 140px;">
                                             <p class="font-medium text-sm text-gray-900 truncate">{{ item.product_name }}</p>
                                             <p v-if="item.variant_options" class="text-xs text-gray-500 truncate">
                                                 {{ Object.entries(item.variant_options).map(([k, v]) => `${k}: ${v}`).join(', ') }}
                                             </p>
                                         </div>
                                     </td>
-                                    <td class="px-3 py-3 text-center align-middle w-16">
+                                    <td class="px-3 py-3 text-center align-middle w-16" :title="`Stock disponible: ${getAvailableStock(item)}`">
                                         <span :class="getStockTextClass(item)">
                                             {{ getAvailableStock(item) }}
                                         </span>
                                     </td>
-                                    <td class="px-3 py-3 text-center align-middle w-20">
+                                    <td class="px-3 py-3 text-center align-middle w-20" :title="`Cantidad: ${item.quantity}`">
                                         <input
                                             type="number"
                                             :value="item.quantity"
@@ -1285,17 +1360,16 @@ watch(searchQuery, async (newValue) => {
                                             min="1"
                                         />
                                     </td>
-                                    <td class="px-3 py-3 text-right align-middle w-28">
+                                    <td class="px-3 py-3 text-right align-middle w-40" :title="`Precio unitario: ${formatCurrency(item.unit_price)}`">
                                         <input
-                                            type="number"
-                                            :value="item.original_price || item.unit_price"
-                                            @change="updatePriceFromInput(index, $event)"
+                                            type="text"
+                                            :value="formatNumberForInput(item.original_price || item.unit_price)"
+                                            @input="handlePriceInput(index, $event)"
                                             class="w-full text-right border border-gray-300 rounded text-sm py-2 px-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            min="0"
-                                            step="0.01"
+                                            placeholder="0"
                                         />
                                     </td>
-                                    <td class="px-3 py-3 text-right align-middle w-24">
+                                    <td class="px-3 py-3 text-right align-middle w-32" :title="`Descuento: ${item.discount_percent}%`">
                                         <input
                                             type="number"
                                             :value="item.discount_percent"
@@ -1307,7 +1381,7 @@ watch(searchQuery, async (newValue) => {
                                             step="0.01"
                                         />
                                     </td>
-                                    <td class="px-3 py-3 text-right align-middle w-32">
+                                    <td class="px-3 py-3 text-right align-middle w-36" :title="`Subtotal: ${formatCurrency(item.quantity * item.unit_price)}`">
                                         <span class="font-semibold text-gray-900 text-sm">
                                             {{ formatCurrency(item.quantity * item.unit_price) }}
                                         </span>
@@ -1316,6 +1390,7 @@ watch(searchQuery, async (newValue) => {
                                         <button
                                             @click="removeFromCart(index)"
                                             class="flex items-center justify-center w-8 h-8 bg-red-500 text-white rounded hover:bg-red-600 transition-colors mx-auto"
+                                            title="Eliminar producto"
                                         >
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
