@@ -545,6 +545,9 @@ const updateDiscountFromInput = (index, event) => {
         item.original_price = item.unit_price;
     }
     
+    // Si se edita manualmente, se asume que es porcentaje
+    item.discount_type = 'percentage';
+    item.discount_value = discountPercent;
     item.discount_percent = discountPercent;
     item.unit_price = item.original_price * (1 - discountPercent / 100);
     
@@ -558,12 +561,16 @@ const updateDiscountFromInput = (index, event) => {
 const openProductDiscountModal = (index) => {
     selectedProductIndex.value = index;
     const item = cartItems.value[index];
-    // Si ya tiene descuento, mostrar como porcentaje
-    if (item.discount_percent > 0) {
+    // Si ya tiene descuento, cargar datos guardados
+    if (item.discount_type) {
+        productDiscountType.value = item.discount_type;
+        productDiscountValue.value = item.discount_value || 0;
+    } else if (item.discount_percent > 0) {
+        // Compatibilidad con items anteriores
         productDiscountType.value = 'percentage';
         productDiscountValue.value = item.discount_percent;
     } else {
-        // Por defecto, usar porcentaje
+        // Por defecto
         productDiscountType.value = 'percentage';
         productDiscountValue.value = 0;
     }
@@ -583,10 +590,19 @@ const applyProductDiscount = () => {
     
     if (productDiscountType.value === 'percentage') {
         const discountPercent = Math.min(100, Math.max(0, productDiscountValue.value));
-        item.discount_percent = discountPercent;
-        item.unit_price = basePrice * (1 - discountPercent / 100);
+        // Redondear a 2 decimales
+        const roundedPercent = Math.round(discountPercent * 100) / 100;
+        
+        item.discount_type = 'percentage';
+        item.discount_value = roundedPercent;
+        item.discount_percent = roundedPercent;
+        item.unit_price = basePrice * (1 - roundedPercent / 100);
     } else {
         const discountAmount = Math.min(basePrice, Math.max(0, productDiscountValue.value));
+        
+        item.discount_type = 'amount';
+        item.discount_value = discountAmount;
+        // Calculamos porcentaje solo para referencia interna
         item.discount_percent = (discountAmount / basePrice) * 100;
         item.unit_price = basePrice - discountAmount;
     }
@@ -1331,7 +1347,7 @@ const stopResize = () => {
                                     <th class="px-3 py-3 text-center text-xs font-semibold text-gray-700 w-16">Stock</th>
                                     <th class="px-3 py-3 text-center text-xs font-semibold text-gray-700 w-20">Cant</th>
                                     <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-40">Valor</th>
-                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-32">% Desc</th>
+                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-32">Desc</th>
                                     <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-36">SubTotal</th>
                                     <th class="px-3 py-3 text-center text-xs font-semibold text-gray-700 w-16"></th>
                                 </tr>
@@ -1369,17 +1385,31 @@ const stopResize = () => {
                                             placeholder="0"
                                         />
                                     </td>
-                                    <td class="px-3 py-3 text-right align-middle w-32" :title="`Descuento: ${item.discount_percent}%`">
-                                        <input
-                                            type="number"
-                                            :value="item.discount_percent"
-                                            @change="updateDiscountFromInput(index, $event)"
+                                    <td class="px-3 py-3 text-right align-middle w-32" :title="item.discount_type === 'amount' ? `Descuento: $${item.discount_value}` : `Descuento: ${item.discount_percent}%`">
+                                        <!-- Si es monto fijo, mostrar button con valor -->
+                                        <button 
+                                            v-if="item.discount_type === 'amount'"
                                             @click="openProductDiscountModal(index)"
-                                            class="w-full text-right border border-gray-300 rounded text-sm py-2 px-2 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            min="0"
-                                            max="100"
-                                            step="0.01"
-                                        />
+                                            class="w-full text-right border border-blue-200 bg-blue-50 text-blue-700 font-semibold rounded text-sm py-2 px-2 hover:bg-blue-100 transition-colors"
+                                        >
+                                            $ {{ formatNumberForInput(item.discount_value) }}
+                                        </button>
+                                        
+                                        <!-- Si es porcentaje, mostrar input original con símbolo % -->
+                                        <div v-else class="relative">
+                                            <input
+                                                type="number"
+                                                :value="item.discount_percent"
+                                                @change="updateDiscountFromInput(index, $event)"
+                                                @click.self="openProductDiscountModal(index)" 
+                                                class="w-full text-right border border-gray-300 rounded text-sm py-2 pl-2 pr-6 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                min="0"
+                                                max="100"
+                                                step="0.01"
+                                            />
+                                            <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm font-medium pointer-events-none">%</span>
+                                        </div>
+                                        <!-- Nota: quitamos @click del input para evitar abrir modal indeseado al editar, pero se puede añadir un icono o doble click -->
                                     </td>
                                     <td class="px-3 py-3 text-right align-middle w-36" :title="`Subtotal: ${formatCurrency(item.quantity * item.unit_price)}`">
                                         <span class="font-semibold text-gray-900 text-sm">
