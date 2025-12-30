@@ -80,7 +80,19 @@ class PhysicalSaleController extends Controller
         // Calcular estadísticas
         $statsQuery = clone $salesQuery;
         $totalSales = $statsQuery->sum('total');
+        $totalSales = $statsQuery->sum('total');
         $totalCount = $statsQuery->count();
+
+        // Calcular gastos
+        $expensesQuery = $store->expenses();
+        
+        // Aplicar mismos filtros de fecha a gastos
+        if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
+            $expensesQuery->whereBetween('expense_date', [$startUtc, $endExclusiveUtc]);
+        }
+
+        $totalExpenses = $expensesQuery->sum('amount');
+        $netCash = $totalSales - $totalExpenses;
 
         // Obtener productos activos con imágenes para el catálogo POS
         $products = $store->products()
@@ -142,7 +154,10 @@ class PhysicalSaleController extends Controller
             'sales' => $sales,
             'stats' => [
                 'totalSales' => $totalSales,
+                'totalSales' => $totalSales,
                 'totalCount' => $totalCount,
+                'totalExpenses' => $totalExpenses,
+                'netCash' => $netCash,
             ],
             'filters' => $request->only(['start_date', 'end_date', 'search']),
             'products' => $products,
@@ -445,9 +460,9 @@ class PhysicalSaleController extends Controller
     public function export(Request $request)
     {
         $filters = $request->only(['start_date', 'end_date']);
-        $fileName = 'reporte-ventas-fisicas-' . now()->format('Y-m-d') . '.xlsx';
+        $fileName = 'balanze-pos-' . now()->format('Y-m-d') . '.xlsx';
         
-        return Excel::download(new PhysicalSalesExport($filters), $fileName);
+        return Excel::download(new \App\Exports\PhysicalReportExport($filters), $fileName);
     }
 }
 

@@ -8,6 +8,7 @@ import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import Pagination from '@/Components/Pagination.vue';
+import ExpenseModal from './ExpenseModal.vue';
 
 const props = defineProps({
     sales: Object,
@@ -215,6 +216,15 @@ const showStockAlertModal = ref(false);
 const stockAlertMessage = ref('');
 // Referencias para el escáner de código de barras
 const html5QrCode = ref(null);
+
+// Modal de gastos
+const showExpenseModal = ref(false);
+const showSuccessExpenseModal = ref(false);
+
+const handleExpenseSuccess = () => {
+    showSuccessExpenseModal.value = true;
+    // router.reload({ only: ['stats'] }); 
+};
 
 // Función para reproducir beep
 const playBeep = () => {
@@ -1209,6 +1219,19 @@ const stopResize = () => {
                             </svg>
                             Salir
                         </button>
+                        
+                        <!-- Botón Nuevo Gasto -->
+                        <button 
+                            @click="showExpenseModal = true"
+                            class="px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 text-sm font-medium flex items-center gap-2 border border-red-200"
+                            title="Registrar Gasto / Salida"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            Gasto
+                        </button>
+
                         <div class="flex-1 relative">
                             <input
                                 v-model="searchQuery"
@@ -1930,6 +1953,13 @@ const stopResize = () => {
             </div>
         </Modal>
 
+        <!-- Modal de Gastos -->
+        <ExpenseModal 
+            :show="showExpenseModal" 
+            @close="showExpenseModal = false"
+            @success="handleExpenseSuccess"
+        />
+
         <!-- Modal de catálogo de productos -->
         <Modal :show="showProductCatalogModal" @close="showProductCatalogModal = false" :max-width="'4xl'">
             <div class="p-6 max-h-[90vh] flex flex-col">
@@ -2097,6 +2127,17 @@ const stopResize = () => {
                 </div>
             </div>
         </Modal>
+
+        <!-- Modal de éxito de Gasto -->
+        <AlertModal 
+            :show="showSuccessExpenseModal"
+            type="success"
+            title="¡Gasto Guardado!"
+            message="El gasto se ha registrado correctamente en el sistema."
+            primary-text="Entendido"
+            @close="showSuccessExpenseModal = false"
+            @primary="showSuccessExpenseModal = false"
+        />
     </AuthenticatedLayout>
 </template>
 

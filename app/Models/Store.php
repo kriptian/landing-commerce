@@ -169,6 +169,14 @@ class Store extends Model
     }
 
     /**
+     * Una tienda tiene muchos gastos.
+     */
+    public function expenses()
+    {
+        return $this->hasMany(\App\Models\Expense::class);
+    }
+
+    /**
      * Devuelve el logo de la tienda o, si no existe, el logo principal de la app.
      */
     protected function logoUrl(): Attribute

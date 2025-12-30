@@ -112,6 +112,17 @@ class ReportController extends Controller
         $physicalTotalSales = $physicalSalesStatsQuery->sum('total');
         $physicalTotalCount = $physicalSalesStatsQuery->count();
 
+        // Calcular gastos
+        $expensesQuery = $store->expenses()->with('user');
+        if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
+            $expensesQuery->whereBetween('expense_date', [$startUtc, $endExclusiveUtc]);
+        }
+        $totalExpenses = $expensesQuery->sum('amount');
+        $netCash = $physicalTotalSales - $totalExpenses;
+
+        // Obtener listado de gastos (paginado)
+        $expensesList = $expensesQuery->latest('expense_date')->paginate(20)->withQueryString();
+
         return Inertia::render('Admin/Reports/Index', [
             'orders' => $orders,
             'stats' => [
@@ -129,8 +140,11 @@ class ReportController extends Controller
             'physicalSalesStats' => [
                 'totalSales' => $physicalTotalSales,
                 'totalCount' => $physicalTotalCount,
+                'totalExpenses' => $totalExpenses,
+                'netCash' => $netCash,
             ],
             'physicalSalesFilters' => $request->only(['start_date', 'end_date', 'search']),
+            'expensesList' => $expensesList,
         ]);
     }
 

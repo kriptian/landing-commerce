@@ -12,12 +12,16 @@ const props = defineProps({
     chartData: Object,
     physicalSales: Object,
     physicalSalesStats: Object,
+    physicalSales: Object,
+    physicalSalesStats: Object,
     physicalSalesFilters: Object,
+    expensesList: Object,
 });
 
 
 const reportType = ref('digital'); // 'digital' o 'physical'
 const activeTab = ref('chart');
+const activePhysicalTab = ref('sales'); // 'sales' o 'expenses'
 
 const filterForm = useForm({
     start_date: props.filters.start_date || '',
@@ -86,14 +90,20 @@ const setQuickRange = (range) => {
         default:
             return;
     }
-    filterForm.start_date = formatYMD(start);
-    filterForm.end_date = formatYMD(end);
+    
+    // Determine which form to update based on reportType
+    const activeForm = reportType.value === 'digital' ? filterForm : physicalSalesFilterForm;
+    activeForm.start_date = formatYMD(start);
+    activeForm.end_date = formatYMD(end);
     applyFilters();
 };
 
 const isRangeSelected = (range) => {
-    const sd = filterForm.start_date;
-    const ed = filterForm.end_date;
+    // Determine which form to check
+    const activeForm = reportType.value === 'digital' ? filterForm : physicalSalesFilterForm;
+    const sd = activeForm.start_date;
+    const ed = activeForm.end_date;
+    
     if (!sd || !ed) return false;
     const today = getToday();
     const ymd = (d) => formatYMD(d);
@@ -340,68 +350,295 @@ const startResize = (e) => {
 
                 <!-- Estadísticas y Filtros para Ventas Físicas -->
                 <div v-if="reportType === 'physical'">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                             <div class="p-6">
-                                <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Ventas Totales</h3>
-                                <p class="mt-1 text-3xl font-semibold text-gray-900">
+                                <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Ventas Totales</h3>
+                                <p class="mt-1 text-2xl font-semibold text-gray-900">
                                     {{ physicalSalesStats ? formatCurrency(physicalSalesStats.totalSales || 0) : '$0' }}
                                 </p>
                             </div>
                         </div>
                         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                             <div class="p-6">
-                                <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Total de Ventas</h3>
-                                <p class="mt-1 text-3xl font-semibold text-gray-900">
+                                <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Gastos / Salidas</h3>
+                                <p class="mt-1 text-2xl font-semibold text-red-600">
+                                    {{ physicalSalesStats ? formatCurrency(physicalSalesStats.totalExpenses || 0) : '$0' }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                            <div class="p-6">
+                                <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Efectivo Neto</h3>
+                                <p class="mt-1 text-2xl font-semibold text-green-600">
+                                    {{ physicalSalesStats ? formatCurrency(physicalSalesStats.netCash || 0) : '$0' }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                            <div class="p-6">
+                                <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider"># Ventas</h3>
+                                <p class="mt-1 text-2xl font-semibold text-gray-900">
                                     {{ physicalSalesStats ? physicalSalesStats.totalCount || 0 : 0 }}
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Filtros -->
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
-                        <div class="p-6">
-                            <form @submit.prevent="applyFilters">
-                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                                    <div>
-                                        <label for="search_sale" class="block text-sm font-medium text-gray-700">Buscar por número</label>
-                                        <input 
-                                            type="text" 
-                                            id="search_sale" 
-                                            v-model="physicalSalesFilterForm.search" 
-                                            placeholder="Ej: V-000001"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                                        />
+                    <!-- Sub-pestañas para Físicas -->
+                    <div class="mb-6 border-b border-gray-200">
+                        <nav class="-mb-px flex space-x-8">
+                            <button 
+                                @click="activePhysicalTab = 'sales'"
+                                :class="[activePhysicalTab === 'sales' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm']"
+                            >
+                                Historial Ventas
+                            </button>
+                            <button 
+                                @click="activePhysicalTab = 'expenses'"
+                                :class="[activePhysicalTab === 'expenses' ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm']"
+                            >
+                                Historial Gastos
+                            </button>
+                        </nav>
+                    </div>
+
+                    <!-- Contenido Pestaña Ventas -->
+                    <div v-if="activePhysicalTab === 'sales'">
+                        <!-- Filtros Ventas -->
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
+                            <div class="p-6">
+                                <form @submit.prevent="applyFilters">
+                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                        <div>
+                                            <label for="search_sale" class="block text-sm font-medium text-gray-700">Buscar por número</label>
+                                            <input 
+                                                type="text" 
+                                                id="search_sale" 
+                                                v-model="physicalSalesFilterForm.search" 
+                                                placeholder="Ej: V-000001"
+                                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label for="physical_start_date" class="block text-sm font-medium text-gray-700">Fecha inicio</label>
+                                            <input 
+                                                type="date" 
+                                                id="physical_start_date" 
+                                                v-model="physicalSalesFilterForm.start_date"
+                                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label for="physical_end_date" class="block text-sm font-medium text-gray-700">Fecha fin</label>
+                                            <input 
+                                                type="date" 
+                                                id="physical_end_date" 
+                                                v-model="physicalSalesFilterForm.end_date"
+                                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                                            />
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button type="submit" :disabled="physicalSalesFilterForm.processing" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+                                                Filtrar
+                                            </button>
+                                            <Link :href="route('admin.reports.index', { type: 'physical' })" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 text-center">
+                                                Limpiar
+                                            </Link>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label for="physical_start_date" class="block text-sm font-medium text-gray-700">Fecha inicio</label>
-                                        <input 
-                                            type="date" 
-                                            id="physical_start_date" 
-                                            v-model="physicalSalesFilterForm.start_date"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                                        />
+                                    <div class="mt-4 flex flex-wrap gap-2">
+                                        <span class="text-sm text-gray-500 mr-2 self-center">Rangos rápidos:</span>
+                                        <button type="button" @click="setQuickRange('today')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('today') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Hoy</button>
+                                        <button type="button" @click="setQuickRange('last7')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last7') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 7 días</button>
+                                        <button type="button" @click="setQuickRange('last30')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last30') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 30 días</button>
+                                        <button type="button" @click="setQuickRange('thisMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('thisMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Este mes</button>
+                                        <button type="button" @click="setQuickRange('lastMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('lastMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Mes pasado</button>
                                     </div>
-                                    <div>
-                                        <label for="physical_end_date" class="block text-sm font-medium text-gray-700">Fecha fin</label>
-                                        <input 
-                                            type="date" 
-                                            id="physical_end_date" 
-                                            v-model="physicalSalesFilterForm.end_date"
-                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                                        />
-                                    </div>
-                                    <div class="flex gap-2">
-                                        <button type="submit" :disabled="physicalSalesFilterForm.processing" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
-                                            Filtrar
-                                        </button>
-                                        <Link :href="route('admin.reports.index', { type: 'physical' })" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 text-center">
-                                            Limpiar
-                                        </Link>
-                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Tabla Ventas -->
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                            <div class="p-6">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3 class="text-lg font-semibold">Historial de Ventas Físicas</h3>
+                                    <a 
+                                        :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date })"
+                                        v-if="physicalSales && physicalSales.data && physicalSales.data.length > 0"
+                                        class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
+                                            <path d="M7 10a1 1 0 011-1h2V4a1 1 0 112 0v5h2a1 1 0 01.7 1.714l-3 3a1 1 0 01-1.4 0l-3-3A1 1 0 017 10z"/>
+                                            <path d="M5 15a1 1 0 011 1v2a2 2 0 002 2h8a2 2 0 002-2v-2a1 1 0 112 0v2a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a1 1 0 011-1z"/>
+                                        </svg>
+                                        Exportar Ventas
+                                    </a>
                                 </div>
-                            </form>
+
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Número</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendedor</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Método de Pago</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subtotal</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descuento</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            <tr v-for="sale in physicalSales?.data" :key="sale.id">
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+                                                    <Link :href="route('admin.physical-sales.show', sale.id)" class="hover:underline">
+                                                        {{ sale.sale_number }}
+                                                    </Link>
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {{ sale.user?.name || 'N/A' }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {{ formatDateShort(sale.created_at) }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                                                    {{ sale.payment_method }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {{ formatCurrency(sale.subtotal) }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {{ formatCurrency(sale.discount) }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                                                    {{ formatCurrency(sale.total) }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                                    <Link 
+                                                        :href="route('admin.physical-sales.show', sale.id)"
+                                                        class="text-blue-600 hover:text-blue-900"
+                                                    >
+                                                        Ver
+                                                    </Link>
+                                                </td>
+                                            </tr>
+                                            <tr v-if="!physicalSales || !physicalSales.data || physicalSales.data.length === 0">
+                                                <td colspan="8" class="px-6 py-4 text-center text-gray-500">
+                                                    No hay ventas para mostrar en este período.
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <Pagination v-if="physicalSales && physicalSales.links" class="mt-6" :links="physicalSales.links" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contenido Pestaña Gastos -->
+                    <div v-if="activePhysicalTab === 'expenses'">
+                        <!-- Filtros Gastos (Reutilizamos los mismos filtros físicos) -->
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
+                            <div class="p-6">
+                                <form @submit.prevent="applyFilters">
+                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                        <div class="hidden md:block">
+                                            <!-- Espaciador -->
+                                        </div>
+                                        <div>
+                                            <label for="exp_start_date" class="block text-sm font-medium text-gray-700">Fecha inicio</label>
+                                            <input 
+                                                type="date" 
+                                                id="exp_start_date" 
+                                                v-model="physicalSalesFilterForm.start_date"
+                                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label for="exp_end_date" class="block text-sm font-medium text-gray-700">Fecha fin</label>
+                                            <input 
+                                                type="date" 
+                                                id="exp_end_date" 
+                                                v-model="physicalSalesFilterForm.end_date"
+                                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                                            />
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button type="submit" :disabled="physicalSalesFilterForm.processing" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+                                                Filtrar Gastos
+                                            </button>
+                                            <Link :href="route('admin.reports.index', { type: 'physical' })" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 text-center">
+                                                Limpiar
+                                            </Link>
+                                        </div>
+                                    </div>
+                                    <div class="mt-4 flex flex-wrap gap-2">
+                                        <span class="text-sm text-gray-500 mr-2 self-center">Rangos rápidos:</span>
+                                        <button type="button" @click="setQuickRange('today')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('today') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Hoy</button>
+                                        <button type="button" @click="setQuickRange('last7')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last7') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 7 días</button>
+                                        <button type="button" @click="setQuickRange('last30')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last30') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 30 días</button>
+                                        <button type="button" @click="setQuickRange('thisMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('thisMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Este mes</button>
+                                        <button type="button" @click="setQuickRange('lastMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('lastMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Mes pasado</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Tabla de Gastos -->
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                            <div class="p-6">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3 class="text-lg font-semibold text-red-600">Historial de Gastos</h3>
+                                    <!-- Botón Exportar (Mismo endpoint, descarga todo el reporte multisheet) -->
+                                    <a 
+                                        :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date })"
+                                        class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 focus:outline-none transition"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
+                                            <path d="M7 10a1 1 0 011-1h2V4a1 1 0 112 0v5h2a1 1 0 01.7 1.714l-3 3a1 1 0 01-1.4 0l-3-3A1 1 0 017 10z"/>
+                                            <path d="M5 15a1 1 0 011 1v2a2 2 0 002 2h8a2 2 0 002-2v-2a1 1 0 112 0v2a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a1 1 0 011-1z"/>
+                                        </svg>
+                                        Exportar Reporte
+                                    </a>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-red-50">
+                                            <tr>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-red-800 uppercase">Fecha</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-red-800 uppercase">Descripción</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-red-800 uppercase">Registrado por</th>
+                                                <th class="px-6 py-3 text-right text-xs font-medium text-red-800 uppercase">Monto</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            <tr v-for="expense in expensesList.data" :key="expense.id">
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {{ formatDateShort(expense.expense_date) }}
+                                                </td>
+                                                <td class="px-6 py-4 text-sm text-gray-900">
+                                                    {{ expense.description }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {{ expense.user?.name || 'N/A' }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600 text-right">
+                                                    {{ formatCurrency(expense.amount) }}
+                                                </td>
+                                            </tr>
+                                            <tr v-if="!expensesList || !expensesList.data || expensesList.data.length === 0">
+                                                <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                                                    No hay gastos registrados en este período.
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <Pagination v-if="expensesList && expensesList.links" class="mt-6" :links="expensesList.links" />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -499,87 +736,6 @@ const startResize = (e) => {
                                 </table>
                             </div>
                             <Pagination class="mt-6" :links="orders.links" />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Contenido de Ventas Físicas -->
-                <div v-if="reportType === 'physical'">
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                        <div class="p-6">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="text-lg font-semibold">Historial de Ventas Físicas</h3>
-                                <a 
-                                    :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date })"
-                                    v-if="physicalSales && physicalSales.data && physicalSales.data.length > 0"
-                                    class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
-                                        <path d="M7 10a1 1 0 011-1h2V4a1 1 0 112 0v5h2a1 1 0 01.7 1.714l-3 3a1 1 0 01-1.4 0l-3-3A1 1 0 017 10z"/>
-                                        <path d="M5 15a1 1 0 011 1v2a2 2 0 002 2h8a2 2 0 002-2v-2a1 1 0 112 0v2a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a1 1 0 011-1z"/>
-                                    </svg>
-                                    Exportar a Excel
-                                </a>
-                            </div>
-
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-200">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Número</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendedor</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Método de Pago</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subtotal</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descuento</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="bg-white divide-y divide-gray-200">
-                                        <tr v-for="sale in physicalSales?.data" :key="sale.id">
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                                                <Link :href="route('admin.physical-sales.show', sale.id)" class="hover:underline">
-                                                    {{ sale.sale_number }}
-                                                </Link>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {{ sale.user?.name || 'N/A' }}
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {{ formatDateShort(sale.created_at) }}
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                                                {{ sale.payment_method }}
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {{ formatCurrency(sale.subtotal) }}
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {{ formatCurrency(sale.discount) }}
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                                                {{ formatCurrency(sale.total) }}
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                                <Link 
-                                                    :href="route('admin.physical-sales.show', sale.id)"
-                                                    class="text-blue-600 hover:text-blue-900"
-                                                >
-                                                    Ver
-                                                </Link>
-                                            </td>
-                                        </tr>
-                                        <tr v-if="!physicalSales || !physicalSales.data || physicalSales.data.length === 0">
-                                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">
-                                                No hay ventas para mostrar en este período.
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <Pagination v-if="physicalSales && physicalSales.links" class="mt-6" :links="physicalSales.links" />
                         </div>
                     </div>
                 </div>

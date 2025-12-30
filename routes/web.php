@@ -144,6 +144,9 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
             Route::post('physical-sales/open-drawer', [PhysicalSaleController::class, 'openDrawer'])->name('physical-sales.open-drawer');
             Route::get('physical-sales/{physicalSale}', [PhysicalSaleController::class, 'show'])->name('physical-sales.show');
             Route::get('physical-sales/export/excel', [PhysicalSaleController::class, 'export'])->name('physical-sales.export');
+            
+            // Gastos
+            Route::post('expenses', [\App\Http\Controllers\Admin\ExpenseController::class, 'store'])->name('expenses.store');
         });
 
         // ===== RUTAS AVANZADAS (solo plan negociantes) =====

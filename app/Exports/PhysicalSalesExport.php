@@ -7,7 +7,9 @@ use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Illuminate\Support\Facades\Auth;
 
-class PhysicalSalesExport implements FromCollection, WithHeadings
+use Maatwebsite\Excel\Concerns\WithTitle;
+
+class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
 {
     protected $filters;
 
@@ -82,6 +84,10 @@ class PhysicalSalesExport implements FromCollection, WithHeadings
             'Subtotal Item',
             'Notas',
         ];
+    }
+    public function title(): string
+    {
+        return 'Ventas Físicas';
     }
 }
 
