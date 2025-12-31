@@ -7,6 +7,7 @@ import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
+import VariantInventoryModal from './VariantInventoryModal.vue';
 
 const props = defineProps({
     product: Object,
@@ -25,7 +26,9 @@ const errorMessages = ref([]);
 const showBarcodeScanner = ref(false);
 const html5QrCode = ref(null);
 const showBarcodeSuccessModal = ref(false);
+
 const scannedBarcode = ref('');
+const scanningVariant = ref(null); // { pIndex, cIndex } or null
 
 // Función para reproducir beep
 const playBeep = () => {
@@ -248,15 +251,40 @@ const hydrateVariantParents = () => {
                 }
             }
             
-            return {
-                id: child.id,
-                name: child.name,
-                price: child.price,
-                image: null, // No podemos cargar el archivo, solo la ruta
-                imagePreview: imagePath, // Usar la ruta normalizada como preview
-                imagePath: imagePath, // Guardar la ruta normalizada existente
-                order: child.order || 0,
-            };
+                // --- FIX DISCREPANCIA STOCK ---
+                // Buscar si existe un ProductVariant (Source of Truth) que coincida con esta opción para usar su stock real.
+                // Suponemos variantes simples (1 dimensión) o buscamos coincidencia exacta de opción.
+                let realStock = Number(child.stock || 0);
+
+                if (props.product.variants && props.product.variants.length > 0) {
+                   // Buscamos un variant que tenga esta opción (ej: "Peso": "1.5")
+                   // props.product.variants es un array de { id, options: {"Peso": "1.5"}, stock: 17 ... }
+                   const matchingPv = props.product.variants.find(v => {
+                       const vOpts = v.options || {};
+                       // Verificamos si alguna key tiene como valor el nombre de este hijo (ej: "1.5")
+                       // Y si la key coincide con el padre (parentOption.name)
+                       return vOpts[parentOption.name] === child.name;
+                   });
+
+                   if (matchingPv) {
+                       realStock = Number(matchingPv.stock); // Usar el stock real (17)
+                   }
+                }
+                // -----------------------------
+
+                return {
+                    id: child.id,
+                    name: child.name,
+                    barcode: child.barcode || '',
+                    price: child.price,
+                    image: null, // No podemos cargar el archivo, solo la ruta
+                    imagePreview: imagePath, // Usar la ruta normalizada como preview
+                    imagePath: imagePath, // Guardar la ruta normalizada existente
+                    order: child.order || 0,
+                    stock: realStock, // Usar stock corregido
+                    alert: child.alert,
+                    purchase_price: child.purchase_price,
+                };
         });
         
         const depInfo = dependencyMap[parentOption.name] || {};
@@ -278,6 +306,81 @@ const hydrateVariantParents = () => {
     variantParents.value.forEach((_, index) => {
         expandedVariants.value[index] = true;
     });
+};
+
+const hasSpecificInventory = computed(() => {
+    return variantParents.value.some(parent => 
+        parent.children && parent.children.some(child => 
+            (Number(child.stock) || 0) > 0 || 
+            (child.alert !== null && child.alert !== '' && child.alert !== undefined) || 
+            (child.purchase_price !== null && child.purchase_price !== '' && child.purchase_price !== undefined)
+        )
+    );
+});
+
+const hasSpecificBarcode = computed(() => {
+    return variantParents.value.some(parent => 
+        parent.children && parent.children.some(child => 
+           child.barcode && child.barcode !== ''
+        )
+    );
+});
+
+// Limpiar código de barras principal si se agregan códigos a variantes
+watch(hasSpecificBarcode, (newValue) => {
+    if (newValue) {
+        form.barcode = '';
+        form.clearErrors('barcode');
+    }
+});
+
+// Calcular stock total basado en las variantes configuradas
+const computedTotalStock = computed(() => {
+    if (!hasSpecificInventory.value) return form.quantity;
+    
+    // Sumar el stock de todas las opciones hijas configuradas
+    let total = 0;
+    variantParents.value.forEach(parent => {
+        if (parent.children) {
+            parent.children.forEach(child => {
+                total += Number(child.stock) || 0;
+            });
+        }
+    });
+    return total;
+});
+
+// Actualizar form.quantity visualmente
+watch(computedTotalStock, (newVal) => {
+    if (hasSpecificInventory.value) {
+        form.quantity = newVal;
+    }
+});
+
+
+
+const showInventoryModal = ref(false);
+const currentInventoryVariant = ref(null);
+const currentInventoryIndices = ref({ pIndex: -1, cIndex: -1 });
+
+const openInventoryModal = (child, pIndex, cIndex) => {
+    currentInventoryVariant.value = {
+        stock: child.stock || 0,
+        alert: child.alert,
+        purchase_price: child.purchase_price,
+        name: child.name
+    };
+    currentInventoryIndices.value = { pIndex, cIndex };
+    showInventoryModal.value = true;
+};
+
+const saveInventoryData = (data) => {
+    const { pIndex, cIndex } = currentInventoryIndices.value;
+    if (pIndex !== -1 && cIndex !== -1) {
+        variantParents.value[pIndex].children[cIndex].stock = data.stock;
+        variantParents.value[pIndex].children[cIndex].alert = data.alert;
+        variantParents.value[pIndex].children[cIndex].purchase_price = data.purchase_price;
+    }
 };
 
 const addVariantParent = () => {
@@ -310,6 +413,7 @@ const addVariantChild = (parentIndex) => {
     variantParents.value[parentIndex].children.push({
         id: null,
         name: '',
+        barcode: '',
         price: null,
         image: null,
         imagePreview: null,
@@ -390,6 +494,7 @@ const prepareVariantOptions = () => {
             id: parent.id, // Para actualizar si existe
             name: parent.name.trim(),
             parent_id: null,
+            barcode: null,
             price: null,
             image_path: null,
             order: parent.order ?? parentIndex,
@@ -417,6 +522,10 @@ const prepareVariantOptions = () => {
                     id: child.id, // Para actualizar si existe
                     name: child.name.trim(),
                     parent_id: null, // Se establecerá en el backend
+                    barcode: child.barcode || null,
+                    stock: child.stock || 0,
+                    alert: child.alert,
+                    purchase_price: child.purchase_price,
                     price: child.price ? parseFloat(child.price) : null,
                     image_file_key: child.image ? `variant_option_${parentIndex}_${childIndex}` : null,
                     image_path: imagePathToSend, // Enviar la ruta existente si no hay nueva imagen
@@ -511,6 +620,31 @@ const canAddImageToVariant = (parentIndex) => {
     
     // Si hay otra variante con imágenes, no permitir agregar imagen a esta
     return !otherImageParent;
+};
+
+// Verificar si se puede agregar código de barras a esta variante
+const canAddBarcodeToVariant = (parentIndex) => {
+    const otherBarcodeParent = variantParents.value.find((parent, index) => {
+        if (index === parentIndex) return false;
+        if (!parent.children || parent.children.length === 0) return false;
+        return parent.children.some(child => child.barcode && child.barcode !== '');
+    });
+    return !otherBarcodeParent;
+};
+
+// Verificar si se puede agregar inventario a esta variante
+const canAddInventoryToVariant = (parentIndex) => {
+    const otherInventoryParent = variantParents.value.find((parent, index) => {
+        if (index === parentIndex) return false;
+        if (!parent.children || parent.children.length === 0) return false;
+        // Check stock>0, alert!=null, purchase_price!=null
+        return parent.children.some(child => 
+            (Number(child.stock) || 0) > 0 || 
+            (child.alert !== null && child.alert !== '' && child.alert !== undefined) ||
+            (child.purchase_price !== null && child.purchase_price !== '' && child.purchase_price !== undefined)
+        );
+    });
+    return !otherInventoryParent;
 };
 
 // Manejar el input de precio
@@ -744,6 +878,36 @@ onBeforeUnmount(() => {
     stopBarcodeScanner();
 });
 
+// Manejar código escaneado
+const handleBarcodeScanned = async (decodedText) => {
+    playBeep();
+    // Limpiar el código de barras
+    const cleanedBarcode = decodedText.replace(/\s+/g, '').trim();
+
+    if (scanningVariant.value) {
+        // Asignar a la variante específica
+        const { pIndex, cIndex } = scanningVariant.value;
+        if (variantParents.value[pIndex] && variantParents.value[pIndex].children[cIndex]) {
+            variantParents.value[pIndex].children[cIndex].barcode = cleanedBarcode;
+        }
+        scanningVariant.value = null;
+    } else {
+        // Asignar al producto principal
+        form.barcode = cleanedBarcode;
+        await nextTick();
+    }
+
+    scannedBarcode.value = cleanedBarcode;
+    stopBarcodeScanner();
+    showBarcodeSuccessModal.value = true;
+};
+
+// Iniciar escáner para variante
+const startVariantBarcodeScanner = (pIndex, cIndex) => {
+    scanningVariant.value = { pIndex, cIndex };
+    startBarcodeScanner();
+};
+
 // Iniciar escáner de código de barras
 const startBarcodeScanner = async () => {
     try {
@@ -768,20 +932,7 @@ const startBarcodeScanner = async () => {
                 { facingMode: "environment" },
                 config,
                 async (decodedText) => {
-                    playBeep();
-                    // Limpiar el código de barras: eliminar todos los espacios y caracteres no deseados
-                    // Los códigos de barras pueden venir con espacios (ej: "7 898024 397861" -> "7898024397861")
-                    const cleanedBarcode = decodedText.replace(/\s+/g, '').trim();
-                    
-                    // Actualizar el código de barras en el formulario
-                    form.barcode = cleanedBarcode;
-                    // Usar nextTick para asegurar que Vue detecte el cambio antes de continuar
-                    await nextTick();
-                    // Forzar que el formulario sepa que hay un cambio
-                    form.clearErrors('barcode');
-                    scannedBarcode.value = cleanedBarcode;
-                    stopBarcodeScanner();
-                    showBarcodeSuccessModal.value = true;
+                    await handleBarcodeScanned(decodedText);
                 },
                 (errorMessage) => {
                     // Ignorar errores de escaneo continuo
@@ -794,20 +945,7 @@ const startBarcodeScanner = async () => {
                     { facingMode: "user" },
                     config,
                     async (decodedText) => {
-                        playBeep();
-                        // Limpiar el código de barras: eliminar todos los espacios y caracteres no deseados
-                        // Los códigos de barras pueden venir con espacios (ej: "7 898024 397861" -> "7898024397861")
-                        const cleanedBarcode = decodedText.replace(/\s+/g, '').trim();
-                        
-                        // Actualizar el código de barras en el formulario
-                        form.barcode = cleanedBarcode;
-                        // Usar nextTick para asegurar que Vue detecte el cambio antes de continuar
-                        await nextTick();
-                        // Forzar que el formulario sepa que hay un cambio
-                        form.clearErrors('barcode');
-                        scannedBarcode.value = cleanedBarcode;
-                        stopBarcodeScanner();
-                        showBarcodeSuccessModal.value = true;
+                        await handleBarcodeScanned(decodedText);
                     },
                     (errorMessage) => {
                         // Ignorar errores de escaneo continuo
@@ -1089,7 +1227,16 @@ const confirmSave = () => {
                                     <div class="mb-4">
                                         <label for="barcode" class="block font-medium text-sm text-gray-700 mb-1">Código de Barras (Opcional)</label>
                                         <div class="flex gap-2">
-                                            <input id="barcode" v-model="form.barcode" type="text" class="flex-1 block mt-1 rounded-md shadow-sm border-gray-300" placeholder="Ej: 1234567890123">
+                                            <input 
+                                                id="barcode" 
+                                                v-model="form.barcode" 
+                                                type="text" 
+                                                class="flex-1 block mt-1 rounded-md shadow-sm border-gray-300" 
+                                                placeholder="Ej: 1234567890123"
+                                                :disabled="hasSpecificBarcode"
+                                                :class="{ 'bg-gray-100 cursor-not-allowed': hasSpecificBarcode }"
+                                                :title="hasSpecificBarcode ? 'Deshabilitado porque hay variantes con código de barras propio' : ''"
+                                            >
                                             <button
                                                 type="button"
                                                 @click="startBarcodeScanner"
@@ -1120,9 +1267,9 @@ const confirmSave = () => {
                                                  v-model="form.quantity" 
                                                  type="number" 
                                                  class="block mt-1 w-full rounded-md shadow-sm border-gray-300" 
-                                                 :class="{ 'bg-gray-100': form.track_inventory === false }"
-                                                 :disabled="form.track_inventory === false" 
-                                                 required
+                                                 :class="{ 'bg-gray-100': !form.track_inventory || hasSpecificInventory }"
+                                                 :disabled="!form.track_inventory || hasSpecificInventory" 
+                                                 :required="form.track_inventory && !hasSpecificInventory"
                                                  title="Stock si no hay variantes. Con variantes, se suma automáticamente.">
                                          </div>
                                           <div>
@@ -1132,14 +1279,22 @@ const confirmSave = () => {
                                                  v-model="form.alert" 
                                                  type="number" 
                                                  class="block mt-1 w-full rounded-md shadow-sm border-gray-300"
-                                                 :class="{ 'bg-gray-100': form.track_inventory === false }"
-                                                 :disabled="form.track_inventory === false"
+                                                 :class="{ 'bg-gray-100': !form.track_inventory || hasSpecificInventory }"
+                                                 :disabled="!form.track_inventory || hasSpecificInventory"
                                                  title="Se considera bajo stock cuando cantidad ≤ alerta."
                                              />
                                          </div>
                                          <div>
                                              <label for="purchase_price" class="block font-medium text-sm text-gray-700">Precio de compra</label>
-                                             <input id="purchase_price" v-model="form.purchase_price" type="number" step="0.01" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" />
+                                             <input 
+                                                 id="purchase_price" 
+                                                 v-model="form.purchase_price" 
+                                                 type="number" 
+                                                 step="0.01" 
+                                                 class="block mt-1 w-full rounded-md shadow-sm border-gray-300" 
+                                                 :class="{ 'bg-gray-100': !form.track_inventory || hasSpecificInventory }"
+                                                 :disabled="!form.track_inventory || hasSpecificInventory"
+                                             />
                                          </div>
                                          
                                          
@@ -1327,7 +1482,7 @@ const confirmSave = () => {
                                                 <!-- Opciones hijas (expandidas) -->
                                                 <div v-if="expandedVariants[parentIndex] ?? false" class="mt-2 pl-4 border-l">
                                                     <div v-for="(child, childIndex) in parent.children" :key="`child-${parentIndex}-${childIndex}`" class="py-2 flex justify-between items-start">
-                                                        <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                    <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
                                                             <div>
                                                                 <label class="block text-xs font-medium text-gray-600 mb-1">Nombre</label>
                                                                 <input 
@@ -1362,8 +1517,8 @@ const confirmSave = () => {
                                                                     :id="`variant-image-input-${parentIndex}-${childIndex}`"
                                                                     :disabled="!canAddImageToVariant(parentIndex)"
                                                                 />
-                                                                <div v-if="child.imagePreview || child.imagePath" class="relative">
-                                                                    <img :src="child.imagePreview || child.imagePath" alt="Preview" class="w-10 h-10 object-cover rounded border">
+                                                                <div v-if="child.imagePreview" class="relative">
+                                                                    <img :src="child.imagePreview" alt="Preview" class="w-10 h-10 object-cover rounded border">
                                                                     <button 
                                                                         type="button"
                                                                         @click.stop="removeVariantChildImage(parentIndex, childIndex)"
@@ -1387,6 +1542,50 @@ const confirmSave = () => {
                                                                     Solo puedes agregar imágenes a una variante principal
                                                                 </p>
                                                             </div>
+                                                            <div>
+                                                                <label class="block text-xs font-medium text-gray-600 mb-1">Código de Barras</label>
+                                                                <div class="flex gap-1">
+                                                                    <input 
+                                                                        v-model="child.barcode" 
+                                                                        type="text" 
+                                                                        placeholder="Ej: 770..." 
+                                                                        class="block w-full text-sm border-gray-300 rounded-md shadow-sm"
+                                                                        :disabled="!canAddBarcodeToVariant(parentIndex)"
+                                                                        :class="{ 'bg-gray-100 cursor-not-allowed': !canAddBarcodeToVariant(parentIndex) }"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        @click="startVariantBarcodeScanner(parentIndex, childIndex)"
+                                                                        class="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                                                                        title="Escanear"
+                                                                        :disabled="!canAddBarcodeToVariant(parentIndex)"
+                                                                        :class="{ 'opacity-50 cursor-not-allowed': !canAddBarcodeToVariant(parentIndex) }"
+                                                                    >
+                                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+                                                                        </svg>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        @click="openInventoryModal(child, parentIndex, childIndex)"
+                                                                        class="p-2 bg-purple-100 text-purple-600 rounded hover:bg-purple-200"
+                                                                        title="Inventario"
+                                                                        :disabled="!form.track_inventory || !canAddInventoryToVariant(parentIndex)"
+                                                                        :class="{ 'opacity-50 cursor-not-allowed': !form.track_inventory || !canAddInventoryToVariant(parentIndex) }"
+                                                                    >
+                                                                        <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                                <p v-if="!canAddBarcodeToVariant(parentIndex)" class="mt-1 text-xs text-amber-600">
+                                                                    Solo una variante principal puede tener códigos
+                                                                </p>
+                                                                <p v-if="form.track_inventory && !canAddInventoryToVariant(parentIndex)" class="mt-1 text-xs text-amber-600">
+                                                                    Solo una variante principal puede tener inventario
+                                                                </p>
+                                                            </div>
+
                                                         </div>
                                                         <div class="flex items-center gap-2 ml-2">
                                                             <button 
@@ -1405,8 +1604,8 @@ const confirmSave = () => {
                                             </div>
                                         </div>
                                         
-                                        <!-- Formulario para agregar nueva variante principal -->
-                                        <form @submit.prevent="addVariantParent" class="mt-6 border-t pt-4">
+                                        <!-- Formulario para agregar nueva variante principal (Restringido a 1 sola categoría principal para simplificar códigos de barras) -->
+                                        <form v-if="variantParents.length < 1" @submit.prevent="addVariantParent" class="mt-6 border-t pt-4">
                                             <label class="block font-medium text-sm text-gray-700">Añadir Nueva Variante Principal</label>
                                             <div class="mt-2 flex items-center gap-2">
                                                 <input 
@@ -1601,4 +1800,12 @@ const confirmSave = () => {
             </div>
         </div>
     </Modal>
+
+    <VariantInventoryModal 
+        :show="showInventoryModal" 
+        :variant-name="currentInventoryVariant?.name"
+        :initial-data="currentInventoryVariant"
+        @close="showInventoryModal = false"
+        @save="saveInventoryData"
+    />
 </template>

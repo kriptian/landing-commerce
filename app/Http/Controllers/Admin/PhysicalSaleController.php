@@ -139,6 +139,15 @@ class PhysicalSaleController extends Controller
                     'images' => $product->images,
                     'category' => $product->category,
                     'variants' => $product->variants,
+                    'variants' => $product->variants,
+                    'variant_options' => $product->variantOptions->map(function($option) {
+                        return [
+                            'id' => $option->id,
+                            'name' => $option->name,
+                            'children' => $option->children,
+                            'order' => $option->order,
+                        ];
+                    }),
                 ];
             });
 
@@ -185,7 +194,7 @@ class PhysicalSaleController extends Controller
                   ->orWhere('id', $query)
                   ->orWhere('barcode', 'like', "%{$query}%");
             })
-            ->with(['images', 'variants', 'category'])
+            ->with(['images', 'variants', 'category', 'variantOptions.children'])
             ->limit(20)
             ->get();
 
@@ -207,8 +216,28 @@ class PhysicalSaleController extends Controller
         $product = $store->products()
             ->where('is_active', true)
             ->where('barcode', $barcode)
-            ->with(['images', 'variants', 'category'])
+            ->with(['images', 'variants', 'category', 'variantOptions.children'])
             ->first();
+
+        if (!$product) {
+            // Intentar buscar por código de barras de variante
+            $variantOption = \App\Models\VariantOption::where('barcode', $barcode)
+                ->whereHas('product', function($q) use ($store) {
+                    $q->where('store_id', $store->id)->where('is_active', true);
+                })
+                ->first();
+
+            if ($variantOption) {
+                $product = $variantOption->product;
+                // Cargar todas las relaciones necesarias
+                $product->load(['images', 'variants', 'category', 'variantOptions.children']);
+                
+                return response()->json([
+                    'product' => $product,
+                    'matched_variant_option' => $variantOption
+                ]);
+            }
+        }
 
         if (!$product) {
             return response()->json(['product' => null], 404);

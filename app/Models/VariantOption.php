@@ -14,9 +14,13 @@ class VariantOption extends Model
         'product_id',
         'parent_id',
         'name',
+        'barcode',
         'price',
         'image_path',
         'order',
+        'stock',
+        'alert',
+        'purchase_price',
     ];
 
     /**
@@ -27,10 +31,14 @@ class VariantOption extends Model
         'product_id',
         'parent_id',
         'name',
+        'barcode',
         'price',
         'image_path',
         'image_url',
         'order',
+        'stock',
+        'alert',
+        'purchase_price',
     ];
 
     /**

@@ -202,6 +202,9 @@ const variantOptionsMap = computed(() => {
         map[parent.name] = (parent.children || []).map(child => ({
             name: child.name,
             price: child.price,
+            stock: child.stock,
+            alert: child.alert,
+            purchase_price: child.purchase_price,
             image_path: child.image_path,
             id: child.id,
         }));
@@ -533,19 +536,69 @@ const selectedOptionPrice = computed(() => {
     return props.product.price;
 });
 
+const selectedOptionStock = computed(() => {
+    // Variant Option (Stale) vs Product Variant (Truth) Logic
+    // Priorizamos leer del ProductVariant real si existe, porque es el que controla el Admin.
+    
+    // 1. Construir objeto de opciones seleccionadas
+    const currentOptions = {};
+    if (hasVariantOptions.value) {
+        optionKeys.value.forEach(k => currentOptions[k] = selectedOptions.value[k]);
+    }
+
+    // 2. Buscar en ProductVariants (Source of Truth)
+    if (props.product.variants && props.product.variants.length > 0) {
+        const matchingPv = props.product.variants.find(v => {
+            const vOpts = v.options || {};
+            // Verificar coincidencia exacta de todas las keys
+            return optionKeys.value.every(k => String(vOpts[k]) === String(currentOptions[k]));
+        });
+        
+        if (matchingPv) {
+            return Number(matchingPv.stock);
+        }
+    }
+
+    // 3. Fallback a VariantOptions (Legacy Display)
+    // ... lógica anterior ...
+    const stockedVariantParent = props.product.variant_options?.find(parent => {
+        if (!parent.children || parent.children.length === 0) return false;
+        return parent.children.some(child => child.stock != null && child.stock !== '');
+    });
+    
+    if (!stockedVariantParent) {
+        return props.product.quantity;
+    }
+    
+    const selectedValue = selectedOptions.value[stockedVariantParent.name];
+    if (selectedValue) {
+        const childInfo = getOptionChildInfo(stockedVariantParent.name, selectedValue);
+        if (childInfo && childInfo.stock != null) {
+            return Number(childInfo.stock);
+        }
+    }
+    
+    return props.product.quantity;
+});
+
 const selectedVariant = computed(() => {
     if (!allKeysSelected.value) return null;
     
     if (hasVariantOptions.value) {
-        // Sistema nuevo: crear un objeto similar a variant para compatibilidad
+        // Sistema nuevo
         const options = {};
         optionKeys.value.forEach(k => {
             options[k] = selectedOptions.value[k];
         });
+        
+        // Intentar encontrar el stock REAL desde variants
+        let realStock = selectedOptionStock.value; 
+
         return {
-            id: null, // No hay ID en variant_options, se manejará diferente
+            id: null, 
             options: options,
             price: selectedOptionPrice.value,
+            stock: realStock, 
         };
     }
     
@@ -619,7 +672,8 @@ const displayStock = computed(() => {
     // Con inventario activo: si hay variante seleccionada, usar su stock (o caer al del producto)
     if (selectedVariant.value) {
         const sv = Number(selectedVariant.value.stock);
-        if (!Number.isNaN(sv) && sv > 0) return sv;
+        // FIX: Allow 0 stock to be returned if it is a valid number
+        if (!Number.isNaN(sv) && selectedVariant.value.stock !== null && selectedVariant.value.stock !== '') return sv;
         return Number(props.product.quantity || 0);
     }
     // Sin variante seleccionada: usar inventario total del producto

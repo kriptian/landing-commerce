@@ -287,6 +287,9 @@ class ProductController extends Controller
                             'name' => $child->name,
                             'parent_id' => $child->parent_id,
                             'price' => $child->price,
+                            'stock' => $child->stock,
+                            'alert' => $child->alert,
+                            'purchase_price' => $child->purchase_price,
                             'image_path' => $imagePath ?: null,
                             'order' => $child->order,
                         ];

@@ -6,6 +6,7 @@ import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
+import VariantInventoryModal from './VariantInventoryModal.vue';
 
 const props = defineProps({
     categories: Array, 
@@ -22,6 +23,7 @@ const showBarcodeScanner = ref(false);
 const html5QrCode = ref(null);
 const showBarcodeSuccessModal = ref(false);
 const scannedBarcode = ref('');
+const scanningVariant = ref(null); // { pIndex, cIndex } or null
 
 // Función para reproducir beep
 const playBeep = () => {
@@ -44,6 +46,33 @@ const playBeep = () => {
     } catch (error) {
         // Silenciar error de beep
     }
+};
+
+// Manejar código escaneado
+const handleBarcodeScanned = (code) => {
+    playBeep();
+    
+    if (scanningVariant.value) {
+        // Asignar a la variante específica
+        const { pIndex, cIndex } = scanningVariant.value;
+        if (variantParents.value[pIndex] && variantParents.value[pIndex].children[cIndex]) {
+            variantParents.value[pIndex].children[cIndex].barcode = code;
+        }
+        scanningVariant.value = null;
+    } else {
+        // Asignar al producto principal
+        form.barcode = code;
+    }
+
+    scannedBarcode.value = code;
+    stopBarcodeScanner();
+    showBarcodeSuccessModal.value = true;
+};
+
+// Iniciar escáner para variante
+const startVariantBarcodeScanner = (pIndex, cIndex) => {
+    scanningVariant.value = { pIndex, cIndex };
+    startBarcodeScanner();
 };
 
 // Iniciar escáner de código de barras
@@ -70,11 +99,7 @@ const startBarcodeScanner = async () => {
                 { facingMode: "environment" },
                 config,
                 (decodedText) => {
-                    playBeep();
-                    form.barcode = decodedText;
-                    scannedBarcode.value = decodedText;
-                    stopBarcodeScanner();
-                    showBarcodeSuccessModal.value = true;
+                    handleBarcodeScanned(decodedText);
                 },
                 (errorMessage) => {
                     // Ignorar errores de escaneo continuo
@@ -87,11 +112,7 @@ const startBarcodeScanner = async () => {
                     { facingMode: "user" },
                     config,
                     (decodedText) => {
-                        playBeep();
-                        form.barcode = decodedText;
-                        scannedBarcode.value = decodedText;
-                        stopBarcodeScanner();
-                        showBarcodeSuccessModal.value = true;
+                        handleBarcodeScanned(decodedText);
                     },
                     (errorMessage) => {
                         // Ignorar errores de escaneo continuo
@@ -226,8 +247,84 @@ const newVariantName = ref(''); // Nombre para el formulario de nueva variante
 // Estados para expandir/colapsar variantes (solo visual)
 const expandedVariants = ref({});
 
+const hasSpecificInventory = computed(() => {
+    return variantParents.value.some(parent => 
+        parent.children && parent.children.some(child => 
+            (Number(child.stock) || 0) > 0 || 
+            (child.alert !== null && child.alert !== '' && child.alert !== undefined) || 
+            (child.purchase_price !== null && child.purchase_price !== '' && child.purchase_price !== undefined)
+        )
+    );
+});
+
+
+
+const hasSpecificBarcode = computed(() => {
+    return variantParents.value.some(parent => 
+        parent.children && parent.children.some(child => 
+           child.barcode && child.barcode !== ''
+        )
+    );
+});
+
+// Limpiar código de barras principal si se agregan códigos a variantes
+watch(hasSpecificBarcode, (newValue) => {
+    if (newValue) {
+        form.barcode = '';
+    }
+});
+
+// Calcular stock total basado en las variantes configuradas
+const computedTotalStock = computed(() => {
+    if (!hasSpecificInventory.value) return form.quantity;
+    
+    // Sumar el stock de todas las opciones hijas configuradas
+    let total = 0;
+    variantParents.value.forEach(parent => {
+        if (parent.children) {
+            parent.children.forEach(child => {
+                total += Number(child.stock) || 0;
+            });
+        }
+    });
+    return total;
+});
+
+// Actualizar form.quantity visualmente (aunque el backend recalcula)
+watch(computedTotalStock, (newVal) => {
+    if (hasSpecificInventory.value) {
+        form.quantity = newVal;
+    }
+});
+
 const toggleExpandVariant = (parentIndex) => {
     expandedVariants.value[parentIndex] = !(expandedVariants.value[parentIndex] ?? false);
+};
+
+
+
+const showInventoryModal = ref(false);
+const currentInventoryVariant = ref(null);
+const currentInventoryIndices = ref({ pIndex: -1, cIndex: -1 });
+
+const openInventoryModal = (child, pIndex, cIndex) => {
+    currentInventoryVariant.value = {
+        stock: child.stock || 0,
+        alert: child.alert,
+        purchase_price: child.purchase_price,
+        name: child.name
+    };
+    currentInventoryIndices.value = { pIndex, cIndex };
+    showInventoryModal.value = true;
+};
+
+const saveInventoryData = (data) => {
+    const { pIndex, cIndex } = currentInventoryIndices.value;
+    if (pIndex !== -1 && cIndex !== -1) {
+        variantParents.value[pIndex].children[cIndex].stock = data.stock;
+        variantParents.value[pIndex].children[cIndex].alert = data.alert;
+        variantParents.value[pIndex].children[cIndex].purchase_price = data.purchase_price;
+    }
 };
 
 const addVariantParent = () => {
@@ -260,6 +357,7 @@ const addVariantChild = (parentIndex) => {
     variantParents.value[parentIndex].children.push({
         id: null,
         name: '',
+        barcode: '', 
         price: null,
         image: null,
         imagePreview: null,
@@ -349,6 +447,10 @@ const prepareVariantOptions = () => {
                 parentOption.children.push({
                     name: child.name.trim(),
                     parent_id: null, // Se establecerá en el backend
+                    barcode: child.barcode || null,
+                    stock: child.stock || 0,
+                    alert: child.alert,
+                    purchase_price: child.purchase_price,
                     price: child.price ? parseFloat(child.price) : null,
                     image_file_key: child.image ? `variant_option_${parentIndex}_${childIndex}` : null,
                     order: childIndex,
@@ -450,6 +552,31 @@ const canAddImageToVariant = (parentIndex) => {
     
     // Si hay otra variante con imágenes, no permitir agregar imagen a esta
     return !otherImageParent;
+};
+
+// Verificar si se puede agregar código de barras a esta variante
+const canAddBarcodeToVariant = (parentIndex) => {
+    const otherBarcodeParent = variantParents.value.find((parent, index) => {
+        if (index === parentIndex) return false;
+        if (!parent.children || parent.children.length === 0) return false;
+        return parent.children.some(child => child.barcode && child.barcode !== '');
+    });
+    return !otherBarcodeParent;
+};
+
+// Verificar si se puede agregar inventario a esta variante
+const canAddInventoryToVariant = (parentIndex) => {
+    const otherInventoryParent = variantParents.value.find((parent, index) => {
+        if (index === parentIndex) return false;
+        if (!parent.children || parent.children.length === 0) return false;
+        // Check stock>0, alert!=null, purchase_price!=null
+        return parent.children.some(child => 
+            (Number(child.stock) || 0) > 0 || 
+            (child.alert !== null && child.alert !== '' && child.alert !== undefined) ||
+            (child.purchase_price !== null && child.purchase_price !== '' && child.purchase_price !== undefined)
+        );
+    });
+    return !otherInventoryParent;
 };
 
 // Manejar el input de precio
@@ -785,7 +912,16 @@ const submit = () => {
                                 <div class="mb-4">
                                     <label for="barcode" class="block font-medium text-sm text-gray-700 mb-1">Código de Barras (Opcional)</label>
                                     <div class="flex gap-2">
-                                        <input id="barcode" v-model="form.barcode" type="text" class="flex-1 block mt-1 rounded-md shadow-sm border-gray-300" placeholder="Ej: 1234567890123">
+                                        <input 
+                                            id="barcode" 
+                                            v-model="form.barcode" 
+                                            type="text" 
+                                            class="flex-1 block mt-1 rounded-md shadow-sm border-gray-300" 
+                                            placeholder="Ej: 1234567890123"
+                                            :disabled="hasSpecificBarcode"
+                                            :class="{ 'bg-gray-100 cursor-not-allowed': hasSpecificBarcode }"
+                                            :title="hasSpecificBarcode ? 'Deshabilitado porque hay variantes con código de barras propio' : ''"
+                                        >
                                         <button
                                             type="button"
                                             @click="startBarcodeScanner"
@@ -823,8 +959,9 @@ const submit = () => {
                                                 v-model="form.quantity" 
                                                 type="number" 
                                                 class="block mt-1 w-full rounded-md shadow-sm border-gray-300" 
-                                                :class="{ 'bg-gray-100': form.variants.length > 0 }"
-                                                :disabled="form.track_inventory === false || form.variants.length > 0"  
+                                                :class="{ 'bg-gray-100': hasSpecificInventory || form.variants.length > 0 }"
+                                                :disabled="!form.track_inventory || hasSpecificInventory || form.variants.length > 0"  
+                                                :required="form.track_inventory && !hasSpecificInventory"
                                                 title="Stock si no hay variantes. Con variantes, se suma automáticamente."
                                             />
                                             <p v-if="form.errors.quantity" class="mt-1 text-sm text-red-600">{{ form.errors.quantity }}</p>
@@ -838,8 +975,8 @@ const submit = () => {
                                                 v-model="form.alert" 
                                                 type="number" 
                                                 class="block mt-1 w-full rounded-md shadow-sm border-gray-300"
-                                                :class="{ 'bg-gray-100': form.variants.length > 0 && form.track_inventory }"
-                                                :disabled="form.variants.length > 0 && form.track_inventory"
+                                                :class="{ 'bg-gray-100': (hasSpecificInventory || form.variants.length > 0) && form.track_inventory }"
+                                                :disabled="(hasSpecificInventory || form.variants.length > 0) && form.track_inventory"
                                                 title="Se considera bajo stock cuando cantidad ≤ alerta."
                                             />
                                         </div>
@@ -847,7 +984,15 @@ const submit = () => {
                                             <label for="purchase_price" class="block font-medium text-sm text-gray-700 flex items-center">Precio de compra
                                                 <InfoTip class="ml-1 md:hidden" text="Costo de adquisición del producto." />
                                             </label>
-                                            <input id="purchase_price" v-model="form.purchase_price" type="number" step="0.01" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" />
+                                            <input 
+                                                id="purchase_price" 
+                                                v-model="form.purchase_price" 
+                                                type="number" 
+                                                step="0.01" 
+                                                class="block mt-1 w-full rounded-md shadow-sm border-gray-300"
+                                                :class="{ 'bg-gray-100': (hasSpecificInventory || form.variants.length > 0) && form.track_inventory }"
+                                                :disabled="(hasSpecificInventory || form.variants.length > 0) && form.track_inventory" 
+                                            />
                                         </div>
                                         
                                     </div>
@@ -1024,7 +1169,8 @@ const submit = () => {
                                                                             <input type="checkbox" :checked="isRuleChecked(parent, pv, cv)" @change="toggleRule(parent, pv, cv, $event)" class="rounded">
                                                                 <span>{{ cv }}</span>
                                                             </label>
-                                                                    </div>
+                                                                       </div>
+
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -1094,6 +1240,51 @@ const submit = () => {
                                                                     Solo puedes agregar imágenes a una variante principal
                                                                 </p>
                                                             </div>
+                                                            <div>
+                                                                <label class="block text-xs font-medium text-gray-600 mb-1">Código de Barras</label>
+                                                                <div class="flex gap-1">
+                                                                    <input 
+                                                                        v-model="child.barcode" 
+                                                                        type="text" 
+                                                                        placeholder="Ej: 770..." 
+                                                                        class="block w-full text-sm border-gray-300 rounded-md shadow-sm"
+                                                                        :disabled="!canAddBarcodeToVariant(parentIndex)"
+                                                                        :class="{ 'bg-gray-100 cursor-not-allowed': !canAddBarcodeToVariant(parentIndex) }"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        @click="startVariantBarcodeScanner(parentIndex, childIndex)"
+                                                                        class="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                                                                        title="Escanear"
+                                                                        :disabled="!canAddBarcodeToVariant(parentIndex)"
+                                                                        :class="{ 'opacity-50 cursor-not-allowed': !canAddBarcodeToVariant(parentIndex) }"
+                                                                    >
+                                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+                                                                        </svg>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        v-if="form.track_inventory"
+                                                                        @click="openInventoryModal(child, parentIndex, childIndex)"
+                                                                        class="p-2 bg-purple-100 text-purple-600 rounded hover:bg-purple-200"
+                                                                        title="Inventario"
+                                                                        :disabled="!canAddInventoryToVariant(parentIndex)"
+                                                                        :class="{ 'opacity-50 cursor-not-allowed': !canAddInventoryToVariant(parentIndex) }"
+                                                                    >
+                                                                        <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                                <p v-if="!canAddBarcodeToVariant(parentIndex)" class="mt-1 text-xs text-amber-600">
+                                                                    Solo una variante principal puede tener códigos
+                                                                </p>
+                                                                <p v-if="form.track_inventory && !canAddInventoryToVariant(parentIndex)" class="mt-1 text-xs text-amber-600">
+                                                                    Solo una variante principal puede tener inventario
+                                                                </p>
+                                                            </div>
+                                                        </div>
                                                 </div>
                                                         <div class="flex items-center gap-2 ml-2">
                                                             <button 
@@ -1112,8 +1303,8 @@ const submit = () => {
                                             </div>
                                         </div>
                                         
-                                        <!-- Formulario para agregar nueva variante principal -->
-                                        <form @submit.prevent="addVariantParent" class="mt-6 border-t pt-4">
+                                        <!-- Formulario para agregar nueva variante principal (Restringido si hay códigos de barras configurados) -->
+                                        <form v-if="variantParents.length < 1" @submit.prevent="addVariantParent" class="mt-6 border-t pt-4">
                                             <label class="block font-medium text-sm text-gray-700">Añadir Nueva Variante Principal</label>
                                             <div class="mt-2 flex items-center gap-2">
                                                 <input 
@@ -1141,7 +1332,6 @@ const submit = () => {
                                             </div>
                                         </form>
                                     </div>
-                                </div>
                                 </div>
 
                             <!-- Sección de imágenes al final -->
@@ -1251,4 +1441,12 @@ const submit = () => {
             </div>
         </div>
     </Modal>
+
+    <VariantInventoryModal 
+        :show="showInventoryModal" 
+        :variant-name="currentInventoryVariant?.name"
+        :initial-data="currentInventoryVariant"
+        @close="showInventoryModal = false"
+        @save="saveInventoryData"
+    />
 </template>

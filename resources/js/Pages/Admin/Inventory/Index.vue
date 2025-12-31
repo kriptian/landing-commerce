@@ -2,8 +2,11 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
+import Modal from '@/Components/Modal.vue';
+import AlertModal from '@/Components/AlertModal.vue';
 import { ref, watch, nextTick, computed, onMounted, onBeforeUnmount } from 'vue';
 import { safeRoute } from '@/utils/safeRoute';
+import axios from 'axios';
 
 const props = defineProps({
     products: Object, // Objeto de paginación con los productos y sus variantes
@@ -17,6 +20,7 @@ const search = ref(props.filters?.search || '');
 const status = ref(props.filters?.status || ''); // '', 'out_of_stock', 'low_stock'
 const searchInputRef = ref(null);
 const showStatusMenu = ref(false);
+const expandedProducts = ref({}); // Map of product ID -> boolean
 
 const statuses = [
     { value: '', label: 'Todos' },
@@ -132,6 +136,190 @@ const formatVariantOptions = (options) => {
     return Object.entries(options).map(([key, value]) => `${key}: ${value}`).join(', ');
 };
 
+// --- LOGICA DE EXPANSIÓN Y AGREGACIÓN ---
+
+const toggleExpand = (productId) => {
+    expandedProducts.value[productId] = !expandedProducts.value[productId];
+};
+
+const isExpanded = (productId) => {
+    return !!expandedProducts.value[productId];
+};
+
+const hasVariants = (product) => {
+    return product.variants && product.variants.length > 0;
+};
+
+const formatVariantName = (variant) => {
+    // Si la variante tiene sku, mostrarlo
+    let name = formatVariantOptions(variant.options || {});
+    if (variant.sku) name += ` (SKU: ${variant.sku})`;
+    return name;
+};
+
+const calculateMainStock = (product) => {
+    if (!hasVariants(product)) {
+        return Number(product.quantity) || 0;
+    }
+    // Sumar stock de variantes
+    return product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+};
+
+// "sume también el valor de compra" -> Interpretado como VALOR TOTAL DEL INVENTARIO (Stock * Costo)
+const calculateMainPurchaseValue = (product) => {
+    if (!hasVariants(product)) {
+        // Para productos simples, ¿mostrar precio unitario o valor total?
+        // El usuario pidió sumar. Si mostramos valor total aquí, también debería ser para simples.
+        // Pero para no cambiar comportamiento existente en simples (que muestra precio unitario),
+        // mantendremos Unitario para Simples, y TOTAL para Variantes (o Unitario Promedio?)
+        // El usuario dijo: "así como se suma el inventario... sume también el valor de compra".
+        // Si tengo 10 items @ $100.
+        // Antes mostraba: Stock 10, Precio $100.
+        // Con variantes: Stock 24, Precio ¿$22.000? (Valor total).
+        // Si muestro Valor Total para variantes, es inconsistente con Simples (Unitario).
+        // CAMBIO: Mostraré Valor Total si hay variantes, y Unitario si es simple (como estaba),
+        // pero con un label visual que ya puse en el template ("Inversión Total").
+        
+        return fmt(product.purchase_price); 
+    }
+    
+    // Para productos con variantes, sumamos (Stock * Precio Compra) de cada variante
+    const totalValue = product.variants.reduce((sum, v) => {
+        const s = Number(v.stock) || 0;
+        const p = Number(v.purchase_price) || 0;
+        return sum + (s * p);
+    }, 0);
+    
+    return fmt(totalValue);
+};
+
+// --- LOGICA DE ENTRADA RÁPIDA (QUICK ENTRY) ---
+const showQuickEntry = ref(false);
+const quickSearch = ref('');
+const quickSearchResults = ref([]);
+const selectedQuickProduct = ref(null);
+const quickProcessing = ref(false);
+
+const openQuickEntry = () => {
+    quickSearch.value = '';
+    quickSearchResults.value = [];
+    selectedQuickProduct.value = null;
+    showQuickEntry.value = true;
+    nextTick(() => document.getElementById('quick-search-input')?.focus());
+};
+
+const closeQuickEntry = () => {
+    showQuickEntry.value = false;
+};
+
+// Función core de búsqueda
+const fetchSearchResults = () => {
+    if (quickSearch.value.length < 2) return;
+    axios.get(route('admin.inventory.search', { q: quickSearch.value }))
+        .then(res => {
+            quickSearchResults.value = res.data;
+        })
+        .catch(err => console.error(err));
+};
+
+let quickSearchTimer;
+const searchProductsForModal = () => {
+    clearTimeout(quickSearchTimer);
+    if (quickSearch.value.length < 2) {
+        quickSearchResults.value = [];
+        return;
+    }
+    quickSearchTimer = setTimeout(fetchSearchResults, 300);
+};
+
+const selectQuickProduct = (product) => {
+    selectedQuickProduct.value = JSON.parse(JSON.stringify(product)); // Copia profunda para editar
+    // Inicializar campos de edición
+    if (selectedQuickProduct.value.variants && selectedQuickProduct.value.variants.length > 0) {
+        selectedQuickProduct.value.variants.forEach(v => {
+            v.qty_add = '';
+            v.new_price = v.price;
+            v.new_purchase_price = v.purchase_price;
+        });
+    } else {
+        selectedQuickProduct.value.qty_add = '';
+        selectedQuickProduct.value.new_price = selectedQuickProduct.value.price;
+        selectedQuickProduct.value.new_purchase_price = selectedQuickProduct.value.purchase_price;
+    }
+};
+
+const backToSearch = () => {
+    selectedQuickProduct.value = null;
+    nextTick(() => document.getElementById('quick-search-input')?.focus());
+    // Refrescar lista al volver, por si acaso
+    fetchSearchResults();
+};
+
+const submitQuickUpdate = (id, type, qtyAdd, purchasePrice, price) => {
+    if (quickProcessing.value) return;
+    const qty = Number(qtyAdd) || 0;
+    
+    // Validar al menos un cambio
+    if (!qtyAdd && purchasePrice === undefined && price === undefined) return;
+
+    quickProcessing.value = true;
+    router.post(route('admin.inventory.quick-update'), {
+        id,
+        type,
+        quantity_add: qty,
+        purchase_price: purchasePrice,
+        price: price
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+             // 1. Mostrar Feedback
+             showAlert('success', 'Éxito', 'Inventario actualizado correctamente.');
+             
+             // 2. Refresh inmediato de la lista de búsqueda (Backend Source of Truth)
+             // Esto asegura que el "Total Stock" calculado sea el real de base de datos
+             fetchSearchResults();
+
+             // 3. Actualizar modelo visual actual (Formulario)
+            if (type === 'product' && selectedQuickProduct.value && selectedQuickProduct.value.id === id) {
+                 if (qty > 0) {
+                     selectedQuickProduct.value.quantity = (Number(selectedQuickProduct.value.quantity) || 0) + qty;
+                 }
+                 selectedQuickProduct.value.qty_add = '';
+                 if (purchasePrice) selectedQuickProduct.value.purchase_price = purchasePrice;
+                 if (price) selectedQuickProduct.value.price = price;
+
+            } else if (type === 'variant' && selectedQuickProduct.value) {
+                const v = selectedQuickProduct.value.variants.find(v => v.id === id);
+                if (v) {
+                    if (qty > 0) {
+                        v.stock = (Number(v.stock) || 0) + qty;
+                    }
+                    v.qty_add = '';
+                    if (purchasePrice) v.purchase_price = purchasePrice;
+                    if (price) v.price = price;
+                }
+            }
+            
+            quickProcessing.value = false;
+        },
+        onError: () => {
+            quickProcessing.value = false;
+            showAlert('error', 'Error', 'No se pudo actualizar el inventario.');
+        }
+    });
+};
+
+// --- ALERT MODAL ---
+const alertState = ref({ show: false, type: 'success', title: '', message: '' });
+const showAlert = (type, title, message) => {
+    alertState.value = { show: true, type, title, message };
+    // Auto cerrar éxito rápido
+    if (type === 'success') {
+        setTimeout(() => { alertState.value.show = false; }, 1500); 
+    }
+};
+
 // Indicadores de scroll lateral (degradados) para mobile
 const scrollBoxRef = ref(null);
 const showLeftFade = ref(false);
@@ -232,6 +420,15 @@ const startResize = (e) => {
                                     </svg>
                                     Exportar a Excel
                                 </a>
+                                <!-- Botón Entrada Rápida -->
+                                <button type="button" @click="openQuickEntry"
+                                   class="inline-flex items-center px-3 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-800 transition ease-in-out duration-150"
+                                   title="Entrada Rápida">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                                        <path fill-rule="evenodd" d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="hidden md:inline ml-1">Nueva Entrada</span>
+                                </button>
                                 <!-- Dropdown de estado (estilizado) -->
                             <div class="relative z-30">
                                 <button type="button" @click="showStatusMenu = !showStatusMenu" class="inline-flex items-center gap-2 px-3 py-2 border rounded-md shadow-sm hover:bg-gray-50">
@@ -270,38 +467,105 @@ const startResize = (e) => {
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">% Gan.</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">$ Gan.</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Estado</th>
-                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap w-12">
-                                            <span class="sr-only">Acciones</span>
-                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     <template v-for="(product, idx) in products.data" :key="product.id">
-                                        <tr v-if="matchesProductStatus(product)" class="odd:bg-white even:bg-gray-100">
-                                            <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r truncate" :style="firstColStyle" :title="product.name" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ product.name }}</td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-800 font-bold">{{ product.quantity }}</td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700">{{ fmt(product.purchase_price) }}</td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700">{{ fmt(product.price) }}</td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm" :class="{ 'text-gray-500': pct(product.purchase_price, product.price) === null }">
-                                                <span v-if="pct(product.purchase_price, product.price) !== null">{{ pct(product.purchase_price, product.price) }}%</span>
-                                                <span v-else>—</span>
+                                        <tr v-if="matchesProductStatus(product)" class="odd:bg-white even:bg-gray-100 group">
+                                            <!-- Columna Producto con Chevron -->
+                                            <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r bg-[inherit]" :style="firstColStyle">
+                                                <div class="flex items-center gap-2">
+                                                    <button 
+                                                        v-if="product.variants && product.variants.length > 0"
+                                                        type="button" 
+                                                        @click="toggleExpand(product.id)"
+                                                        class="p-1 rounded hover:bg-gray-200 text-gray-500 transition-transform duration-200"
+                                                        :class="{ 'rotate-90': isExpanded(product.id) }"
+                                                    >
+                                                        <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                                            <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.16 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                    <span class="truncate" :title="product.name">{{ product.name }}</span>
+                                                </div>
                                             </td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm" :class="{ 'text-gray-500': profit(product.purchase_price, product.price) === null }">
-                                                <span v-if="profit(product.purchase_price, product.price) !== null">{{ fmt(profit(product.purchase_price, product.price)) }}</span>
-                                                <span v-else>—</span>
+                                            
+                                            <!-- STOCKS Y PRECIOS AGREGADOS -->
+                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-800 font-bold">
+                                                {{ calculateMainStock(product) }}
+                                                <span v-if="hasVariants(product)" class="text-xs text-gray-500 font-normal ml-1">(Total)</span>
+                                            </td>
+                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700">
+                                                <!-- Suma del valor de compra (Inversión Total) -->
+                                                {{ calculateMainPurchaseValue(product) }}
+                                                <div v-if="hasVariants(product)" class="text-xs text-gray-500">Inversión Total</div>
+                                            </td>
+                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700">
+                                                <span v-if="!hasVariants(product)">{{ fmt(product.price) }}</span>
+                                                <span v-else class="text-gray-400 italic text-xs">Ver variantes</span>
+                                            </td>
+                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm">
+                                                <span v-if="!hasVariants(product)" :class="{ 'text-gray-500': pct(product.purchase_price, product.price) === null }">
+                                                    {{ pct(product.purchase_price, product.price) !== null ? pct(product.purchase_price, product.price) + '%' : '—' }}
+                                                </span>
+                                                <span v-else class="text-gray-400 text-xs">—</span>
+                                            </td>
+                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm">
+                                                <span v-if="!hasVariants(product)" :class="{ 'text-gray-500': profit(product.purchase_price, product.price) === null }">
+                                                    {{ profit(product.purchase_price, product.price) !== null ? fmt(profit(product.purchase_price, product.price)) : '—' }}
+                                                </span>
+                                                <span v-else class="text-gray-400 text-xs">—</span>
                                             </td>
                                             <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
+                                                <!-- Estado Global (simplificado) -->
                                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                                      :class="getStockStatus({ stock: product.quantity, alert: product.alert }).class">
-                                                    {{ getStockStatus({ stock: product.quantity, alert: product.alert }).text }}
+                                                      :class="getStockStatus({ stock: calculateMainStock(product), alert: product.alert || 0 }).class">
+                                                    {{ getStockStatus({ stock: calculateMainStock(product), alert: product.alert || 0 }).text }}
                                                 </span>
                                             </td>
-                                            <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap w-12">
-                                                <Link :href="route('admin.products.edit', product.id)" class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-indigo-600" title="Editar">
-                                                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16.862 3.487a2.25 2.25 0 113.182 3.182L9.428 17.284a3.75 3.75 0 01-1.582.992l-2.685.805a.75.75 0 01-.93-.93l.805-2.685a3.75 3.75 0 01.992-1.582L16.862 3.487z"/><path d="M15.75 4.5l3.75 3.75"/></svg>
-                                                </Link>
-                                            </td>
                                         </tr>
+
+                                        <!-- Filas de Variantes (Expandible) -->
+                                        <template v-if="isExpanded(product.id) && hasVariants(product)">
+                                            <tr v-for="variant in product.variants" :key="variant.id" class="bg-gray-50 border-b border-gray-100">
+                                                <td class="sticky left-0 z-10 px-3 py-2 sm:px-6 sm:py-3 text-sm text-gray-500 border-r bg-gray-50" :style="{...firstColStyle, paddingLeft: '2rem'}">
+                                                    <div class="flex items-center gap-2">
+                                                        <svg class="w-3 h-3 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                                            <polyline points="16 17 21 12 16 7" />
+                                                            <line x1="21" y1="12" x2="9" y2="12" />
+                                                        </svg>
+                                                        <span class="truncate">{{ formatVariantName(variant) }}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap text-sm text-gray-600 font-medium">
+                                                    {{ Number(variant.stock) || 0 }}
+                                                </td>
+                                                <td class="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap text-sm text-gray-600">
+                                                    {{ fmt(variant.purchase_price || product.purchase_price) }}
+                                                </td>
+                                                <td class="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap text-sm text-gray-600">
+                                                    {{ fmt(variant.price || product.price) }}
+                                                </td>
+                                                <td class="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap text-sm">
+                                                    <span :class="{ 'text-gray-400': pct(variant.purchase_price || product.purchase_price, variant.price || product.price) === null }">
+                                                        {{ pct(variant.purchase_price || product.purchase_price, variant.price || product.price) !== null ? pct(variant.purchase_price || product.purchase_price, variant.price || product.price) + '%' : '—' }}
+                                                    </span>
+                                                </td>
+                                                <td class="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap text-sm">
+                                                    <span :class="{ 'text-green-600 font-medium': profit(variant.purchase_price || product.purchase_price, variant.price || product.price) !== null }">
+                                                        {{ profit(variant.purchase_price || product.purchase_price, variant.price || product.price) !== null ? fmt(profit(variant.purchase_price || product.purchase_price, variant.price || product.price)) : '—' }}
+                                                    </span>
+                                                </td>
+                                                <td class="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap">
+                                                    <span class="px-2 inline-flex text-[10px] leading-4 font-semibold rounded-full"
+                                                          :class="getStockStatus({ stock: variant.stock, alert: variant.alert || 0 }).class">
+                                                        {{ getStockStatus({ stock: variant.stock, alert: variant.alert || 0 }).text }}
+                                                    </span>
+                                                </td>
+                                                <td class="px-3 py-2 sm:px-6 sm:py-3"></td>
+                                            </tr>
+                                        </template>
                                     </template>
                                     <tr v-if="products.data.length === 0">
                                         <td colspan="8" class="px-6 py-4 text-center text-gray-500">
@@ -319,7 +583,151 @@ const startResize = (e) => {
             </div>
         </div>
         
-    </AuthenticatedLayout>
+
+    
+    <!-- MODAL DE ENTRADA RÁPIDA -->
+    <Modal :show="showQuickEntry" @close="closeQuickEntry">
+        <div class="p-6">
+            <h2 class="text-lg font-medium text-gray-900 mb-4">
+                <span v-if="!selectedQuickProduct">Buscar Producto para Entrada Rápida</span>
+                <span v-else>
+                    <button @click="backToSearch" class="text-indigo-600 hover:underline mr-2">&larr;</button>
+                    Editando: {{ selectedQuickProduct.name }}
+                </span>
+            </h2>
+
+            <!-- BUSCADOR -->
+            <div v-if="!selectedQuickProduct">
+                <input 
+                    id="quick-search-input"
+                    type="text" 
+                    v-model="quickSearch" 
+                    @input="searchProductsForModal"
+                    placeholder="Escribe el nombre o escanea código..."
+                    class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                <div class="mt-4 max-h-60 overflow-y-auto border rounded-md" v-if="quickSearchResults.length > 0">
+                    <div v-for="p in quickSearchResults" :key="p.id" 
+                         @click="selectQuickProduct(p)"
+                         class="p-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0 flex justify-between items-center group">
+                         <div>
+                            <div class="font-medium">{{ p.name }}</div>
+                            <div class="text-xs text-gray-500">
+                                Stock Total: {{ (p.variants && p.variants.length > 0) 
+                                    ? p.variants.reduce((s,v)=>s+(Number(v.stock)||0), 0) 
+                                    : (p.quantity || 0) 
+                                }}
+                            </div>
+                         </div>
+                         <div class="text-indigo-600 opacity-0 group-hover:opacity-100 font-bold text-sm">SELECCIONAR</div>
+                    </div>
+                </div>
+                <div v-else-if="quickSearch.length > 2" class="mt-4 text-gray-500 text-center text-sm">
+                    No se encontraron productos.
+                </div>
+            </div>
+
+            <!-- FORMULARIO DE EDICIÓN RÁPIDA -->
+            <div v-else class="max-h-[60vh] overflow-y-auto pr-2">
+                
+                <!-- CASO: PRODUCTO SIMPLE -->
+                <div v-if="!selectedQuickProduct.variants || selectedQuickProduct.variants.length === 0">
+                    <div class="bg-gray-50 p-4 rounded-md border text-sm grid gap-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-500 text-xs">Stock Actual</label>
+                                <div class="font-bold text-lg">{{ selectedQuickProduct.quantity }}</div>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 font-bold mb-1">Agregar Stock (+)</label>
+                                <input type="number" min="0" v-model="selectedQuickProduct.qty_add" class="w-full border-gray-300 rounded-md shadow-sm h-8">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-500 text-xs">Precio Compra</label>
+                                <input type="number" min="0" v-model="selectedQuickProduct.new_purchase_price" class="w-full border-gray-300 rounded-md shadow-sm h-8" :placeholder="selectedQuickProduct.purchase_price">
+                            </div>
+                            <div>
+                                <label class="block text-gray-500 text-xs">Precio Venta</label>
+                                <input type="number" min="0" v-model="selectedQuickProduct.new_price" class="w-full border-gray-300 rounded-md shadow-sm h-8" :placeholder="selectedQuickProduct.price">
+                            </div>
+                        </div>
+                        <div class="flex justify-end mt-2">
+                            <button 
+                                @click="submitQuickUpdate(selectedQuickProduct.id, 'product', selectedQuickProduct.qty_add, selectedQuickProduct.new_purchase_price, selectedQuickProduct.new_price)"
+                                :disabled="quickProcessing"
+                                class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition disabled:opacity-50">
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CASO: VARIANTES -->
+                <template v-else>
+                    <div v-for="variant in selectedQuickProduct.variants" :key="variant.id" class="mb-4 bg-white border rounded-md p-3 shadow-sm">
+                        <div class="font-bold text-gray-800 border-b pb-2 mb-2 bg-gray-50 -mx-3 -mt-3 px-3 pt-2 text-sm">
+                            {{ formatVariantName(variant) }} 
+                            <span v-if="variant.sku" class="text-gray-400 font-normal text-xs">({{ variant.sku }})</span>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
+                            <div class="md:col-span-1">
+                                <label class="block text-gray-400 text-[10px] uppercase">Actual</label>
+                                <div class="font-bold">{{ variant.stock }}</div>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-gray-700 text-xs font-bold mb-1">Sumar (+)</label>
+                                <input type="number" min="0" v-model="variant.qty_add" class="w-full border-gray-300 rounded shadow-sm text-sm py-1 px-2">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-gray-500 text-[10px] uppercase">$ Compra</label>
+                                <input type="number" min="0" v-model="variant.new_purchase_price" 
+                                       class="w-full border-gray-300 rounded shadow-sm text-sm py-1 px-2" 
+                                       placeholder="Heredado"
+                                       :title="'Heredado: ' + (selectedQuickProduct.purchase_price || 0)">
+                            </div>
+                            <div class="md:col-span-2 flex gap-2">
+                                <div class="flex-1">
+                                    <label class="block text-gray-500 text-[10px] uppercase">$ Venta</label>
+                                    <input type="number" min="0" v-model="variant.new_price" 
+                                           class="w-full border-gray-300 rounded shadow-sm text-sm py-1 px-2"
+                                           placeholder="Heredado"
+                                           :title="'Heredado: ' + (selectedQuickProduct.price || 0)">
+                                </div>
+                                <button 
+                                    @click="submitQuickUpdate(variant.id, 'variant', variant.qty_add, variant.new_purchase_price, variant.new_price)"
+                                    :disabled="quickProcessing"
+                                    class="mb-[1px] p-2 bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 transition"
+                                    title="Guardar Variantes">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                                        <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <div class="mt-6 flex justify-end">
+                <button @click="closeQuickEntry" class="text-gray-500 hover:text-gray-700 mr-4">Cerrar</button>
+            </div>
+        </div>
+    </Modal>
+
+    <!-- FEEDBACK MODAL -->
+    <AlertModal 
+        :show="alertState.show" 
+        :type="alertState.type" 
+        :title="alertState.title" 
+        :message="alertState.message" 
+        primaryText="Aceptar" 
+        @close="alertState.show = false" 
+        @primary="alertState.show = false" 
+    />
+</AuthenticatedLayout>
 </template>
 
 <style>

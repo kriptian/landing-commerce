@@ -9,6 +9,7 @@ import DangerButton from '@/Components/DangerButton.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import Pagination from '@/Components/Pagination.vue';
 import ExpenseModal from './ExpenseModal.vue';
+import VariantSelectorModal from './VariantSelectorModal.vue';
 
 const props = defineProps({
     sales: Object,
@@ -64,6 +65,28 @@ const hideSaleValues = ref(false);
 // Venta recién creada para imprimir
 const lastCreatedSale = ref(null);
 const showInvoiceModal = ref(false);
+
+// Modal de selección de variantes
+const showVariantSelectorModal = ref(false);
+const selectedProductForVariant = ref(null);
+
+const openVariantSelector = (product) => {
+    selectedProductForVariant.value = product;
+    showVariantSelectorModal.value = true;
+};
+
+const handleVariantAddToCart = (product, variant) => {
+    addToCart(product, variant);
+};
+
+const handleProductClick = (product) => {
+    // Si tiene variantes (variant_options), abrir modal
+    if (product.variant_options && product.variant_options.length > 0) {
+        openVariantSelector(product);
+    } else {
+        addToCart(product);
+    }
+};
 
 // Aplicar filtros
 const applyFilters = () => {
@@ -306,7 +329,7 @@ const searchProducts = async () => {
         
         // En móvil, si hay un solo resultado, agregarlo automáticamente
         if (products.length === 1 && window.innerWidth < 1024) {
-            addToCart(products[0]);
+            handleProductClick(products[0]);
             searchQuery.value = '';
             searchResults.value = [];
         }
@@ -331,8 +354,33 @@ const searchByBarcode = async (barcode) => {
         });
         
         if (response.data?.product) {
-            addToCart(response.data.product);
-            barcodeInput.value = '';
+            const product = response.data.product;
+            const matchedOption = response.data.matched_variant_option;
+            
+            // Lógica para auto-seleccionar variante si viene una opción específica
+            let variantToAdd = null;
+            if (matchedOption && product.variants && product.variants.length > 0) {
+                // Buscar la variante que coincida con esta opción
+                // Nota: variant.options es un objeto { "Tamaño": "S", "Color": "Rojo" }
+                // matchedOption.name es "S" o "Rojo"
+                const matches = product.variants.filter(v => {
+                    return v.options && Object.values(v.options).some(val => val === matchedOption.name);
+                });
+                
+                // Si hay EXÁCTAMENTE UNA coincidencia, la usamos.
+                // Si hay más (ambigüedad) o cero, dejamos que el usuario elija en el modal.
+                if (matches.length === 1) {
+                    variantToAdd = matches[0];
+                }
+            }
+
+            if (variantToAdd) {
+                addToCart(product, variantToAdd);
+                barcodeInput.value = '';
+            } else {
+                handleProductClick(product);
+                barcodeInput.value = '';
+            }
         } else {
             alert('Producto no encontrado con ese código de barras');
         }
@@ -1141,7 +1189,27 @@ watch(searchQuery, async (newValue) => {
             });
             
             if (response.data?.product) {
-                addToCart(response.data.product);
+                const product = response.data.product;
+                const matchedOption = response.data.matched_variant_option;
+                
+                let variantToAdd = null;
+                if (matchedOption && product.variants && product.variants.length > 0) {
+                    const matches = product.variants.filter(v => {
+                         return v.options && Object.values(v.options).some(val => val === matchedOption.name);
+                    });
+                    if (matches.length === 1) {
+                        variantToAdd = matches[0];
+                    }
+                }
+                
+                if (variantToAdd) {
+                    addToCart(product, variantToAdd);
+                } else {
+                     // Si tiene variantes y no se encontró una específica única,
+                     // handleProductClick abrirá el modal de forma estándar
+                     handleProductClick(product);
+                }
+                
                 searchQuery.value = '';
                 playBeep();
                 return;
@@ -1289,7 +1357,7 @@ const stopResize = () => {
                             v-for="product in filteredProducts"
                             :key="product.id"
                             class="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md cursor-pointer flex flex-col"
-                            @click="addToCart(product)"
+                            @click="handleProductClick(product)"
                         >
                             <div class="aspect-square bg-gray-100 flex items-center justify-center" style="min-height: 120px;">
                                 <img 
@@ -1581,7 +1649,7 @@ const stopResize = () => {
                     <div
                         v-for="product in searchResults"
                         :key="product.id"
-                        @click="addToCart(product); searchQuery = ''; searchResults = []"
+                        @click="handleProductClick(product); searchQuery = ''; searchResults = []"
                         class="px-4 py-3 border-b border-gray-100 hover:bg-blue-50 cursor-pointer flex items-center gap-3"
                     >
                         <div class="w-12 h-12 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
@@ -1971,6 +2039,14 @@ const stopResize = () => {
             @success="handleExpenseSuccess"
         />
 
+        <!-- Modal de selección de variantes -->
+        <VariantSelectorModal
+            :show="showVariantSelectorModal"
+            :product="selectedProductForVariant"
+            @close="showVariantSelectorModal = false"
+            @add-to-cart="handleVariantAddToCart"
+        />
+
         <!-- Modal de catálogo de productos -->
         <Modal :show="showProductCatalogModal" @close="showProductCatalogModal = false" :max-width="'4xl'">
             <div class="p-6 max-h-[90vh] flex flex-col">
@@ -2035,7 +2111,7 @@ const stopResize = () => {
                             v-for="product in filteredProducts"
                             :key="product.id"
                             class="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md cursor-pointer flex flex-col"
-                            @click="addToCart(product); showProductCatalogModal = false"
+                            @click="handleProductClick(product); showProductCatalogModal = false"
                         >
                             <div class="aspect-square bg-gray-100 flex items-center justify-center" style="min-height: 120px;">
                                 <img 

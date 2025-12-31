@@ -161,7 +161,10 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
                 Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
                 Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
             });
+
             Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
+            Route::get('inventory/search', [InventoryController::class, 'search'])->name('inventory.search'); // AJAX
+            Route::post('inventory/quick-update', [InventoryController::class, 'quickUpdate'])->name('inventory.quick-update');
             Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
             Route::get('catalog-customization', [CatalogCustomizationController::class, 'index'])->name('catalog-customization.index');
             Route::put('catalog-customization', [CatalogCustomizationController::class, 'update'])->name('catalog-customization.update');
@@ -208,7 +211,7 @@ Route::get('/crear-link-de-almacenamiento', function () {
 
 // Slugs reservados para no colisionar con rutas del sistema cuando usamos la raíz
 $reservedSlugs = implode('|', [
-    'admin','login','register','logout','profile','dashboard','tiendas','cart','checkout','api','storage','crear-link-de-almacenamiento','customer','mi-cuenta','notifications'
+    'admin','login','register','logout','profile','dashboard','tiendas','cart','checkout','api','storage','crear-link-de-almacenamiento','customer','mi-cuenta','notifications','debug-p'
 ]);
 Route::pattern('store', "^(?!($reservedSlugs)$)[A-Za-z0-9\-_.]+$");
 
