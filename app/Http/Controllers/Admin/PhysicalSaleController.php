@@ -369,12 +369,12 @@ class PhysicalSaleController extends Controller
                 if ($itemData['variant_id']) {
                     $variant = ProductVariant::find($itemData['variant_id']);
                     if ($variant) {
-                        // Verificar stock solo si la variante tiene stock definido
-                        if ($variant->stock !== null && $variant->stock < $itemData['quantity']) {
+                        // Verificar stock solo si la variante tiene stock definido Y el producto controla inventario
+                        if ($product->track_inventory && $variant->stock !== null && $variant->stock < $itemData['quantity']) {
                             throw new \Exception("Stock insuficiente para la variante del producto {$product->name}. Stock disponible: {$variant->stock}, solicitado: {$itemData['quantity']}");
                         }
-                        // Solo descontar si tiene stock definido
-                        if ($variant->stock !== null) {
+                        // Solo descontar si tiene stock definido Y el producto controla inventario
+                        if ($product->track_inventory && $variant->stock !== null) {
                             $variant->decrement('stock', $itemData['quantity']);
                         }
                     }

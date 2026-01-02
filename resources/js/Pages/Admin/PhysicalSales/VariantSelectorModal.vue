@@ -142,7 +142,9 @@ const handleAddToCart = () => {
                 </div>
                 <div class="flex flex-col text-right">
                     <span class="font-medium text-sm">Stock Disponible:</span>
-                    <span class="text-xl font-bold">{{ variantStock ?? 'N/A' }}</span>
+                    <span class="text-xl font-bold">
+                        {{ (!product?.track_inventory || product?.track_inventory === '0' || product?.track_inventory === 0) ? 'Ilimitado' : (variantStock ?? 'N/A') }}
+                    </span>
                 </div>
             </div>
 

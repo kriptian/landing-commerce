@@ -609,7 +609,10 @@ const selectedVariant = computed(() => {
     }) || null;
 });
 
-const isInventoryTracked = computed(() => props.product.track_inventory !== false);
+const isInventoryTracked = computed(() => {
+    const t = props.product.track_inventory;
+    return !!t && t !== '0' && t !== 0 && t !== false;
+});
 
 // Promociones: prioridad a la promo global de la tienda
 const storePromoActive = computed(() => {

@@ -440,15 +440,21 @@ const addToCart = (product, variant = null) => {
 
 // Obtener stock disponible de un item
 const getAvailableStock = (item) => {
+    // PRIMERO: Verificar si el inventario está desactivado globalmente
+    // Manejo robusto de falsy/string '0'
+    if (item.product) {
+        const track = item.product.track_inventory;
+        if (!track || track === '0' || track === 0 || track === false) {
+            return 'Ilimitado';
+        }
+    }
+
     // Si tiene variante, usar el stock de la variante
     if (item.variant && item.variant.stock !== null && item.variant.stock !== undefined) {
         return item.variant.stock;
     }
+    
     if (item.product) {
-        // Si track_inventory es false, retornar 'Ilimitado'
-        if (item.product.track_inventory === false) {
-            return 'Ilimitado';
-        }
         // Verificar si tiene quantity (stock del producto)
         if (item.product.quantity !== null && item.product.quantity !== undefined) {
             return item.product.quantity;
@@ -1447,10 +1453,12 @@ const stopResize = () => {
                                 <tr v-for="(item, index) in cartItems" :key="index" :class="['hover:bg-gray-50', getStockStatusClass(item)]">
                                     <td class="px-3 py-3 text-left align-middle" :title="item.product_name">
                                         <div class="min-w-0" style="max-width: 140px;">
-                                            <p class="font-medium text-sm text-gray-900 truncate">{{ item.product_name }}</p>
-                                            <p v-if="item.variant_options" class="text-xs text-gray-500 truncate">
-                                                {{ Object.entries(item.variant_options).map(([k, v]) => `${k}: ${v}`).join(', ') }}
-                                            </p>
+                                            <div class="font-medium text-gray-900">
+                                                {{ item.product_name }}
+                                                <span v-if="item.variant_options" class="text-xs text-gray-500 ml-1">
+                                                    ({{ Object.values(item.variant_options).join(' / ') }})
+                                                </span>
+                                            </div>
                                         </div>
                                     </td>
                                     <td class="px-3 py-3 text-center align-middle w-16" :title="`Stock disponible: ${getAvailableStock(item)}`">
