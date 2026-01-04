@@ -94,6 +94,34 @@ class PhysicalSaleController extends Controller
         $totalExpenses = $expensesQuery->sum('amount');
         $netCash = $totalSales - $totalExpenses;
 
+        // Calcular Ganancia Total (Profit)
+        // Se calcula iterando sobre las ventas para sumar (precio - costo) * cantidad
+        // Solo se suma si existe un costo (purchase_price) definido > 0
+        $totalProfit = 0;
+        
+        // Clonamos de nuevo para iterar sin afectar otros cálculos si fuera necesario
+        // (aunque statsQuery ya era un clon, al usar chunk se ejecuta)
+        (clone $statsQuery)->chunk(200, function($salesChunk) use (&$totalProfit) {
+            foreach ($salesChunk as $sale) {
+                foreach ($sale->items as $item) {
+                    $cost = 0;
+                    // Intentar obtener costo de la variante primero
+                    if ($item->variant && $item->variant->purchase_price > 0) {
+                        $cost = $item->variant->purchase_price;
+                    } 
+                    // Si no, del producto
+                    elseif ($item->product && $item->product->purchase_price > 0) {
+                        $cost = $item->product->purchase_price;
+                    }
+
+                    if ($cost > 0) {
+                        $profit = ($item->unit_price - $cost) * $item->quantity;
+                        $totalProfit += $profit;
+                    }
+                }
+            }
+        });
+
         // Obtener productos activos con imágenes para el catálogo POS
         $products = $store->products()
             ->where('is_active', true)
@@ -167,6 +195,7 @@ class PhysicalSaleController extends Controller
                 'totalCount' => $totalCount,
                 'totalExpenses' => $totalExpenses,
                 'netCash' => $netCash,
+                'totalProfit' => $totalProfit,
             ],
             'filters' => $request->only(['start_date', 'end_date', 'search']),
             'products' => $products,

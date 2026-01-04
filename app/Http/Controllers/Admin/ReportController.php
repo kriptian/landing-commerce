@@ -112,6 +112,27 @@ class ReportController extends Controller
         $physicalTotalSales = $physicalSalesStatsQuery->sum('total');
         $physicalTotalCount = $physicalSalesStatsQuery->count();
 
+        // Calcular Ganancia Total (Total Profit)
+        // Nota: Se realiza en memoria porque el costo puede estar en variante o producto.
+        // Para rangos de fecha grandes podría ser pesado, pero asumimos rangos razonables.
+        $salesForProfit = (clone $physicalSalesQuery)->with(['items.product', 'items.variant'])->get();
+        $totalProfit = 0;
+        foreach ($salesForProfit as $sale) {
+            foreach ($sale->items as $item) {
+                $purchasePrice = 0;
+                if ($item->variant && $item->variant->purchase_price > 0) {
+                    $purchasePrice = $item->variant->purchase_price;
+                } elseif ($item->product && $item->product->purchase_price > 0) {
+                    $purchasePrice = $item->product->purchase_price;
+                }
+
+                if ($purchasePrice > 0) {
+                    $profit = ($item->unit_price - $purchasePrice) * $item->quantity;
+                    $totalProfit += $profit;
+                }
+            }
+        }
+
         // Calcular gastos
         $expensesQuery = $store->expenses()->with('user');
         if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
@@ -142,6 +163,7 @@ class ReportController extends Controller
                 'totalCount' => $physicalTotalCount,
                 'totalExpenses' => $totalExpenses,
                 'netCash' => $netCash,
+                'totalProfit' => $totalProfit,
             ],
             'physicalSalesFilters' => $request->only(['start_date', 'end_date', 'search']),
             'expensesList' => $expensesList,

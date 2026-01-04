@@ -213,6 +213,33 @@ const formatSaleValue = (value) => {
     return `$${parseFloat(value).toFixed(2)}`;
 };
 
+// Calcular ganancia de una venta individual
+const calculateSaleProfit = (sale) => {
+    let totalProfit = 0;
+    let hasCost = false;
+    
+    // Verificar items
+    if (sale.items && sale.items.length > 0) {
+        sale.items.forEach(item => {
+            let cost = 0;
+            // Intentar obtener cost de variante o producto
+            // Nota: item.variant es relation, item.product es relation
+            if (item.variant && item.variant.purchase_price > 0) {
+                cost = parseFloat(item.variant.purchase_price);
+            } else if (item.product && item.product.purchase_price > 0) {
+                cost = parseFloat(item.product.purchase_price);
+            }
+            
+            if (cost > 0) {
+                hasCost = true;
+                totalProfit += (parseFloat(item.unit_price) - cost) * parseFloat(item.quantity);
+            }
+        });
+    }
+    
+    return hasCost ? formatCurrency(totalProfit) : '-';
+};
+
 // Estado del carrito de venta
 const cartItems = ref([]);
 const searchQuery = ref('');

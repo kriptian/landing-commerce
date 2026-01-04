@@ -190,6 +190,44 @@ const formatCurrency = (value) => {
     }).format(value);
 };
 
+// Calcular ganancia de una venta individual
+const calculateSaleProfit = (sale) => {
+    if (!sale || !sale.items) return '-';
+    
+    let totalProfit = 0;
+    let hasCost = true; // Flag para saber si al menos un item tiene costo
+
+    for (const item of sale.items) {
+        let purchasePrice = 0;
+        
+        // Prioridad: Variante > Producto
+        if (item.variant && item.variant.purchase_price > 0) {
+            purchasePrice = parseFloat(item.variant.purchase_price);
+        } else if (item.product && item.product.purchase_price > 0) {
+            purchasePrice = parseFloat(item.product.purchase_price);
+        }
+        
+        // Si hay precio de compra, calculamos
+        if (purchasePrice > 0) {
+            const profit = (parseFloat(item.unit_price) - purchasePrice) * item.quantity;
+            totalProfit += profit;
+        } else {
+            // Si falta el costo de algún producto, ¿qué mostramos?
+            // El usuario pidió mostrar "-" si no hay precio de compra.
+            // Si al menos UN producto no tiene costo, la ganancia total es incierta.
+            // Pero podríamos sumar lo que hay. 
+            // La instrucción decía: "Si el precio de compra no está disponible o es cero, se debe mostrar un '-' en su lugar (referido a la columna o fila)".
+            // Asumiremos que si hay items sin costo, mostramos "-" para alertar.
+            // O podríamos ser permisivos. 
+            // Siguiendo la lógica estricta:
+            hasCost = false;
+        }
+    }
+
+    if (!hasCost) return '-';
+    return formatCurrency(totalProfit);
+};
+
 // Scroll lateral con degradados para la tabla de órdenes
 const scrollBoxRef = ref(null);
 const showLeftFade = ref(false);
@@ -348,10 +386,9 @@ const startResize = (e) => {
                     </div>
                 </div>
 
-                <!-- Estadísticas y Filtros para Ventas Físicas -->
                 <div v-if="reportType === 'physical'">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="flex flex-wrap gap-4 mb-6">
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg flex-1 min-w-[200px]">
                             <div class="p-6">
                                 <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Ventas Totales</h3>
                                 <p class="mt-1 text-2xl font-semibold text-gray-900">
@@ -359,7 +396,7 @@ const startResize = (e) => {
                                 </p>
                             </div>
                         </div>
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg flex-1 min-w-[200px]">
                             <div class="p-6">
                                 <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Gastos / Salidas</h3>
                                 <p class="mt-1 text-2xl font-semibold text-red-600">
@@ -367,15 +404,23 @@ const startResize = (e) => {
                                 </p>
                             </div>
                         </div>
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg flex-1 min-w-[200px]">
                             <div class="p-6">
                                 <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Efectivo Neto</h3>
-                                <p class="mt-1 text-2xl font-semibold text-green-600">
+                                <p class="mt-1 text-2xl font-semibold text-blue-600">
                                     {{ physicalSalesStats ? formatCurrency(physicalSalesStats.netCash || 0) : '$0' }}
                                 </p>
                             </div>
                         </div>
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg flex-1 min-w-[200px]">
+                            <div class="p-6">
+                                <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Ganancia Total</h3>
+                                <p class="mt-1 text-2xl font-semibold text-green-600">
+                                    {{ physicalSalesStats ? formatCurrency(physicalSalesStats.totalProfit || 0) : '$0' }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg flex-1 min-w-[200px]">
                             <div class="p-6">
                                 <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider"># Ventas</h3>
                                 <p class="mt-1 text-2xl font-semibold text-gray-900">
@@ -488,6 +533,7 @@ const startResize = (e) => {
                                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subtotal</th>
                                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descuento</th>
                                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ganancia</th>
                                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                                             </tr>
                                         </thead>
@@ -515,6 +561,9 @@ const startResize = (e) => {
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                                     {{ formatCurrency(sale.total) }}
+                                                </td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {{ calculateSaleProfit(sale) }}
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm">
                                                     <Link 

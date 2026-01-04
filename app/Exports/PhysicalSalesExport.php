@@ -46,6 +46,22 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
                 }
                 $fullName = trim($name . ($optionsText ? " (".$optionsText.")" : ''));
 
+                // Calcular Ganancia
+                $cost = 0;
+                $profitText = '-'; // Por defecto guión si no hay costo
+                
+                // Intentar obtener costo
+                if ($item->variant && $item->variant->purchase_price > 0) {
+                    $cost = $item->variant->purchase_price;
+                } elseif ($item->product && $item->product->purchase_price > 0) {
+                    $cost = $item->product->purchase_price;
+                }
+
+                if ($cost > 0) {
+                    $profitVal = ($item->unit_price - $cost) * $item->quantity;
+                    $profitText = $profitVal; 
+                }
+
                 $rows->push([
                     $sale->sale_number,
                     $sale->user->name ?? 'N/A',
@@ -59,12 +75,13 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
                     $item->quantity,
                     $item->unit_price,
                     $item->subtotal,
+                    $profitText, // Columna Ganancia
                     $sale->notes ?? '',
                 ]);
             }
         }
         
-        return $rows->isEmpty() ? collect([[null,null,null,null,null,null,null,null,null,null,null,null,null]]) : $rows;
+        return $rows->isEmpty() ? collect([[null,null,null,null,null,null,null,null,null,null,null,null,null,null]]) : $rows;
     }
 
     public function headings(): array
@@ -82,6 +99,7 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
             'Cantidad',
             'Precio Unitario',
             'Subtotal Item',
+            'Ganancia',
             'Notas',
         ];
     }
