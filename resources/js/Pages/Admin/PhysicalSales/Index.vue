@@ -267,6 +267,20 @@ const stockAlertMessage = ref('');
 // Referencias para el escáner de código de barras
 const html5QrCode = ref(null);
 
+// Computed para el valor máximo del descuento
+const maxDiscountValue = computed(() => {
+    if (productDiscountType.value === 'percentage') {
+        return 100;
+    }
+    
+    if (selectedProductIndex.value === null) return 0;
+    
+    const item = cartItems.value[selectedProductIndex.value];
+    if (!item) return 0;
+    
+    return item.original_price || item.unit_price || 0;
+});
+
 // Modal de gastos
 const showExpenseModal = ref(false);
 const showSuccessExpenseModal = ref(false);
@@ -937,6 +951,8 @@ const processSale = async () => {
             variant_id: item.variant_id,
             quantity: item.quantity,
             unit_price: item.unit_price,
+            original_price: item.original_price,
+            discount_percent: item.discount_percent,
         })),
         subtotal: subtotal.value,
         tax: 0,
@@ -2023,7 +2039,7 @@ const stopResize = () => {
                             type="number"
                             :step="productDiscountType === 'percentage' ? '0.01' : '0.01'"
                             :min="0"
-                            :max="productDiscountType === 'percentage' ? 100 : (selectedProductIndex !== null ? (cartItems[selectedProductIndex]?.original_price || cartItems[selectedProductIndex]?.unit_price) : 0)"
+                            :max="maxDiscountValue"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md"
                             :placeholder="productDiscountType === 'percentage' ? 'Porcentaje Descuento' : 'Monto Descuento'"
                         />

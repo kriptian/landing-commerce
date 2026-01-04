@@ -54,7 +54,7 @@ onMounted(() => {
                         🖨️ Imprimir
                     </button>
                     <button
-                        @click="$inertia.visit(route('admin.physical-sales.index'))"
+                        @click="$inertia.visit(route('admin.reports.index', { type: 'physical' }))"
                         class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
                     >
                         Volver
@@ -188,7 +188,7 @@ onMounted(() => {
                         🖨️ Imprimir
                     </button>
                     <Link
-                        :href="route('admin.physical-sales.index')"
+                        :href="route('admin.reports.index', { type: 'physical' })"
                         class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 no-print"
                     >
                         Volver

@@ -18,12 +18,16 @@ class PhysicalSaleItem extends Model
         'subtotal',
         'product_name',
         'variant_options',
+        'original_price',
+        'discount_percent',
     ];
 
     protected $casts = [
         'variant_options' => 'array',
         'unit_price' => 'decimal:2',
         'subtotal' => 'decimal:2',
+        'original_price' => 'decimal:2',
+        'discount_percent' => 'decimal:2',
     ];
 
     public function physicalSale()

@@ -62,6 +62,13 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
                     $profitText = $profitVal; 
                 }
 
+                // Calcular Descuento del Item
+                $itemDiscountText = '-';
+                if ($item->original_price > $item->unit_price) {
+                    $discountVal = ($item->original_price - $item->unit_price) * $item->quantity;
+                    $itemDiscountText = $discountVal;
+                }
+
                 $rows->push([
                     $sale->sale_number,
                     $sale->user->name ?? 'N/A',
@@ -75,6 +82,7 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
                     $item->quantity,
                     $item->unit_price,
                     $item->subtotal,
+                    $itemDiscountText, // Columna Descuento Item
                     $profitText, // Columna Ganancia
                     $sale->notes ?? '',
                 ]);
@@ -99,6 +107,7 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
             'Cantidad',
             'Precio Unitario',
             'Subtotal Item',
+            'Descuento Item',
             'Ganancia',
             'Notas',
         ];

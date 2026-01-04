@@ -228,6 +228,25 @@ const calculateSaleProfit = (sale) => {
     return formatCurrency(totalProfit);
 };
 
+// Calcular descuento total (Manual + Suma de descuentos por item)
+const calculateTotalDiscount = (sale) => {
+    let totalDiscount = parseFloat(sale.discount || 0);
+
+    if (sale.items) {
+        sale.items.forEach(item => {
+            const originalPrice = parseFloat(item.original_price || 0);
+            const unitPrice = parseFloat(item.unit_price || 0);
+            
+            // Si hay precio original y es mayor al vendido, la diferencia es descuento
+            if (originalPrice > unitPrice) {
+                totalDiscount += (originalPrice - unitPrice) * item.quantity;
+            }
+        });
+    }
+
+    return formatCurrency(totalDiscount);
+};
+
 // Scroll lateral con degradados para la tabla de órdenes
 const scrollBoxRef = ref(null);
 const showLeftFade = ref(false);
@@ -556,8 +575,8 @@ const startResize = (e) => {
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                     {{ formatCurrency(sale.subtotal) }}
                                                 </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {{ formatCurrency(sale.discount) }}
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {{ calculateTotalDiscount(sale) }}
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                                     {{ formatCurrency(sale.total) }}

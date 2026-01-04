@@ -315,6 +315,8 @@ class PhysicalSaleController extends Controller
             'items.*.variant_id' => 'nullable|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
+            'items.*.original_price' => 'nullable|numeric|min:0',
+            'items.*.discount_percent' => 'nullable|numeric|min:0',
             'subtotal' => 'required|numeric|min:0',
             'tax' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
@@ -439,6 +441,8 @@ class PhysicalSaleController extends Controller
                     'subtotal' => $itemData['quantity'] * $itemData['unit_price'],
                     'product_name' => $product->name,
                     'variant_options' => $variantOptions,
+                    'original_price' => $itemData['original_price'] ?? null,
+                    'discount_percent' => $itemData['discount_percent'] ?? 0,
                 ]);
             }
 
