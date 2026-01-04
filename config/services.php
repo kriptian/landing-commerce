@@ -37,7 +37,7 @@ return [
 
     // WhatsApp para alertas internas al crear tienda (wa.me phone sin +)
     'whatsapp' => [
-        'admin_phone' => env('WHATSAPP_ADMIN_PHONE', '573024061771'),
+        'admin_phone' => env('WHATSAPP_ADMIN_PHONE', '573208204198'),
     ],
 
 ];
