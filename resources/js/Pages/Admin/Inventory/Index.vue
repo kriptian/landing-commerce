@@ -147,7 +147,15 @@ const isExpanded = (productId) => {
 };
 
 const hasVariants = (product) => {
-    return product.variants && product.variants.length > 0;
+    // 1. Usar el nuevo sistema de opciones jerárquicas si existe
+    if (product.variant_options && product.variant_options.length > 0) return true;
+    
+    // 2. Fallback: Verificar si hay variantes reales con opciones (evitar "ghost variants" vacías)
+    if (product.variants && product.variants.length > 0) {
+        return product.variants.some(v => v.options && Object.keys(v.options).length > 0);
+    }
+    
+    return false;
 };
 
 const formatVariantName = (variant) => {

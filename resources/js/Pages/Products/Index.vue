@@ -129,12 +129,21 @@ const startResize = (e) => {
     document.addEventListener('touchmove', onResizeMove, { passive: false });
     document.addEventListener('touchend', stopResize);
 };
+const getDisplayStock = (product) => {
+    // Si tiene opciones de variantes (sistema nuevo), es configurable: mostramos la suma
+    if (product.variant_options && product.variant_options.length > 0) {
+        return product.variants_sum_stock ?? 0;
+    }
+    // Si no tiene opciones, es simple: mostramos su cantidad directa (ignorando ghost variants)
+    return product.quantity;
+};
 </script>
 
 <template>
     <Head title="Gestionar Productos" />
 
     <AuthenticatedLayout>
+
         <template #header>
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">Gestionar Productos</h2>
         </template>
@@ -202,7 +211,7 @@ const startResize = (e) => {
                                             <span v-if="!product.is_active" class="ml-2 inline-flex items-center rounded bg-gray-200 text-gray-700 text-xs font-semibold px-2 py-0.5">Inactivo</span>
                                         </td>
                                         <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">$ {{ Number(product.price).toLocaleString('es-CO') }}</td>
-                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ product.variants_sum_stock ?? product.quantity }}</td>
+                                        <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ getDisplayStock(product) }}</td>
                                         <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ product.category ? product.category.name : 'Sin Categoría' }}</td>
                                         <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">
                                             <label class="inline-flex items-center gap-1 text-sm">

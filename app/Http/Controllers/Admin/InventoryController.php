@@ -24,7 +24,7 @@ class InventoryController extends Controller
         $status = $request->string('status')->toString(); // '', 'out_of_stock', 'low_stock'
 
         $productsQuery = $request->user()->store->products()
-            ->with('variants')
+            ->with(['variants', 'variantOptions']) // Cargar variantOptions para distinguir simples vs configurables
             ->latest();
 
         if (!empty($search)) {

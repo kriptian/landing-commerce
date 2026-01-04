@@ -25,7 +25,7 @@ class ProductController extends Controller
         $store = $request->user()->store;
         $store = $request->user()->store;
         // Cargar la suma de stock de variantes (variants_sum_stock) para corregir visualización en listado
-        $query = $store->products()->with('category')->withSum('variants', 'stock')->latest();
+        $query = $store->products()->with(['category', 'variantOptions'])->withSum('variants', 'stock')->latest();
 
         if ($request->filled('category')) {
             $query->where('category_id', $request->integer('category'));
@@ -156,6 +156,13 @@ class ProductController extends Controller
             if (!isset($productData['alert'])) {
                 $productData['alert'] = null;
             }
+        } else {
+             // FIX: Asegurar que se guarde la cantidad para productos simples
+             if (isset($productData['track_inventory']) && $productData['track_inventory']) {
+                 if ($request->has('quantity')) {
+                     $productData['quantity'] = (int) $request->input('quantity');
+                 }
+             }
         }
         
         $product = $request->user()->store->products()->create($productData);
@@ -294,9 +301,9 @@ class ProductController extends Controller
         $product->load('images', 'category.parent', 'variants', 'variantOptions.children');
 
         // --- FIX DISCREPANCIA STOCK ---
-        // Si el producto tiene variantes, la columna 'quantity' puede estar desactualizada (legacy).
-        // Recalculamos la cantidad real sumando el stock de las variantes para el formulario.
-        if ($product->variants && $product->variants->count() > 0) {
+        // Si el producto tiene variantes Y opciones de variantes (es un producto configurable real),
+        // recalculamos la cantidad. Si es simple (sin opciones) pero con basura en variants, respetamos quantity.
+        if ($product->variants && $product->variants->count() > 0 && $product->variantOptions && $product->variantOptions->count() > 0) {
             $product->quantity = $product->variants->sum('stock');
         }
         // -----------------------------
@@ -378,6 +385,8 @@ class ProductController extends Controller
         }
         $selectedCategoryPath = array_reverse($selectedCategoryPath);
 
+
+        
         return Inertia::render('Products/Edit', [
             'product' => $productArray, // Usar el array serializado con variant_options correctamente formateado
             'categories' => auth()->user()->store->categories()->whereNull('parent_id')->orderBy('name')->get(['id','name']),
@@ -501,6 +510,13 @@ class ProductController extends Controller
             
             if (!isset($productData['alert'])) {
                 $productData['alert'] = null;
+            }
+        } else {
+            // FIX: Para productos simples (sin variantes) que controlan inventario, asegurar que se guarde la cantidad
+            if (isset($productData['track_inventory']) && $productData['track_inventory']) {
+                 if ($request->has('quantity')) {
+                     $productData['quantity'] = (int) $request->input('quantity');
+                 }
             }
         }
         // Si NO se controla inventario, normalizamos cantidades

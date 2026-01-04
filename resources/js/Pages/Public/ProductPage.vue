@@ -540,22 +540,21 @@ const selectedOptionStock = computed(() => {
     // Variant Option (Stale) vs Product Variant (Truth) Logic
     // Priorizamos leer del ProductVariant real si existe, porque es el que controla el Admin.
     
-    // 1. Construir objeto de opciones seleccionadas
-    const currentOptions = {};
-    if (hasVariantOptions.value) {
-        optionKeys.value.forEach(k => currentOptions[k] = selectedOptions.value[k]);
-    }
-
-    // 2. Buscar en ProductVariants (Source of Truth)
+    // 1. Prioridad: Buscar coincidencia exacta en variants (Source of Truth)
     if (props.product.variants && props.product.variants.length > 0) {
-        const matchingPv = props.product.variants.find(v => {
-            const vOpts = v.options || {};
-            // Verificar coincidencia exacta de todas las keys
-            return optionKeys.value.every(k => String(vOpts[k]) === String(currentOptions[k]));
-        });
+        // Verificar que las variantes tengan opciones válidas
+        const validVariants = props.product.variants.filter(v => v.options && Object.keys(v.options).length > 0);
         
-        if (matchingPv) {
-            return Number(matchingPv.stock);
+        if (validVariants.length > 0) {
+            const matchingPv = validVariants.find(v => {
+                const vOpts = v.options || {};
+                // Verificar coincidencia exacta de todas las keys
+                return optionKeys.value.every(k => String(vOpts[k]) === String(selectedOptions.value[k]));
+            });
+            
+            if (matchingPv) {
+                return Number(matchingPv.stock);
+            }
         }
     }
 
@@ -582,6 +581,9 @@ const selectedOptionStock = computed(() => {
 });
 
 const selectedVariant = computed(() => {
+    // Si no hay keys de variantes (producto simple), no intentar buscar
+    if (optionKeys.value.length === 0) return null;
+
     if (!allKeysSelected.value) return null;
     
     if (hasVariantOptions.value) {
@@ -593,7 +595,10 @@ const selectedVariant = computed(() => {
         
         // Intentar encontrar el stock REAL desde variants
         let realStock = selectedOptionStock.value; 
-
+        
+        // Si no se encontró stock específico, usar 0 por seguridad
+        // (Aunque selectedOptionStock ya debería devolver 0 si falla)
+        
         return {
             id: null, 
             options: options,
@@ -714,7 +719,7 @@ watch(selectedQuantity, (newQty) => {
 
 const addToCart = () => {
     // Exigir selección completa cuando hay variantes con múltiples atributos
-    const hasVariants = hasVariantOptions.value || (props.product.variants && props.product.variants.length > 0);
+    const hasVariants = hasVariantOptions.value || (optionKeys.value.length > 0);
     if (hasVariants && !selectedVariant.value) {
         showVariantAlert.value = true;
         return;
@@ -755,7 +760,7 @@ const addToCart = () => {
 
 const buyNow = () => {
     // Exigir selección completa cuando hay variantes con múltiples atributos
-    const hasVariants = hasVariantOptions.value || (props.product.variants && props.product.variants.length > 0);
+    const hasVariants = hasVariantOptions.value || (optionKeys.value.length > 0);
     if (hasVariants && !selectedVariant.value) {
         showVariantAlert.value = true;
         return;
@@ -957,25 +962,25 @@ const getVariantDisplayPrices = (variant) => {
                             <input type="number" v-model.number="selectedQuantity" :min="1" :max="isFinite(displayStock) ? displayStock : undefined" class="w-16 h-9 text-center border rounded-md" :style="inputStyleObj" />
                             <button type="button" @click="increaseQuantity" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800">＋</button>
                         </div>
-                <p v-if="(selectedVariant || product.variants.length == 0) && isInventoryTracked" class="ml-2 text-xs md:text-sm text-gray-600 whitespace-nowrap shrink-0">{{ isFinite(displayStock) ? displayStock : '∞' }} en stock</p>
+                <p v-if="(selectedVariant || optionKeys.length == 0) && isInventoryTracked" class="ml-2 text-xs md:text-sm text-gray-600 whitespace-nowrap shrink-0">{{ isFinite(displayStock) ? displayStock : '∞' }} en stock</p>
                     </div>
 
                     <button 
                         @click="addToCart"
-                        :disabled="((hasVariantOptions || product.variants.length > 0) && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
+                        :disabled="(optionKeys.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
                         class="w-full mt-6 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-300 disabled:text-gray-500"
                         :class="catalogUseDefault ? 'bg-blue-600/30 backdrop-blur-sm text-blue-700 enabled:hover:bg-blue-600/40 border-2 border-blue-600/50' : 'text-white border-2'"
-                        :style="!catalogUseDefault && !((hasVariantOptions || product.variants.length > 0) && !selectedVariant) && !(isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock)) ? purchaseButtonSecondaryStyle : {}"
+                        :style="!catalogUseDefault && !(optionKeys.length > 0 && !selectedVariant) && !(isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock)) ? purchaseButtonSecondaryStyle : {}"
                     >
-                        {{ (hasVariantOptions || product.variants.length > 0) && !selectedVariant ? 'Selecciona opciones' : (isInventoryTracked ? (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') : 'Agregar al Carrito') }}
+                        {{ optionKeys.length > 0 && !selectedVariant ? 'Selecciona opciones' : (isInventoryTracked ? (displayStock === 0 ? 'Agotado' : 'Agregar al Carrito') : 'Agregar al Carrito') }}
                     </button>
                     
                     <button 
                         @click="buyNow"
-                        :disabled="((hasVariantOptions || product.variants.length > 0) && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
+                        :disabled="(optionKeys.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
                         class="w-full mt-3 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:opacity-90 buy-now-button"
                         :class="catalogUseDefault ? 'bg-blue-600 text-white enabled:hover:bg-blue-700' : 'text-white'"
-                        :style="!catalogUseDefault && !((hasVariantOptions || product.variants.length > 0) && !selectedVariant) && !(isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock)) ? purchaseButtonStyle : {}"
+                        :style="!catalogUseDefault && !(optionKeys.length > 0 && !selectedVariant) && !(isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock)) ? purchaseButtonStyle : {}"
                     >
                         Comprar Ahora
                     </button>
