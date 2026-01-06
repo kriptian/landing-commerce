@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, useForm, Link, usePage } from '@inertiajs/vue3';
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { downloadPDF, sharePDF } from '@/Utils/pdfUtils';
 import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -65,6 +66,38 @@ const hideSaleValues = ref(false);
 // Venta recién creada para imprimir
 const lastCreatedSale = ref(null);
 const showInvoiceModal = ref(false);
+const isGeneratingPDF = ref(false);
+
+const downloadInvoicePDF = async () => {
+    if (!lastCreatedSale.value) return;
+    isGeneratingPDF.value = true;
+    try {
+        const element = document.getElementById('invoice-content-pos');
+        if (element) {
+            await downloadPDF(element, `factura-${lastCreatedSale.value.sale_number}.pdf`);
+        }
+    } catch (error) {
+        console.error(error);
+        alert('Error al generar el PDF');
+    } finally {
+        isGeneratingPDF.value = false;
+    }
+};
+
+const shareInvoicePDF = async () => {
+    if (!lastCreatedSale.value) return;
+    isGeneratingPDF.value = true;
+    try {
+        const element = document.getElementById('invoice-content-pos');
+        if (element) {
+            await sharePDF(element, `factura-${lastCreatedSale.value.sale_number}.pdf`, `Factura #${lastCreatedSale.value.sale_number}`);
+        }
+    } catch (error) {
+        console.error(error);
+    } finally {
+        isGeneratingPDF.value = false;
+    }
+};
 
 // Modal de selección de variantes
 const showVariantSelectorModal = ref(false);
@@ -1960,14 +1993,128 @@ const stopResize = () => {
                     </p>
                 </div>
 
-                <div class="flex gap-3">
-                    <SecondaryButton @click="showInvoiceModal = false">Cerrar</SecondaryButton>
+                <div class="flex gap-2 sm:gap-3 justify-center sm:justify-end">
+                    <SecondaryButton @click="showInvoiceModal = false" class="!px-3 sm:!px-4">
+                        <span class="sm:hidden">✕</span>
+                        <span class="hidden sm:inline">Cerrar</span>
+                    </SecondaryButton>
+                    
+                    <button 
+                         v-if="lastCreatedSale"
+                         @click="downloadInvoicePDF"
+                         class="inline-flex items-center px-3 sm:px-4 py-2 bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 focus:outline-none focus:border-gray-900 focus:ring ring-gray-300 disabled:opacity-25 transition ease-in-out duration-150"
+                         :disabled="isGeneratingPDF"
+                         title="Descargar PDF"
+                    >
+                        <span v-if="isGeneratingPDF" class="animate-pulse">⏳</span>
+                        <span v-else>⬇️ <span class="hidden sm:inline ml-1">Descargar PDF</span></span>
+                    </button>
+
+                    <button 
+                         v-if="lastCreatedSale"
+                         @click="shareInvoicePDF"
+                         class="inline-flex items-center px-3 sm:px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150"
+                         :disabled="isGeneratingPDF"
+                         title="Compartir Factura"
+                    >
+                        <span v-if="isGeneratingPDF" class="animate-pulse">⏳</span>
+                        <span v-else>🔗 <span class="hidden sm:inline ml-1">Compartir</span></span>
+                    </button>
+
                     <PrimaryButton 
                         v-if="lastCreatedSale"
                         @click="printInvoice(lastCreatedSale)"
+                        class="!px-3 sm:!px-4"
+                        title="Imprimir Factura"
                     >
-                        🖨️ Imprimir Factura
+                        🖨️ <span class="hidden sm:inline ml-1">Imprimir</span>
                     </PrimaryButton>
+                </div>
+                
+                <!-- Hidden invoice container for PDF generation -->
+                <div class="fixed top-0 left-0 w-[210mm] bg-white z-[-100] opacity-0 pointer-events-none">
+                    <div id="invoice-content-pos" class="p-8 bg-white text-black relative overflow-hidden">
+                        <!-- Watermark for PDF -->
+                        <div v-if="store?.name" class="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-[0.12]">
+                            <div class="text-[80px] font-[900] text-black uppercase whitespace-nowrap -rotate-45 transform select-none">
+                                {{ store.name }}
+                            </div>
+                        </div>
+
+                        <div v-if="lastCreatedSale" class="relative z-10">
+                            <!-- Header with Logo -->
+                            <div class="flex items-center justify-center gap-4 mb-8 pb-4 border-b-2 border-black">
+                                <img 
+                                    v-if="store?.logo_url" 
+                                    :src="store.logo_url" 
+                                    alt="Logo" 
+                                    class="h-20 w-auto object-contain"
+                                    crossorigin="anonymous"
+                                />
+                                <h1 v-if="store?.name" class="text-3xl font-bold">{{ store.name }}</h1>
+                            </div>
+
+                            <div class="mb-8">
+                                <h2 class="text-xl font-bold mb-4">Información de Venta</h2>
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div><strong>Número:</strong> #{{ lastCreatedSale.sale_number }}</div>
+                                    <div><strong>Fecha:</strong> {{ new Date(lastCreatedSale.created_at).toLocaleString('es-CO') }}</div>
+                                    <div><strong>Vendedor:</strong> {{ lastCreatedSale.user?.name || 'N/A' }}</div>
+                                    <div><strong>Método de Pago:</strong> <span class="capitalize">{{ lastCreatedSale.payment_method }}</span></div>
+                                </div>
+                            </div>
+                            
+                            <table class="w-full mb-8 text-sm">
+                                <thead class="border-b-2 border-black">
+                                    <tr>
+                                        <th class="text-left py-2">Producto</th>
+                                        <th class="text-center py-2">Cant</th>
+                                        <th class="text-right py-2">Precio</th>
+                                        <th class="text-right py-2">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="item in lastCreatedSale.items" :key="item.id" class="border-b border-gray-200">
+                                        <td class="py-2">
+                                            {{ item.product_name }}
+                                            <div v-if="item.variant_options" class="text-xs text-gray-500">
+                                                {{ Object.values(item.variant_options).join(' / ') }}
+                                            </div>
+                                        </td>
+                                        <td class="text-center py-2">{{ item.quantity }}</td>
+                                        <td class="text-right py-2">{{ formatCurrency(item.unit_price) }}</td>
+                                        <td class="text-right py-2">{{ formatCurrency(item.subtotal) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <div class="flex justify-end">
+                                <div class="w-1/2 space-y-2 text-right">
+                                    <div class="flex justify-between">
+                                        <span>Subtotal:</span>
+                                        <span>{{ formatCurrency(lastCreatedSale.subtotal) }}</span>
+                                    </div>
+                                    <div v-if="lastCreatedSale.discount > 0" class="flex justify-between text-red-600">
+                                        <span>Descuento:</span>
+                                        <span>-{{ formatCurrency(lastCreatedSale.discount) }}</span>
+                                    </div>
+                                    <div class="flex justify-between text-xl font-bold border-t border-black pt-2">
+                                        <span>Total:</span>
+                                        <span>{{ formatCurrency(lastCreatedSale.total) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-if="lastCreatedSale.notes" class="mt-8 pt-4 border-t border-gray-200">
+                                <p class="text-sm font-bold">Notas:</p>
+                                <p class="text-sm">{{ lastCreatedSale.notes }}</p>
+                            </div>
+                            
+                            <div class="mt-12 text-center text-xs text-gray-500">
+                                <p>Gracias por su compra</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </Modal>
