@@ -10,12 +10,31 @@ import jsPDF from 'jspdf';
 export const generatePDF = async (element, filename = 'document.pdf') => {
     // Basic scaling for better quality
     const scale = 2;
+
+    // Save original styles
+    const originalOpacity = element.style.opacity;
+    const originalZIndex = element.style.zIndex;
+    const originalPosition = element.style.position;
+    
+    // Make visible for capture
+    element.style.opacity = '1';
+    element.style.zIndex = '9999';
+    // Ensure it has a white background
+    if (!element.style.background) {
+        element.style.background = '#ffffff';
+    }
+
     const canvas = await html2canvas(element, {
         scale: scale,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff'
     });
+
+    // Restore original styles
+    element.style.opacity = originalOpacity;
+    element.style.zIndex = originalZIndex;
+    if (originalPosition) element.style.position = originalPosition;
 
     const imgData = canvas.toDataURL('image/png');
     
