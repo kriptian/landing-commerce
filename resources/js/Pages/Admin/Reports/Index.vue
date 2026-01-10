@@ -2,7 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
-// import BarChart from '@/Components/BarChart.vue';
+import BarChart from '@/Components/BarChart.vue';
 import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
 
 const props = defineProps({
@@ -260,6 +260,13 @@ const updateFades = () => {
     showRightFade.value = left < (maxScrollLeft - 1);
 };
 onMounted(() => {
+    // Check if 'type' query param exists and switch tab
+    const urlParams = new URLSearchParams(window.location.search);
+    const type = urlParams.get('type');
+    if (type === 'physical') {
+        reportType.value = 'physical';
+    }
+
     nextTick(() => updateFades());
     scrollBoxRef.value?.addEventListener('scroll', updateFades, { passive: true });
     window.addEventListener('resize', updateFades);
@@ -715,8 +722,8 @@ const startResize = (e) => {
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                         <div class="p-6">
                             <h3 class="text-lg font-semibold mb-4">Ventas en el Período Seleccionado</h3>
-                            <!-- <BarChart :chart-data="formattedChartData" /> -->
-                            <p>Gráfico temporalmente deshabilitado por debug</p>
+                            <BarChart :chart-data="formattedChartData" />
+                            <!-- <p>Gráfico temporalmente deshabilitado por debug</p> -->
                         </div>
                     </div>
                 </div>
@@ -756,6 +763,7 @@ const startResize = (e) => {
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Productos</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Cantidades</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">P. Unitario</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
@@ -793,6 +801,9 @@ const startResize = (e) => {
                                             </td>
                                             <td class="px-6 py-4 whitespace-pre-line text-sm text-gray-600"> 
                                                 <div v-for="item in order.items" :key="'p'+item.id">{{ formatCurrency(item.unit_price) }}</div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                <Link :href="route('admin.orders.show', order.id)" class="text-blue-600 hover:text-blue-900">Ver</Link>
                                             </td>
                                         </tr>
                                         <tr v-if="orders.data.length === 0">

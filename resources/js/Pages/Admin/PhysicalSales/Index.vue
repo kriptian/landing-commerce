@@ -243,7 +243,7 @@ const formatSaleValue = (value) => {
     if (hideSaleValues.value) {
         return '***';
     }
-    return `$${parseFloat(value).toFixed(2)}`;
+    return formatCurrency(value);
 };
 
 // Calcular ganancia de una venta individual

@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
+import { downloadPDF, sharePDF } from '@/Utils/pdfUtils';
 
 const showInfo = ref(false);
 const infoTitle = ref('');
@@ -11,7 +12,54 @@ const infoType = ref('success'); // 'success' | 'error'
 
 const props = defineProps({
     order: Object,
+    store: Object,
 });
+
+// --- Helper Functions ---
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(value);
+};
+
+// --- PDF Generation Logic ---
+const isGeneratingPDF = ref(false);
+
+const downloadInvoicePDF = async () => {
+    isGeneratingPDF.value = true;
+    try {
+        const element = document.getElementById('invoice-content-digital');
+        if (element) {
+            await downloadPDF(element, `factura-${props.order.sequence_number || props.order.id}.pdf`);
+        }
+    } catch (error) {
+        console.error(error);
+        alert('Error al generar el PDF');
+    } finally {
+        isGeneratingPDF.value = false;
+    }
+};
+
+const shareInvoicePDF = async () => {
+    isGeneratingPDF.value = true;
+    try {
+        const element = document.getElementById('invoice-content-digital');
+        if (element) {
+            await sharePDF(element, `factura-${props.order.sequence_number || props.order.id}.pdf`, `Factura #${props.order.sequence_number || props.order.id}`);
+        }
+    } catch (error) {
+        console.error(error);
+    } finally {
+        isGeneratingPDF.value = false;
+    }
+};
+
+const printInvoice = () => {
+    window.print();
+};
 
 // --- Lógica de Formateo (sigue igual) ---
 const formatDate = (datetime) => {
@@ -105,7 +153,7 @@ const buildItemsSummary = () => {
 const buildStatusMessage = () => {
     const orderNumber = props.order.sequence_number ?? props.order.id;
     const dateText = formatDate(props.order.created_at);
-    const totalText = `$ ${Number(props.order.total_price).toLocaleString('es-CO')}`;
+    const totalText = formatCurrency(props.order.total_price);
     const name = (props.order?.customer_name || '').trim();
     const greeting = name ? `Hola ${name},` : 'Hola,';
     const address = (props.order?.customer_address || '').trim();
@@ -162,13 +210,48 @@ const notifyCurrentStatus = () => {
 
     <AuthenticatedLayout>
         <template #header>
-            <div class="flex items-center space-x-4">
-                <Link :href="route('admin.orders.index')" class="text-blue-600 hover:text-blue-800">
-                    &larr; Volver a Órdenes
-                </Link>
+            <div class="flex items-center justify-between w-full">
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">
                     Detalle de la Orden #{{ order.sequence_number ?? order.id }}
                 </h2>
+                <div class="flex gap-2">
+                    <button
+                        @click="downloadInvoicePDF"
+                        class="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm flex items-center gap-1 no-print"
+                        :disabled="isGeneratingPDF"
+                        title="Descargar PDF"
+                    >
+                        <span v-if="isGeneratingPDF">⏳</span>
+                        <span v-else>⬇️</span>
+                        <span class="hidden sm:inline">Descargar</span>
+                    </button>
+                    <button
+                        @click="shareInvoicePDF"
+                        class="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm flex items-center gap-1 no-print"
+                        :disabled="isGeneratingPDF"
+                        title="Compartir Factura"
+                    >
+                        <span v-if="isGeneratingPDF">⏳</span>
+                        <span v-else>🔗</span>
+                        <span class="hidden sm:inline">Compartir</span>
+                    </button>
+                    <button
+                        @click="printInvoice"
+                        class="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 no-print flex items-center gap-1"
+                        title="Imprimir"
+                    >
+                        <span>🖨️</span>
+                        <span class="hidden sm:inline">Imprimir</span>
+                    </button>
+                    <Link 
+                        :href="route('admin.reports.index')" 
+                        class="px-3 sm:px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 no-print flex items-center gap-1"
+                        title="Volver"
+                    >
+                        <span>⬅️</span>
+                        <span class="hidden sm:inline">Volver</span>
+                    </Link>
+                </div>
             </div>
         </template>
 
@@ -189,14 +272,14 @@ const notifyCurrentStatus = () => {
                                             </span>
                                         </div>
                                         <p class="text-sm text-gray-500 mt-2">
-                                            {{ item.quantity }} x $ {{ Number(item.unit_price).toLocaleString('es-CO') }}
+                                            {{ item.quantity }} x {{ formatCurrency(item.unit_price) }}
                                         </p>
                                     </div>
-                                    <p class="font-semibold text-gray-800 shrink-0 ml-4">$ {{ Number(item.unit_price * item.quantity).toLocaleString('es-CO') }}</p>
+                                    <p class="font-semibold text-gray-800 shrink-0 ml-4">{{ formatCurrency(item.unit_price * item.quantity) }}</p>
                                 </div>
                             </div>
                             <div class="border-t border-gray-200 pt-4 mt-4 text-right">
-                                <p class="text-2xl font-bold">Total: $ {{ Number(order.total_price).toLocaleString('es-CO') }}</p>
+                                <p class="text-2xl font-bold">Total: {{ formatCurrency(order.total_price) }}</p>
                             </div>
                         </div>
                     </div>
@@ -291,4 +374,93 @@ const notifyCurrentStatus = () => {
         @primary="showInfo=false"
         @close="showInfo=false"
     />
+
+    <!-- Hidden invoice container for PDF generation -->
+    <div class="fixed top-0 left-0 w-[210mm] bg-white z-[-100] opacity-0 pointer-events-none">
+        <div id="invoice-content-digital" class="p-8 bg-white text-black relative overflow-hidden">
+            <!-- Watermark for PDF -->
+             <div v-if="order.store?.name || $page.props.auth.user.store?.name" class="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-[0.12]">
+                <div class="text-[80px] font-[900] text-black uppercase whitespace-nowrap -rotate-45 transform select-none">
+                    {{ order.store?.name || $page.props.auth.user.store?.name }}
+                </div>
+            </div>
+
+            <div class="relative z-10">
+                <!-- Header with Logo -->
+                <div class="flex items-center justify-center gap-4 mb-8 pb-4 border-b-2 border-black">
+                     <img 
+                        v-if="order.store?.logo_url || $page.props.auth.user.store?.logo_url" 
+                        :src="order.store?.logo_url || $page.props.auth.user.store?.logo_url" 
+                        alt="Logo" 
+                        class="h-20 w-auto object-contain"
+                        crossorigin="anonymous"
+                    />
+                    <h1 v-if="order.store?.name || $page.props.auth.user.store?.name" class="text-3xl font-bold">
+                        {{ order.store?.name || $page.props.auth.user.store?.name }}
+                    </h1>
+                </div>
+
+                <div class="mb-8">
+                    <h2 class="text-xl font-bold mb-4">Información de Venta</h2>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div><strong>Número:</strong> #{{ order.sequence_number ?? order.id }}</div>
+                        <div><strong>Fecha:</strong> {{ new Date(order.created_at).toLocaleString('es-CO') }}</div>
+                        <div><strong>Cliente:</strong> {{ order.customer_name }}</div>
+                        <div><strong>Teléfono:</strong> {{ order.customer_phone }}</div>
+                        <div><strong>Dirección:</strong> {{ order.customer_address }}</div>
+                         <div><strong>Método de Pago:</strong> <span class="capitalize">{{ order.payment_method || 'N/A' }}</span></div>
+                    </div>
+                </div>
+                
+                <table class="w-full mb-8 text-sm">
+                    <thead class="border-b-2 border-black">
+                        <tr>
+                            <th class="text-left py-2">Producto</th>
+                            <th class="text-center py-2">Cant</th>
+                            <th class="text-right py-2">Precio</th>
+                            <th class="text-right py-2">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="item in order.items" :key="item.id" class="border-b border-gray-200">
+                            <td class="py-2">
+                                {{ item.product_name }}
+                                <div v-if="item.variant_options" class="text-xs text-gray-500">
+                                   <span v-for="(value, key) in item.variant_options" :key="key" class="mr-1">
+                                        {{ key }}: {{ value }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="text-center py-2">{{ item.quantity }}</td>
+                            <td class="text-right py-2">{{ formatCurrency(item.unit_price) }}</td>
+                            <td class="text-right py-2">{{ formatCurrency(item.unit_price * item.quantity) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div class="flex justify-end">
+                    <div class="w-1/2 space-y-2 text-right">
+                        <div class="flex justify-between text-xl font-bold border-t border-black pt-2">
+                            <span>Total:</span>
+                            <span>{{ formatCurrency(order.total_price) }}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-12 text-center text-xs text-gray-500">
+                    <p>Gracias por su compra</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
 </template>
+
+<style>
+@media print {
+    .no-print, nav, header, aside, footer { display: none !important; }
+    .print-store-header { display: block !important; }
+    body, .bg-white { background: white !important; }
+    .shadow-sm { box-shadow: none !important; }
+}
+</style>

@@ -21,14 +21,29 @@ class OrdersExport implements FromCollection, WithHeadings
     {
         $query = Auth::user()->store->orders()->with(['items', 'items.product', 'items.variant']);
         if (!empty($this->filters['start_date']) && !empty($this->filters['end_date'])) {
-            $appTz = config('app.timezone', 'UTC');
+            $appTz = config('app.timezone', 'America/Bogota');
             $startLocal = \Carbon\Carbon::parse($this->filters['start_date'], $appTz)->startOfDay();
             $endLocal = \Carbon\Carbon::parse($this->filters['end_date'], $appTz)->endOfDay();
-            // Aseguramos comparación por fecha local
-            $query->whereRaw(
-                "DATE(CONVERT_TZ(created_at, 'UTC', ?)) BETWEEN ? AND ?",
-                [$appTz, $startLocal->toDateString(), $endLocal->toDateString()]
-            );
+            
+            $startUtc = $startLocal->copy()->timezone('UTC');
+            $endExclusiveUtc = $endLocal->copy()->addDay()->startOfDay()->timezone('UTC');
+
+             $query->where(function ($q) use ($startUtc, $endExclusiveUtc, $startLocal, $endLocal, $appTz) {
+                // Caso A: BD guarda en UTC (rango exclusivo del final)
+                $q->where(function ($qq) use ($startUtc, $endExclusiveUtc) {
+                    $qq->where('created_at', '>=', $startUtc)
+                       ->where('created_at', '<', $endExclusiveUtc);
+                })
+                // Caso B: BD guarda en hora local
+                ->orWhereRaw('DATE(created_at) BETWEEN ? AND ?', [
+                    $startLocal->toDateString(), $endLocal->toDateString()
+                ])
+                // Caso C: MySQL con tablas TZ
+                ->orWhereRaw(
+                    "DATE(CONVERT_TZ(created_at, 'UTC', ?)) BETWEEN ? AND ?",
+                    [$appTz, $startLocal->toDateString(), $endLocal->toDateString()]
+                );
+            });
         }
         $orders = $query->orderByDesc('sequence_number')->orderByDesc('id')->get();
 

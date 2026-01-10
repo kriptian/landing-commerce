@@ -4,6 +4,15 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import { onMounted, computed, ref } from 'vue';
 import { downloadPDF, sharePDF } from '@/Utils/pdfUtils';
 
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(value);
+};
+
 const props = defineProps({
     sale: Object,
     store: Object,
@@ -150,7 +159,7 @@ onMounted(() => {
                                 </div>
                                 <div>
                                     <p class="text-sm text-gray-500">Vendedor</p>
-                                    <p class="font-medium">{{ sale.user?.name || 'N/A' }}</p>
+                                    <p class="font-medium">{{ sale.user?.name || 'Administrador' }}</p>
                                 </div>
                                 <div>
                                     <p class="text-sm text-gray-500">Método de Pago</p>
@@ -188,10 +197,10 @@ onMounted(() => {
                                             <td class="px-4 py-3">{{ item.quantity }}</td>
                                             <td class="px-4 py-3">
                                                 <div v-if="item.original_price && item.original_price > item.unit_price">
-                                                    <p class="text-sm text-gray-400 line-through">${{ parseFloat(item.original_price).toFixed(2) }}</p>
-                                                    <p class="font-medium">${{ parseFloat(item.unit_price).toFixed(2) }}</p>
+                                                    <p class="text-sm text-gray-400 line-through">{{ formatCurrency(item.original_price) }}</p>
+                                                    <p class="font-medium">{{ formatCurrency(item.unit_price) }}</p>
                                                 </div>
-                                                <p v-else>${{ parseFloat(item.unit_price).toFixed(2) }}</p>
+                                                <p v-else>{{ formatCurrency(item.unit_price) }}</p>
                                             </td>
                                             <td class="px-4 py-3">
                                                 <span v-if="item.discount_percent > 0" class="text-sm text-green-600 font-medium">
@@ -199,7 +208,7 @@ onMounted(() => {
                                                 </span>
                                                 <span v-else class="text-sm text-gray-400">-</span>
                                             </td>
-                                            <td class="px-4 py-3 font-medium">${{ parseFloat(item.subtotal).toFixed(2) }}</td>
+                                            <td class="px-4 py-3 font-medium">{{ formatCurrency(item.subtotal) }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -354,10 +363,10 @@ onMounted(() => {
                                             <td class="px-4 py-3">{{ item.quantity }}</td>
                                             <td class="px-4 py-3">
                                                 <div v-if="item.original_price && item.original_price > item.unit_price">
-                                                    <p class="text-sm text-gray-400 line-through">${{ parseFloat(item.original_price).toFixed(2) }}</p>
-                                                    <p class="font-medium">${{ parseFloat(item.unit_price).toFixed(2) }}</p>
+                                                    <p class="text-sm text-gray-400 line-through">{{ formatCurrency(item.original_price) }}</p>
+                                                    <p class="font-medium">{{ formatCurrency(item.unit_price) }}</p>
                                                 </div>
-                                                <p v-else>${{ parseFloat(item.unit_price).toFixed(2) }}</p>
+                                                <p v-else>{{ formatCurrency(item.unit_price) }}</p>
                                             </td>
                                             <td class="px-4 py-3">
                                                 <span v-if="item.discount_percent > 0" class="text-sm text-green-600 font-medium">
@@ -365,7 +374,7 @@ onMounted(() => {
                                                 </span>
                                                 <span v-else class="text-sm text-gray-400">-</span>
                                             </td>
-                                            <td class="px-4 py-3 font-medium">${{ parseFloat(item.subtotal).toFixed(2) }}</td>
+                                            <td class="px-4 py-3 font-medium">{{ formatCurrency(item.subtotal) }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -378,16 +387,16 @@ onMounted(() => {
                                 <div class="w-64 space-y-2">
                                     <div class="flex justify-between">
                                         <span>Subtotal:</span>
-                                        <span>${{ parseFloat(sale.subtotal).toFixed(2) }}</span>
+                                        <span>{{ formatCurrency(sale.subtotal) }}</span>
                                     </div>
                                     <!-- Descuento manual de la venta -->
                                     <div v-if="sale.discount > 0" class="flex justify-between text-red-600">
                                         <span>Descuento manual:</span>
-                                        <span>-${{ parseFloat(sale.discount).toFixed(2) }}</span>
+                                        <span>-{{ formatCurrency(sale.discount) }}</span>
                                     </div>
                                     <div class="flex justify-between text-lg font-bold pt-2 border-t">
                                         <span>Total:</span>
-                                        <span>${{ parseFloat(sale.total).toFixed(2) }}</span>
+                                        <span>{{ formatCurrency(sale.total) }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -426,7 +435,7 @@ onMounted(() => {
                     <div class="grid grid-cols-2 gap-4 text-sm">
                         <div><strong>Número:</strong> #{{ sale.sale_number }}</div>
                         <div><strong>Fecha:</strong> {{ new Date(sale.created_at).toLocaleString('es-CO') }}</div>
-                        <div><strong>Vendedor:</strong> {{ sale.user?.name || 'N/A' }}</div>
+                        <div><strong>Vendedor:</strong> {{ sale.user?.name || 'Administrador' }}</div>
                         <div><strong>Método de Pago:</strong> <span class="capitalize">{{ sale.payment_method }}</span></div>
                     </div>
                 </div>
@@ -449,8 +458,8 @@ onMounted(() => {
                                 </div>
                             </td>
                             <td class="text-center py-2">{{ item.quantity }}</td>
-                            <td class="text-right py-2">${{ parseFloat(item.unit_price).toFixed(2) }}</td>
-                            <td class="text-right py-2">${{ parseFloat(item.subtotal).toFixed(2) }}</td>
+                            <td class="text-right py-2">{{ formatCurrency(item.unit_price) }}</td>
+                            <td class="text-right py-2">{{ formatCurrency(item.subtotal) }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -459,15 +468,15 @@ onMounted(() => {
                     <div class="w-1/2 space-y-2 text-right">
                         <div class="flex justify-between">
                             <span>Subtotal:</span>
-                            <span>${{ parseFloat(sale.subtotal).toFixed(2) }}</span>
+                            <span>{{ formatCurrency(sale.subtotal) }}</span>
                         </div>
                         <div v-if="sale.discount > 0" class="flex justify-between text-red-600">
                             <span>Descuento:</span>
-                            <span>-${{ parseFloat(sale.discount).toFixed(2) }}</span>
+                            <span>-{{ formatCurrency(sale.discount) }}</span>
                         </div>
                         <div class="flex justify-between text-xl font-bold border-t border-black pt-2">
                             <span>Total:</span>
-                            <span>${{ parseFloat(sale.total).toFixed(2) }}</span>
+                            <span>{{ formatCurrency(sale.total) }}</span>
                         </div>
                     </div>
                 </div>
