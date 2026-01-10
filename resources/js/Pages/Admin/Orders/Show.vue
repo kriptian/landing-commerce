@@ -376,79 +376,90 @@ const notifyCurrentStatus = () => {
     />
 
     <!-- Hidden invoice container for PDF generation -->
-    <div class="fixed top-0 left-0 w-[210mm] bg-white z-[-100] opacity-0 pointer-events-none">
-        <div id="invoice-content-digital" class="p-8 bg-white text-black relative overflow-hidden">
+    <div id="invoice-content-digital" class="fixed top-0 left-0 w-[80mm] bg-white z-[-100] opacity-0 pointer-events-none">
+        <div class="bg-white text-black p-2 font-mono text-[11px] leading-tight" style="width: 80mm; margin: 0 auto; font-family: 'Courier New', Courier, monospace;">
             <!-- Watermark for PDF -->
              <div v-if="order.store?.name || $page.props.auth.user.store?.name" class="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-[0.12]">
-                <div class="text-[80px] font-[900] text-black uppercase whitespace-nowrap -rotate-45 transform select-none">
+                <div class="text-[60px] font-[900] text-black uppercase whitespace-nowrap -rotate-45 transform select-none">
                     {{ order.store?.name || $page.props.auth.user.store?.name }}
                 </div>
             </div>
 
             <div class="relative z-10">
                 <!-- Header with Logo -->
-                <div class="flex items-center justify-center gap-4 mb-8 pb-4 border-b-2 border-black">
+                 <div class="text-center mb-4">
                      <img 
                         v-if="order.store?.logo_url || $page.props.auth.user.store?.logo_url" 
                         :src="order.store?.logo_url || $page.props.auth.user.store?.logo_url" 
                         alt="Logo" 
-                        class="h-20 w-auto object-contain"
+                        class="h-12 w-auto object-contain mx-auto mb-2 grayscale"
                         crossorigin="anonymous"
                     />
-                    <h1 v-if="order.store?.name || $page.props.auth.user.store?.name" class="text-3xl font-bold">
-                        {{ order.store?.name || $page.props.auth.user.store?.name }}
-                    </h1>
-                </div>
-
-                <div class="mb-8">
-                    <h2 class="text-xl font-bold mb-4">Información de Venta</h2>
-                    <div class="grid grid-cols-2 gap-4 text-sm">
-                        <div><strong>Número:</strong> #{{ order.sequence_number ?? order.id }}</div>
-                        <div><strong>Fecha:</strong> {{ new Date(order.created_at).toLocaleString('es-CO') }}</div>
-                        <div><strong>Cliente:</strong> {{ order.customer_name }}</div>
-                        <div><strong>Teléfono:</strong> {{ order.customer_phone }}</div>
-                        <div><strong>Dirección:</strong> {{ order.customer_address }}</div>
-                         <div><strong>Método de Pago:</strong> <span class="capitalize">{{ order.payment_method || 'N/A' }}</span></div>
+                    <h2 class="font-bold text-base uppercase mb-1">{{ order.store?.name || $page.props.auth.user.store?.name }}</h2>
+                    <!-- Intentar mostrar info de la tienda si está disponible en 'store' prop o similar -->
+                    <div v-if="store" class="text-[10px] space-y-0.5" style="font-size: 10px;">
+                        <p v-if="store.nit">NIT: {{ store.nit }}</p>
+                        <p v-if="store.phone" class="whitespace-normal">Tel: {{ store.phone }}</p>
+                        <p v-if="store.address" class="whitespace-normal">{{ store.address }}</p>
+                        <p v-if="store.email" class="whitespace-normal break-words">{{ store.email }}</p>
                     </div>
                 </div>
+
+                <div class="border-b-2 border-dashed border-black my-2"></div>
+
+                <!-- Info -->
+                <div class="mb-3 text-[10px] space-y-1">
+                    <p>Canal: Tienda Online</p>
+                    <p>Fecha: {{ new Date(order.created_at).toLocaleString('es-CO') }}</p>
+                    <p>No. Orden: <span class="font-bold">#{{ order.sequence_number ?? order.id }}</span></p>
+                    <p v-if="order.customer_name">Cliente: {{ order.customer_name }}</p>
+                    <p v-if="order.customer_phone">Tel: {{ order.customer_phone }}</p>
+                    <p v-if="order.customer_address" class="whitespace-normal">Dir: {{ order.customer_address }}</p>
+                </div>
+
+                <div class="border-b border-dashed border-black my-2"></div>
                 
-                <table class="w-full mb-8 text-sm">
-                    <thead class="border-b-2 border-black">
-                        <tr>
-                            <th class="text-left py-2">Producto</th>
-                            <th class="text-center py-2">Cant</th>
-                            <th class="text-right py-2">Precio</th>
-                            <th class="text-right py-2">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="item in order.items" :key="item.id" class="border-b border-gray-200">
-                            <td class="py-2">
-                                {{ item.product_name }}
-                                <div v-if="item.variant_options" class="text-xs text-gray-500">
-                                   <span v-for="(value, key) in item.variant_options" :key="key" class="mr-1">
-                                        {{ key }}: {{ value }}
-                                    </span>
-                                </div>
-                            </td>
-                            <td class="text-center py-2">{{ item.quantity }}</td>
-                            <td class="text-right py-2">{{ formatCurrency(item.unit_price) }}</td>
-                            <td class="text-right py-2">{{ formatCurrency(item.unit_price * item.quantity) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <div class="flex justify-end">
-                    <div class="w-1/2 space-y-2 text-right">
-                        <div class="flex justify-between text-xl font-bold border-t border-black pt-2">
-                            <span>Total:</span>
-                            <span>{{ formatCurrency(order.total_price) }}</span>
+                <!-- Items -->
+                <div class="mb-4">
+                    <div v-for="item in order.items" :key="item.id" class="mb-2 pb-1 border-b border-dotted border-gray-400 last:border-0">
+                        <div class="flex justify-between font-bold items-start">
+                            <span class="w-[70%] leading-tight">{{ item.product_name }}</span>
+                            <span class="whitespace-nowrap">{{ formatCurrency(item.unit_price * item.quantity) }}</span>
+                        </div>
+                        <div class="flex flex-col text-[10px] text-gray-600 pl-2 mt-0.5">
+                            <div v-if="item.variant_options" class="text-xs text-gray-500 italic">
+                               <span v-for="(value, key) in item.variant_options" :key="key" class="mr-1">
+                                    {{ key }}: {{ value }}
+                                </span>
+                            </div>
+                            <span>{{ item.quantity }} x {{ formatCurrency(item.unit_price) }}</span>
                         </div>
                     </div>
                 </div>
                 
-                <div class="mt-12 text-center text-xs text-gray-500">
-                    <p>Gracias por su compra</p>
+                <div class="border-b-2 border-dashed border-black my-2"></div>
+
+                <!-- Totals -->
+                <div class="space-y-1 text-right">
+                     <div class="flex justify-between text-xl font-bold mt-2">
+                        <span>TOTAL</span>
+                        <span>{{ formatCurrency(order.total_price) }}</span>
+                    </div>
+
+                    <div class="flex justify-between text-[10px] mt-2 pt-1 border-dotted border-t border-gray-400">
+                        <span>Método Pago</span>
+                        <span class="capitalize">{{ order.payment_method || 'N/A' }}</span>
+                    </div>
+                    <div class="flex justify-between text-[10px]">
+                        <span>Estado</span>
+                        <span class="capitalize">{{ order.status }}</span>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div class="text-center mt-6 text-[10px] space-y-1 mb-4">
+                    <p>¡Gracias por su compra!</p>
+                    <p class="italic">Para consultas sobre su envío, contáctenos.</p>
                 </div>
             </div>
 
@@ -458,9 +469,34 @@ const notifyCurrentStatus = () => {
 
 <style>
 @media print {
-    .no-print, nav, header, aside, footer { display: none !important; }
-    .print-store-header { display: block !important; }
-    body, .bg-white { background: white !important; }
-    .shadow-sm { box-shadow: none !important; }
+    /* Ocultar todo el contenido normal */
+    body * {
+        visibility: hidden;
+    }
+
+    /* Mostrar solo el contenido de la factura nueva */
+    #invoice-content-digital, 
+    #invoice-content-digital * {
+        visibility: visible;
+    }
+
+    /* Posicionar la factura correctamente */
+    #invoice-content-digital {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 80mm !important;
+        opacity: 1 !important;
+        z-index: 9999;
+        margin: 0;
+        padding: 0;
+        background: white !important;
+    }
+    
+    /* Asegurar que no haya márgenes extraños en la página */
+    @page {
+        margin: 0;
+        size: auto; 
+    }
 }
 </style>

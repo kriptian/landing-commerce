@@ -276,8 +276,21 @@ const calculateSaleProfit = (sale) => {
 // Estado del carrito de venta
 const cartItems = ref([]);
 const searchQuery = ref('');
+const searchInput = ref(null); // Ref para el input de búsqueda
 const searchResults = ref([]);
 const isSearching = ref(false);
+
+// Función para enfocar el input de búsqueda
+const focusSearchInput = () => {
+    // Solo enfocar en desktop donde existe este input específico
+    if (window.innerWidth >= 1024) {
+        nextTick(() => {
+            if (searchInput.value) {
+                searchInput.value.focus();
+            }
+        });
+    }
+};
 const showBarcodeScanner = ref(false);
 const barcodeInput = ref('');
 const showPaymentModal = ref(false);
@@ -457,9 +470,11 @@ const searchByBarcode = async (barcode) => {
             }
         } else {
             alert('Producto no encontrado con ese código de barras');
+            focusSearchInput();
         }
     } catch (error) {
         alert('Error al buscar producto');
+        focusSearchInput();
     }
 };
 
@@ -510,6 +525,9 @@ const addToCart = (product, variant = null) => {
     
     searchQuery.value = '';
     searchResults.value = [];
+    
+    // Enfocar nuevamente el input de búsqueda para permitir escaneo continuo
+    focusSearchInput();
 };
 
 // Obtener stock disponible de un item
@@ -575,9 +593,18 @@ const getStockTextClass = (item) => {
     return 'text-gray-600 text-xs';
 };
 
+// Cancelar venta y limpiar carrito
+const cancelSale = () => {
+    cartItems.value = [];
+    discount.value = 0;
+    discountType.value = 'amount';
+    focusSearchInput();
+};
+
 // Remover item del carrito
 const removeFromCart = (index) => {
     cartItems.value.splice(index, 1);
+    focusSearchInput(); // Enfocar también al eliminar un item singular
 };
 
 // Actualizar cantidad
@@ -901,6 +928,9 @@ const ensureCsrfToken = () => {
 // Asegurar que el token CSRF esté actualizado cuando se carga la página
 // Esto es especialmente importante después del login cuando el token se regenera
 onMounted(() => {
+    // Enfocar el input de búsqueda inicialmente
+    focusSearchInput();
+
     // Esperar a que el DOM esté completamente cargado y el meta tag esté actualizado
     // Después del login, Inertia puede tardar un momento en actualizar el meta tag
     setTimeout(() => {
@@ -1311,6 +1341,27 @@ watch(searchQuery, async (newValue) => {
     }, 300);
 });
 
+// Watch global para enfocar el buscador al cerrar cualquier modal
+watch([
+    showVariantSelectorModal, 
+    showProductCatalogModal, 
+    showProductDiscountModal, 
+    showGeneralDiscountModal, 
+    showPaymentModal, 
+    showInvoiceModal,
+    showExpenseModal,
+    showStockAlertModal
+], (newValues, oldValues) => {
+    // Si alguno cambió a false (se cerró), y estamos en desktop, enfocar
+    const someClosed = newValues.some((val, index) => !val && oldValues[index]);
+    if (someClosed) {
+        // Pequeño delay para asegurar que sobrescribimos el "restore focus" de la librería del modal
+        setTimeout(() => {
+            focusSearchInput();
+        }, 150); 
+    }
+});
+
 // Lógica para redimensionar paneles (Split Pane)
 const leftPanelWidth = ref(50); // Porcentaje inicial
 const isResizing = ref(false);
@@ -1384,6 +1435,7 @@ const stopResize = () => {
 
                         <div class="flex-1 relative">
                             <input
+                                ref="searchInput"
                                 v-model="searchQuery"
                                 type="text"
                                 placeholder="Buscar producto..."
@@ -1639,7 +1691,7 @@ const stopResize = () => {
                                 Procesar Venta
                             </button>
                             <button
-                                @click="cartItems = []; discount = 0; discountType = 'amount'"
+                                @click="cancelSale"
                                 class="flex-1 py-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 font-semibold text-base border border-red-300"
                             >
                                 Cancelar
@@ -2032,86 +2084,82 @@ const stopResize = () => {
                 </div>
                 
                 <!-- Hidden invoice container for PDF generation -->
-                <div class="fixed top-0 left-0 w-[210mm] bg-white z-[-100] opacity-0 pointer-events-none">
-                    <div id="invoice-content-pos" class="p-8 bg-white text-black relative overflow-hidden">
-                        <!-- Watermark for PDF -->
-                        <div v-if="store?.name" class="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-[0.12]">
-                            <div class="text-[80px] font-[900] text-black uppercase whitespace-nowrap -rotate-45 transform select-none">
-                                {{ store.name }}
+                <div id="invoice-content-pos" class="fixed top-0 left-0 w-[80mm] bg-white z-[-100] opacity-0 pointer-events-none">
+                    <div class="bg-white text-black p-2 font-mono text-[11px] leading-tight" style="width: 80mm; margin: 0 auto; font-family: 'Courier New', Courier, monospace;">
+                        <!-- Header -->
+                        <div class="text-center mb-4">
+                             <img 
+                                v-if="store?.logo_url" 
+                                :src="store.logo_url" 
+                                alt="Logo" 
+                                class="h-12 w-auto object-contain mx-auto mb-2 grayscale"
+                                crossorigin="anonymous"
+                            />
+                            <h2 class="font-bold text-base uppercase mb-1">{{ store?.name }}</h2>
+                            <div class="text-[10px] space-y-0.5" style="font-size: 10px;">
+                                <p v-if="store?.nit">NIT: {{ store.nit }}</p>
+                                <p v-if="store?.phone" class="whitespace-normal">Tel: {{ store.phone }}</p>
+                                <p v-if="store?.address" class="whitespace-normal">{{ store.address }}</p>
+                                <p v-if="store?.email" class="whitespace-normal break-words">{{ store.email }}</p>
                             </div>
                         </div>
 
-                        <div v-if="lastCreatedSale" class="relative z-10">
-                            <!-- Header with Logo -->
-                            <div class="flex items-center justify-center gap-4 mb-8 pb-4 border-b-2 border-black">
-                                <img 
-                                    v-if="store?.logo_url" 
-                                    :src="store.logo_url" 
-                                    alt="Logo" 
-                                    class="h-20 w-auto object-contain"
-                                    crossorigin="anonymous"
-                                />
-                                <h1 v-if="store?.name" class="text-3xl font-bold">{{ store.name }}</h1>
-                            </div>
+                        <div class="border-b-2 border-dashed border-black my-2"></div>
 
-                            <div class="mb-8">
-                                <h2 class="text-xl font-bold mb-4">Información de Venta</h2>
-                                <div class="grid grid-cols-2 gap-4 text-sm">
-                                    <div><strong>Número:</strong> #{{ lastCreatedSale.sale_number }}</div>
-                                    <div><strong>Fecha:</strong> {{ new Date(lastCreatedSale.created_at).toLocaleString('es-CO') }}</div>
-                                    <div><strong>Vendedor:</strong> {{ lastCreatedSale.user?.name || 'N/A' }}</div>
-                                    <div><strong>Método de Pago:</strong> <span class="capitalize">{{ lastCreatedSale.payment_method }}</span></div>
+                        <!-- Info -->
+                        <div class="mb-3 text-[10px] space-y-1">
+                            <p v-if="lastCreatedSale?.user?.name">Le atendió: {{ lastCreatedSale.user.name }}</p>
+                            <p>Fecha: {{ lastCreatedSale ? formatDate(lastCreatedSale.created_at) : '' }}</p>
+                            <p>No. Fac: <span class="font-bold">{{ lastCreatedSale?.sale_number }}</span></p>
+                             <p v-if="lastCreatedSale?.customer_name">Cliente: {{ lastCreatedSale.customer_name }}</p>
+                             <p v-if="lastCreatedSale?.customer_nit">CC/NIT: {{ lastCreatedSale.customer_nit }}</p>
+                        </div>
+
+                        <div class="border-b border-dashed border-black my-2"></div>
+
+                        <!-- Items -->
+                        <div class="mb-4">
+                            <div v-for="item in lastCreatedSale?.items" :key="item.id" class="mb-2 pb-1 border-b border-dotted border-gray-400 last:border-0">
+                                <div class="flex justify-between font-bold items-start">
+                                    <span class="w-[70%] leading-tight">{{ item.product_name }}</span>
+                                    <span class="whitespace-nowrap">{{ formatCurrency(item.subtotal) }}</span>
+                                </div>
+                                <div class="flex flex-col text-[10px] text-gray-600 pl-2 mt-0.5">
+                                    <span v-if="item.variant_options" class="italic">{{ Object.values(item.variant_options).join('/') }}</span>
+                                    <span>{{ item.quantity }} x {{ formatCurrency(item.unit_price) }}</span>
                                 </div>
                             </div>
-                            
-                            <table class="w-full mb-8 text-sm">
-                                <thead class="border-b-2 border-black">
-                                    <tr>
-                                        <th class="text-left py-2">Producto</th>
-                                        <th class="text-center py-2">Cant</th>
-                                        <th class="text-right py-2">Precio</th>
-                                        <th class="text-right py-2">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="item in lastCreatedSale.items" :key="item.id" class="border-b border-gray-200">
-                                        <td class="py-2">
-                                            {{ item.product_name }}
-                                            <div v-if="item.variant_options" class="text-xs text-gray-500">
-                                                {{ Object.values(item.variant_options).join(' / ') }}
-                                            </div>
-                                        </td>
-                                        <td class="text-center py-2">{{ item.quantity }}</td>
-                                        <td class="text-right py-2">{{ formatCurrency(item.unit_price) }}</td>
-                                        <td class="text-right py-2">{{ formatCurrency(item.subtotal) }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            
-                            <div class="flex justify-end">
-                                <div class="w-1/2 space-y-2 text-right">
-                                    <div class="flex justify-between">
-                                        <span>Subtotal:</span>
-                                        <span>{{ formatCurrency(lastCreatedSale.subtotal) }}</span>
-                                    </div>
-                                    <div v-if="lastCreatedSale.discount > 0" class="flex justify-between text-red-600">
-                                        <span>Descuento:</span>
-                                        <span>-{{ formatCurrency(lastCreatedSale.discount) }}</span>
-                                    </div>
-                                    <div class="flex justify-between text-xl font-bold border-t border-black pt-2">
-                                        <span>Total:</span>
-                                        <span>{{ formatCurrency(lastCreatedSale.total) }}</span>
-                                    </div>
-                                </div>
-                            </div>
+                        </div>
 
-                            <div v-if="lastCreatedSale.notes" class="mt-8 pt-4 border-t border-gray-200">
-                                <p class="text-sm font-bold">Notas:</p>
-                                <p class="text-sm">{{ lastCreatedSale.notes }}</p>
+                        <div class="border-b-2 border-dashed border-black my-2"></div>
+
+                        <!-- Totals -->
+                        <div class="space-y-1 text-right">
+                             <div v-if="lastCreatedSale?.discount > 0" class="flex justify-between text-[10px]">
+                                <span>Subtotal</span>
+                                <span>{{ formatCurrency(lastCreatedSale.subtotal) }}</span>
                             </div>
-                            
-                            <div class="mt-12 text-center text-xs text-gray-500">
-                                <p>Gracias por su compra</p>
+                             <div v-if="lastCreatedSale?.discount > 0" class="flex justify-between text-[10px]">
+                                <span>Descuento</span>
+                                <span>-{{ formatCurrency(lastCreatedSale.discount) }}</span>
+                            </div>
+                             <div class="flex justify-between text-xl font-bold mt-2">
+                                <span>TOTAL</span>
+                                <span>{{ formatCurrency(lastCreatedSale?.total) }}</span>
+                            </div>
+                             <div class="flex justify-between text-[10px] mt-2 pt-1 border-dotted border-t border-gray-400">
+                                <span>Método Pago</span>
+                                <span class="capitalize">{{ lastCreatedSale?.payment_method }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="text-center mt-6 text-[10px] space-y-1 mb-4">
+                            <p>¡Gracias por su compra!</p>
+                            <p class="italic">Entrega este recibo para retirar tu orden</p>
+                             <div v-if="lastCreatedSale?.notes" class="mt-2 pt-2 border-t border-dotted border-gray-300">
+                                <p class="font-bold">Notas:</p>
+                                <p>{{ lastCreatedSale.notes }}</p>
                             </div>
                         </div>
                     </div>

@@ -408,169 +408,122 @@ onMounted(() => {
     </AuthenticatedLayout>
     
     <!-- Hidden invoice container for PDF generation -->
-    <div class="fixed top-0 left-0 w-[210mm] bg-white z-[-100] opacity-0 pointer-events-none">
-        <div id="invoice-content-show" class="p-8 bg-white text-black relative overflow-hidden">
-            <!-- Watermark for PDF -->
-            <div v-if="store?.name" class="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-[0.12]">
-                <div class="text-[80px] font-[900] text-black uppercase whitespace-nowrap -rotate-45 transform select-none">
-                    {{ store.name }}
+    <div id="invoice-content-show" class="fixed top-0 left-0 w-[80mm] bg-white z-[-100] opacity-0 pointer-events-none">
+        <div class="bg-white text-black p-2 font-mono text-[11px] leading-tight" style="width: 80mm; margin: 0 auto; font-family: 'Courier New', Courier, monospace;">
+            <!-- Header -->
+            <div class="text-center mb-4">
+                 <img 
+                    v-if="store?.logo_url" 
+                    :src="store.logo_url" 
+                    alt="Logo" 
+                    class="h-12 w-auto object-contain mx-auto mb-2 grayscale"
+                    crossorigin="anonymous"
+                />
+                <h2 class="font-bold text-base uppercase mb-1">{{ store?.name }}</h2>
+                <div class="text-[10px] space-y-0.5" style="font-size: 10px;">
+                    <p v-if="store?.nit">NIT: {{ store.nit }}</p>
+                    <p v-if="store?.phone" class="whitespace-normal">Tel: {{ store.phone }}</p>
+                    <p v-if="store?.address" class="whitespace-normal">{{ store.address }}</p>
+                    <p v-if="store?.email" class="whitespace-normal break-words">{{ store.email }}</p>
                 </div>
             </div>
 
-            <div v-if="sale" class="relative z-10">
-                <!-- Header with Logo -->
-                <div class="flex items-center justify-center gap-4 mb-8 pb-4 border-b-2 border-black">
-                    <img 
-                        v-if="store?.logo_url" 
-                        :src="store.logo_url" 
-                        alt="Logo" 
-                        class="h-20 w-auto object-contain"
-                        crossorigin="anonymous"
-                    />
-                    <h1 v-if="store?.name" class="text-3xl font-bold">{{ store.name }}</h1>
+            <div class="border-b-2 border-dashed border-black my-2"></div>
+
+            <div v-if="sale">
+                <!-- Info -->
+                <div class="mb-3 text-[10px] space-y-1">
+                    <p v-if="sale.user?.name">Le atendió: {{ sale.user.name }}</p>
+                    <p>Fecha: {{ new Date(sale.created_at).toLocaleString('es-CO') }}</p>
+                    <p>No. Fac: <span class="font-bold">{{ sale.sale_number }}</span></p>
+                    <p v-if="sale.customer_name">Cliente: {{ sale.customer_name }}</p>
+                    <p v-if="sale.customer_nit">CC/NIT: {{ sale.customer_nit }}</p>
                 </div>
 
-                <div class="mb-8">
-                    <h2 class="text-xl font-bold mb-4">Información de Venta</h2>
-                    <div class="grid grid-cols-2 gap-4 text-sm">
-                        <div><strong>Número:</strong> #{{ sale.sale_number }}</div>
-                        <div><strong>Fecha:</strong> {{ new Date(sale.created_at).toLocaleString('es-CO') }}</div>
-                        <div><strong>Vendedor:</strong> {{ sale.user?.name || 'Administrador' }}</div>
-                        <div><strong>Método de Pago:</strong> <span class="capitalize">{{ sale.payment_method }}</span></div>
-                    </div>
-                </div>
-                
-                <table class="w-full mb-8 text-sm">
-                    <thead class="border-b-2 border-black">
-                        <tr>
-                            <th class="text-left py-2">Producto</th>
-                            <th class="text-center py-2">Cant</th>
-                            <th class="text-right py-2">Precio</th>
-                            <th class="text-right py-2">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="item in sale.items" :key="item.id" class="border-b border-gray-200">
-                            <td class="py-2">
-                                {{ item.product_name }}
-                                <div v-if="item.variant_options" class="text-xs text-gray-500">
-                                    {{ Object.values(item.variant_options).join(' / ') }}
-                                </div>
-                            </td>
-                            <td class="text-center py-2">{{ item.quantity }}</td>
-                            <td class="text-right py-2">{{ formatCurrency(item.unit_price) }}</td>
-                            <td class="text-right py-2">{{ formatCurrency(item.subtotal) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <div class="flex justify-end">
-                    <div class="w-1/2 space-y-2 text-right">
-                        <div class="flex justify-between">
-                            <span>Subtotal:</span>
-                            <span>{{ formatCurrency(sale.subtotal) }}</span>
+                <div class="border-b border-dashed border-black my-2"></div>
+
+                <!-- Items -->
+                <div class="mb-4">
+                    <div v-for="item in sale.items" :key="item.id" class="mb-2 pb-1 border-b border-dotted border-gray-400 last:border-0">
+                        <div class="flex justify-between font-bold items-start">
+                            <span class="w-[70%] leading-tight">{{ item.product_name }}</span>
+                            <span class="whitespace-nowrap">{{ formatCurrency(item.subtotal) }}</span>
                         </div>
-                        <div v-if="sale.discount > 0" class="flex justify-between text-red-600">
-                            <span>Descuento:</span>
-                            <span>-{{ formatCurrency(sale.discount) }}</span>
-                        </div>
-                        <div class="flex justify-between text-xl font-bold border-t border-black pt-2">
-                            <span>Total:</span>
-                            <span>{{ formatCurrency(sale.total) }}</span>
+                        <div class="flex flex-col text-[10px] text-gray-600 pl-2 mt-0.5">
+                            <div v-if="item.variant_options" class="text-xs text-gray-500 italic">
+                                {{ Object.values(item.variant_options).join(' / ') }}
+                            </div>
+                            <span>{{ item.quantity }} x {{ formatCurrency(item.unit_price) }}</span>
                         </div>
                     </div>
                 </div>
 
-                <div v-if="sale.notes" class="mt-8 pt-4 border-t border-gray-200">
-                    <p class="text-sm font-bold">Notas:</p>
-                    <p class="text-sm">{{ sale.notes }}</p>
+                <div class="border-b-2 border-dashed border-black my-2"></div>
+
+                <!-- Totals -->
+                <div class="space-y-1 text-right">
+                     <div v-if="sale.discount > 0" class="flex justify-between text-[10px]">
+                        <span>Subtotal</span>
+                        <span>{{ formatCurrency(sale.subtotal) }}</span>
+                    </div>
+                     <div v-if="sale.discount > 0" class="flex justify-between text-[10px]">
+                        <span>Descuento</span>
+                        <span>-{{ formatCurrency(sale.discount) }}</span>
+                    </div>
+                     <div class="flex justify-between text-xl font-bold mt-2">
+                        <span>TOTAL</span>
+                        <span>{{ formatCurrency(sale.total) }}</span>
+                    </div>
+                     <div class="flex justify-between text-[10px] mt-2 pt-1 border-dotted border-t border-gray-400">
+                        <span>Método Pago</span>
+                        <span class="capitalize">{{ sale.payment_method }}</span>
+                    </div>
                 </div>
-                
-                <div class="mt-12 text-center text-xs text-gray-500">
-                    <p>Gracias por su compra</p>
+
+                 <!-- Footer -->
+                <div class="text-center mt-6 text-[10px] space-y-1 mb-4">
+                    <p>¡Gracias por su compra!</p>
+                    <p class="italic">Entrega este recibo para retirar tu orden</p>
+                     <div v-if="sale.notes" class="mt-2 pt-2 border-t border-dotted border-gray-300">
+                        <p class="font-bold">Notas:</p>
+                        <p>{{ sale.notes }}</p>
+                    </div>
                 </div>
             </div>
-
         </div>
     </div>
 </template>
 
 <style>
 @media print {
-    /* Ocultar elementos de navegación y pestañas */
-    .no-print,
-    nav,
-    header,
-    aside,
-    footer {
-        display: none !important;
+    /* Ocultar todo el contenido normal */
+    body * {
+        visibility: hidden;
     }
-    
-    /* Ocultar pestañas/navegación específicamente */
-    .tabs,
-    [role="tablist"],
-    [role="tab"],
-    button[role="tab"],
-    nav[role="navigation"],
-    .nav-link,
-    .navigation {
-        display: none !important;
+
+    /* Mostrar solo el contenido de la factura nueva */
+    #invoice-content-show, 
+    #invoice-content-show * {
+        visibility: visible;
     }
-    
-    /* Ocultar header de la página pero mostrar el nombre de la tienda */
-    .print-store-header {
-        display: block !important;
-    }
-    
-    /* Estilos básicos para impresión */
-    body {
+
+    /* Posicionar la factura correctamente */
+    #invoice-content-show {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 80mm !important;
+        opacity: 1 !important;
+        z-index: 9999;
+        margin: 0;
+        padding: 0;
         background: white !important;
     }
     
-    .bg-white {
-        background: white !important;
-    }
-    
-    .shadow-sm {
-        box-shadow: none !important;
-    }
-}
-
-/* Estilos de marca de agua */
-.watermark-container {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    opacity: 0.12; /* Ajustado para mejor visibilidad */
-    z-index: 50; /* Por encima del contenido */
-    pointer-events: none;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-
-.watermark-text {
-    font-size: 8vw; /* Tamaño responsivo relativo al ancho */
-    font-weight: 900;
-    color: #000;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-@media print {
-    .watermark-container {
-        display: flex !important;
-        opacity: 0.08 !important; /* Un poco más sutil en impresión */
-    }
-    
-    .watermark-text {
-        font-size: 6rem; /* Tamaño fijo para impresión A4/Carta */
-        color: #000 !important;
-        -webkit-text-stroke: 1px #ccc; /* Borde opcional para mejor definición */
+    /* Asegurar que no haya márgenes extraños en la página */
+    @page {
+        margin: 0;
+        size: auto; 
     }
 }
 </style>

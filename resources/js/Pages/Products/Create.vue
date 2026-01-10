@@ -888,6 +888,12 @@ const submit = () => {
     });
 };
 
+const checkEnter = (e) => {
+    if (e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+    }
+};
+
 </script>
 
 <template>
@@ -902,7 +908,7 @@ const submit = () => {
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
-                        <form @submit.prevent="submit" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <form @submit.prevent="submit" @keydown.enter="checkEnter" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             
                             <div>
                                 <div class="mb-4">

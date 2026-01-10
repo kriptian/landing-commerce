@@ -1,0 +1,1 @@
+@media print{body *{visibility:hidden}#invoice-content-digital,#invoice-content-digital *{visibility:visible}#invoice-content-digital{position:absolute;left:0;top:0;width:80mm!important;opacity:1!important;z-index:9999;margin:0;padding:0;background:#fff!important}@page{margin:0;size:auto}}
