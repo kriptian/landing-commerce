@@ -596,14 +596,21 @@ const selectedVariant = computed(() => {
         // Intentar encontrar el stock REAL desde variants
         let realStock = selectedOptionStock.value; 
         
-        // Si no se encontró stock específico, usar 0 por seguridad
-        // (Aunque selectedOptionStock ya debería devolver 0 si falla)
+        // Buscar el ProductVariant real para obtener otros datos como alert
+        let matchingVariant = null;
+        if (props.product.variants && props.product.variants.length > 0) {
+            matchingVariant = props.product.variants.find(v => {
+                const vOpts = v.options || {};
+                return optionKeys.value.every(k => String(vOpts[k]) === String(selectedOptions.value[k]));
+            });
+        }
         
         return {
-            id: null, 
+            id: matchingVariant?.id || null, 
             options: options,
             price: selectedOptionPrice.value,
-            stock: realStock, 
+            stock: realStock,
+            alert: matchingVariant?.alert || 0, // Incluir alert
         };
     }
     
@@ -677,6 +684,7 @@ const originalPrice = computed(() => {
 const displayStock = computed(() => {
     // Cuando NO se maneja inventario, no limitamos cantidad
     if (!isInventoryTracked.value) return Number.POSITIVE_INFINITY;
+    
     // Con inventario activo: si hay variante seleccionada, usar su stock (o caer al del producto)
     if (selectedVariant.value) {
         const sv = Number(selectedVariant.value.stock);
@@ -684,7 +692,19 @@ const displayStock = computed(() => {
         if (!Number.isNaN(sv) && selectedVariant.value.stock !== null && selectedVariant.value.stock !== '') return sv;
         return Number(props.product.quantity || 0);
     }
-    // Sin variante seleccionada: usar inventario total del producto
+    
+    // Sin variante seleccionada: 
+    // Si tiene variantes, sumar el stock de todas para mostrar disponibilidad general
+    // Esto evita mostrar "Agotado" cuando hay variantes disponibles pero no seleccionadas
+    if (props.product.variants && props.product.variants.length > 0) {
+        return props.product.variants.reduce((acc, v) => {
+            // Si alguna variante no trackea inventario, asumimos stock infinito
+            if (v.track_inventory === false) return 999999;
+            return acc + Number(v.stock || 0);
+        }, 0);
+    }
+
+    // Sin variante seleccionada y sin variantes (producto simple): usar inventario total del producto
     return Number(props.product.quantity || 0);
 });
 
@@ -715,6 +735,32 @@ watch(selectedQuantity, (newQty) => {
     if (newQty < 1) {
         selectedQuantity.value = 1;
     }
+});
+
+// Badge de stock: 'Agotado' o '¡Pocas unidades!'
+const stockBadge = computed(() => {
+    if (!isInventoryTracked.value) return null;
+    const qty = Number(displayStock.value || 0);
+    
+    // Determinar la alerta correcta
+    let alert = 0;
+    if (selectedVariant.value) {
+        // Si hay variante seleccionada, usar su alerta
+        alert = Number(selectedVariant.value.alert || 0);
+    } else {
+        // Sin selección:
+        if (props.product.variants && props.product.variants.length > 0) {
+            // Usar una heurística: Suma de alertas si estamos mostrando suma de stock
+            // Esto asegura que si 1 variante tiene alerta 2 y stock 1, el total (1) <= total alerta (2) se cumpla.
+            alert = props.product.variants.reduce((acc, v) => acc + Number(v.alert || 0), 0);
+        } else {
+            alert = Number(props.product?.alert || 0);
+        }
+    }
+
+    if (qty <= 0) return 'Agotado';
+    if (alert > 0 && qty <= alert) return '¡Pocas unidades!';
+    return null;
 });
 
 const addToCart = () => {
@@ -802,15 +848,7 @@ const buyNow = () => {
     });
 };
 
-// Badge de stock: 'Agotado' o '¡Pocas unidades!'
-const stockBadge = computed(() => {
-    if (!isInventoryTracked.value) return null;
-    const qty = Number(displayStock.value || 0);
-    const alert = Number(props.product?.alert || 0);
-    if (qty <= 0) return 'Agotado';
-    if (alert > 0 && qty <= alert) return '¡Pocas unidades!';
-    return null;
-});
+
 
 const stockBadgeClass = computed(() => {
     const b = stockBadge.value;

@@ -165,12 +165,17 @@ const formatVariantName = (variant) => {
     return name;
 };
 
+// Calcular stock principal
 const calculateMainStock = (product) => {
-    if (!hasVariants(product)) {
-        return Number(product.quantity) || 0;
+    // CORRECCIÓN: Priorizar variants reales. 
+    // Si tiene variantes reales, sumar su stock.
+    if (product.variants && product.variants.length > 0) {
+        return product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
     }
-    // Sumar stock de variantes
-    return product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+    
+    // Si no tiene variantes (aunque tenga variant_options "fantasmas"), usar quantity del producto principal
+    // Esto arregla el bug donde productos simples con opciones residuales mostraban stock 0 o incorrecto
+    return Number(product.quantity) || 0;
 };
 
 // "sume también el valor de compra" -> Interpretado como VALOR TOTAL DEL INVENTARIO (Stock * Costo)
@@ -279,7 +284,7 @@ const submitQuickUpdate = (id, type, qtyAdd, purchasePrice, price) => {
         price: price
     }, {
         preserveScroll: true,
-        preserveState: true,
+        preserveState: false, // FORCE REFRESH: Ensure props are reloaded to show actual server data
         onSuccess: () => {
              // 1. Mostrar Feedback
              showAlert('success', 'Éxito', 'Inventario actualizado correctamente.');
@@ -309,6 +314,8 @@ const submitQuickUpdate = (id, type, qtyAdd, purchasePrice, price) => {
                 }
             }
             
+
+
             quickProcessing.value = false;
         },
         onError: () => {

@@ -877,9 +877,27 @@ watch(menuStack, () => {
 }, { deep: true });
 
 // Helpers de stock para badges en cards
+// Helpers de stock para badges en cards
 const isOutOfStock = (product) => {
     try {
         if (product && product.track_inventory === false) return false;
+        
+        // Si tiene variantes, verificar si alguna tiene stock
+        if (product.variants && product.variants.length > 0) {
+            // Verificar si alguna variante tiene stock > 0
+            const hasStock = product.variants.some(v => {
+                 // Si la variante no trackea inventario, se asume con stock
+                if (v.track_inventory === false) return true;
+                return Number(v.stock || 0) > 0;
+            });
+            // Si tiene variantes y al menos una tiene stock, NO está agotado
+            if (hasStock) return false;
+            
+            // Si tiene variantes y NINGUNA tiene stock, está agotado
+            return true;
+        }
+
+        // Si no tiene variantes, usar la cantidad del producto principal
         const qty = Number(product?.quantity || 0);
         return qty <= 0;
     } catch (e) { return false; }
@@ -888,11 +906,42 @@ const isOutOfStock = (product) => {
 const isLowStock = (product) => {
     try {
         if (product && product.track_inventory === false) return false;
-        const qty = Number(product?.quantity || 0);
-        const alert = Number(product?.alert || 0);
-        if (qty <= 0) return false;
-        if (alert <= 0) return false;
-        return qty <= alert;
+
+        // Si tiene variantes, verificar el estado de CADA una
+        if (product.variants && product.variants.length > 0) {
+            // Verificar primero si está totalmente agotado
+            if (isOutOfStock(product)) return false;
+
+            // Filtrar variantes que están "disponibles" (stock > 0 o sin tracking)
+            const availableVariants = product.variants.filter(v => 
+                v.track_inventory === false || Number(v.stock || 0) > 0
+            );
+
+            // Si no hay disponibles, debería haber caído en isOutOfStock, pero por seguridad:
+            if (availableVariants.length === 0) return false;
+
+            // Verificar si TODAS las variantes disponibles están en "picas unidades"
+            // Una variante está baja si trackea inventario, tiene alerta > 0 y stock <= alerta
+            const allLow = availableVariants.every(v => {
+                // Si no trackea, nunca es 'low stock'
+                if (v.track_inventory === false) return false;
+                
+                const variantAlert = Number(v.alert || 0);
+                // Si no tiene alerta configurada, no es 'low stock'
+                if (variantAlert <= 0) return false;
+                
+                return Number(v.stock || 0) <= variantAlert;
+            });
+
+            return allLow;
+        } else {
+             // Si no tiene variantes
+            const qty = Number(product?.quantity || 0);
+            const alert = Number(product?.alert || 0);
+            if (qty <= 0) return false; // Si es 0 o menos, es "agotado"
+            if (alert <= 0) return false;
+            return qty <= alert;
+        }
     } catch (e) { return false; }
 };
 

@@ -39,6 +39,7 @@ class VariantOption extends Model
         'stock',
         'alert',
         'purchase_price',
+        'children',
     ];
 
     /**

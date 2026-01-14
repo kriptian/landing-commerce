@@ -113,8 +113,9 @@ const handleVariantAddToCart = (product, variant) => {
 };
 
 const handleProductClick = (product) => {
-    // Si tiene variantes (variant_options), abrir modal
-    if (product.variant_options && product.variant_options.length > 0) {
+    // Si tiene variantes REALES, abrir modal
+    // Usamos variants (array de modelos) en lugar de variant_options para evitar falsos positivos con opciones fantasma
+    if (product.variants && product.variants.length > 0) {
         openVariantSelector(product);
     } else {
         addToCart(product);
@@ -407,7 +408,21 @@ const filteredProducts = computed(() => {
         products = products.filter(p => 
             p.name.toLowerCase().includes(query) ||
             p.id.toString().includes(query) ||
-            (p.barcode && p.barcode.toLowerCase().includes(query))
+            (p.barcode && p.barcode.toLowerCase().includes(query)) ||
+            // Buscar en opciones de variantes (ej: "Rojo", "XL", o código de barras de variante)
+            (p.variant_options && p.variant_options.some(opt => 
+                opt.children && opt.children.some(child => 
+                    child.name.toLowerCase().includes(query) || 
+                    (child.barcode && child.barcode.toLowerCase().includes(query))
+                )
+            )) || 
+            // Buscar en variants (SKU)
+            (p.variants && p.variants.some(v => 
+                (v.sku && v.sku.toLowerCase().includes(query)) ||
+                (v.options && Object.values(v.options).some(val => 
+                    String(val).toLowerCase().includes(query)
+                ))
+            ))
         );
     }
     
@@ -704,6 +719,17 @@ const handlePriceInput = (index, event) => {
 
     // Formatear el input para visualización inmediata
     // Solo formatear si el usuario no está borrando todo (permitir campo vacío)
+    if (value !== '') {
+        event.target.value = formatNumberForInput(numberValue);
+    }
+};
+
+// Manejar input de dinero recibido (Efectivo) con formato
+const handleAmountTenderedInput = (event) => {
+    let value = event.target.value;
+    const numberValue = parseMoneyInput(value);
+    amountTendered.value = numberValue;
+    
     if (value !== '') {
         event.target.value = formatNumberForInput(numberValue);
     }
@@ -2002,11 +2028,12 @@ const stopResize = () => {
                     <div class="relative">
                         <span class="absolute left-3 top-2 text-gray-500">$</span>
                         <input 
-                            v-model="amountTendered"
-                            type="number" 
-                            step="0.01"
-                            class="w-full pl-7 rounded-md border-gray-300 focus:ring-green-500 focus:border-green-500"
-                            placeholder="0.00"
+                            :value="formatNumberForInput(amountTendered)"
+                            @input="handleAmountTenderedInput"
+                            type="text" 
+                            inputmode="numeric"
+                            class="w-full pl-7 rounded-md border-gray-300 focus:ring-green-500 focus:border-green-500 font-bold text-lg"
+                            placeholder="0"
                         >
                     </div>
                     

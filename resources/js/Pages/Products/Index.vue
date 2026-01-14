@@ -130,11 +130,14 @@ const startResize = (e) => {
     document.addEventListener('touchend', stopResize);
 };
 const getDisplayStock = (product) => {
-    // Si tiene opciones de variantes (sistema nuevo), es configurable: mostramos la suma
-    if (product.variant_options && product.variant_options.length > 0) {
-        return product.variants_sum_stock ?? 0;
+    // CORRECCIÓN: Priorizar variants reales.
+    // Si tiene variantes reales, sumar su stock.
+    if (product.variants && product.variants.length > 0) {
+        return product.variants_sum_stock ?? product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0) ?? 0;
     }
-    // Si no tiene opciones, es simple: mostramos su cantidad directa (ignorando ghost variants)
+    
+    // Si no tiene variantes (aunque tenga variant_options "fantasmas"), usar quantity del producto principal
+    // Esto corrección alinea el comportamiento con Inventario y POS
     return product.quantity;
 };
 </script>

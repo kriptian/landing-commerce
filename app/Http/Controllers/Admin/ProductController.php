@@ -24,8 +24,8 @@ class ProductController extends Controller
     {
         $store = $request->user()->store;
         $store = $request->user()->store;
-        // Cargar la suma de stock de variantes (variants_sum_stock) para corregir visualización en listado
-        $query = $store->products()->with(['category', 'variantOptions'])->withSum('variants', 'stock')->latest();
+        // Cargar 'variants' también para alinear la lógica de visualización con el Inventario
+        $query = $store->products()->with(['category', 'variantOptions', 'variants'])->withSum('variants', 'stock')->latest();
 
         if ($request->filled('category')) {
             $query->where('category_id', $request->integer('category'));

@@ -221,7 +221,34 @@ class PhysicalSaleController extends Controller
             ->where(function ($q) use ($query) {
                 $q->where('name', 'like', "%{$query}%")
                   ->orWhere('id', $query)
-                  ->orWhere('barcode', 'like', "%{$query}%");
+                  ->orWhere('barcode', 'like', "%{$query}%")
+                  ->orWhereHas('variants', function ($subQ) use ($query) {
+                        $subQ->where('sku', 'like', "%{$query}%")
+                             ->orWhere('options', 'like', "%{$query}%"); // Opcional: buscar por nombre de opción
+                  })
+                  ->orWhereHas('variants', function ($subQ) use ($query) {
+                        // Buscar por barcode de variante si existe la columna, o reusar la logica anterior si barcode está en VariantOption
+                        // En este proyecto, el barcode de variante parece estar en ProductVariant o VariantOption?
+                        // ProductVariant tiene 'sku', VariantOption tiene 'barcode'.
+                        // Revisando modelos: VariantOption tiene barcode. ProductVariant tiene sku?
+                        // Revisamos ProductVariant: 'sku' está fillable. 
+                        // Revisamos VariantOption: 'barcode' está fillable.
+                        // La búsqueda debe cubrir ambos casos probablemente.
+                  });
+
+                // Simplificación: Buscar en las relaciones relevantes
+                $q->where('name', 'like', "%{$query}%")
+                  ->orWhere('id', $query)
+                  ->orWhere('barcode', 'like', "%{$query}%")
+                   // Buscar en ProductVariant (SKU)
+                  ->orWhereHas('variants', function ($v) use ($query) {
+                      $v->where('sku', 'like', "%{$query}%");
+                  })
+                  // Buscar en VariantOption (Barcode y Nombre)
+                  ->orWhereHas('variantOptions', function ($vo) use ($query) {
+                      $vo->where('barcode', 'like', "%{$query}%")
+                         ->orWhere('name', 'like', "%{$query}%");
+                  });
             })
             ->with(['images', 'variants', 'category', 'variantOptions.children'])
             ->limit(20)
