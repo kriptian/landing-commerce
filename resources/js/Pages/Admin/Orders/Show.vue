@@ -15,6 +15,12 @@ const props = defineProps({
     store: Object,
 });
 
+// Ensure items is always an array
+const itemsList = computed(() => {
+    if (!props.order || !props.order.items) return [];
+    return Array.isArray(props.order.items) ? props.order.items : Object.values(props.order.items);
+});
+
 // --- Helper Functions ---
 const formatCurrency = (value) => {
     return new Intl.NumberFormat('es-CO', {
@@ -131,7 +137,7 @@ const storeUrl = computed(() => {
 // Resumen breve de ítems comprados
 const buildItemsSummary = () => {
     try {
-        const items = Array.isArray(props.order?.items) ? props.order.items : [];
+        const items = itemsList.value;
         if (!items.length) return '';
         const lines = items.map((it) => {
             const qty = Number(it.quantity || 0);
@@ -263,7 +269,7 @@ const notifyCurrentStatus = () => {
                         <div class="p-6">
                             <h3 class="text-lg font-semibold border-b pb-4 mb-4">Productos en la Orden</h3>
                             <div class="divide-y divide-gray-200">
-                                <div v-for="item in order.items" :key="item.id" class="py-4 flex justify-between items-start">
+                                <div v-for="item in itemsList" :key="item.id" class="py-4 flex justify-between items-start">
                                     <div class="flex-grow">
                                         <p class="font-bold text-gray-900">{{ item.product_name }}</p>
                                         <div v-if="item.variant_options" class="text-sm text-gray-600 mt-1">
@@ -407,41 +413,88 @@ const notifyCurrentStatus = () => {
 
                 <div class="border-b-2 border-dashed border-black my-2"></div>
 
-                <!-- Info -->
-                <div class="mb-3 text-[10px] space-y-1">
-                    <p>Canal: Tienda Online</p>
-                    <p>Fecha: {{ new Date(order.created_at).toLocaleString('es-CO') }}</p>
-                    <p>No. Orden: <span class="font-bold">#{{ order.sequence_number ?? order.id }}</span></p>
-                    <p v-if="order.customer_name">Cliente: {{ order.customer_name }}</p>
-                    <p v-if="order.customer_phone">Tel: {{ order.customer_phone }}</p>
-                    <p v-if="order.customer_address" class="whitespace-normal">Dir: {{ order.customer_address }}</p>
+                <!-- Info Grid -->
+                <div class="mb-3 text-[10px] grid grid-cols-2 gap-x-2 gap-y-1">
+                    <div class="col-span-2 text-center mb-1">
+                        <p class="text-sm font-bold">Orden #{{ order.sequence_number ?? order.id }}</p>
+                        <p class="text-[9px] text-gray-500">{{ new Date(order.created_at).toLocaleString('es-CO') }}</p>
+                    </div>
+                    
+                    <div>
+                        <span class="font-bold block text-gray-600">Canal:</span>
+                        <span>Tienda Online</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="font-bold block text-gray-600">Método de Pago:</span>
+                        <span class="capitalize">{{ order.payment_method || 'N/A' }}</span>
+                    </div>
+
+                    <div v-if="order.customer_name" class="col-span-2 mt-1 border-t border-dotted border-gray-300 pt-1">
+                        <p><span class="font-bold text-gray-600">Cliente:</span> {{ order.customer_name }}</p>
+                        <p v-if="order.customer_phone"><span class="font-bold text-gray-600">Tel:</span> {{ order.customer_phone }}</p>
+                        <p v-if="order.customer_address" class="leading-tight"><span class="font-bold text-gray-600">Dir:</span> {{ order.customer_address }}</p>
+                    </div>
                 </div>
 
-                <div class="border-b border-dashed border-black my-2"></div>
-                
+                <div class="border-b border-black my-2"></div>
+
                 <!-- Items -->
                 <div class="mb-4">
-                    <div v-for="item in order.items" :key="item.id" class="mb-2 pb-1 border-b border-dotted border-gray-400 last:border-0">
-                        <div class="flex justify-between font-bold items-start">
-                            <span class="w-[70%] leading-tight">{{ item.product_name }}</span>
-                            <span class="whitespace-nowrap">{{ formatCurrency(item.unit_price * item.quantity) }}</span>
+                     <!-- Simplified Header -->
+                     <div class="flex justify-between text-[9px] font-bold mb-2 uppercase text-gray-800">
+                        <span>Descripción</span>
+                        <span>Total</span>
+                    </div>
+
+                    <div v-for="item in itemsList" :key="item.id" class="mb-3 border-b border-gray-200 last:border-0 pb-2">
+                        <!-- Top Row: Product Name -->
+                        <div class="font-bold text-[11px] leading-tight mb-0.5">
+                            {{ item.product_name }}
                         </div>
-                        <div class="flex flex-col text-[10px] text-gray-600 pl-2 mt-0.5">
-                            <div v-if="item.variant_options" class="text-xs text-gray-500 italic">
-                               <span v-for="(value, key) in item.variant_options" :key="key" class="mr-1">
-                                    {{ key }}: {{ value }}
-                                </span>
+                        
+                        <!-- Variant Info -->
+                        <div v-if="item.variant_options" class="text-[9px] text-gray-500 italic mb-1">
+                             <span v-for="(value, key) in item.variant_options" :key="key" class="mr-1">
+                                {{ value }}
+                            </span>
+                        </div>
+
+                        <!-- Price / Calculation Row -->
+                        <div class="flex justify-between items-start text-[10px] mt-1">
+                             <!-- Left Col: Quantity x Price -->
+                            <div class="flex flex-col">
+                                <!-- Standard calculation line -->
+                                <span class="text-gray-800">{{ item.quantity }} x {{ formatCurrency(item.unit_price) }}</span>
+                                
+                                <!-- Extended Discount Info -->
+                                <div v-if="item.discount_percent > 0 || (item.original_price && item.original_price > item.unit_price)" 
+                                     class="flex flex-col mt-0.5"
+                                >
+                                    <!-- Original Price (Strikethrough) -->
+                                    <span style="text-decoration: line-through; color: #9ca3af;" class="text-[9px]">
+                                        Precio Normal: {{ formatCurrency(item.original_price || (item.unit_price * 100 / (100 - (item.discount_percent || 0)))) }}
+                                    </span>
+                                    
+                                    <!-- Discount Tag -->
+                                    <span class="text-[9px] font-bold text-gray-800">
+                                        Desc: {{ item.discount_percent || Math.round((1 - item.unit_price/item.original_price)*100) }}%
+                                    </span>
+                                </div>
                             </div>
-                            <span>{{ item.quantity }} x {{ formatCurrency(item.unit_price) }}</span>
+                            
+                            <!-- Right Col: Line Total -->
+                            <div class="font-bold text-[11px] mt-0.5">
+                                {{ formatCurrency(item.unit_price * item.quantity) }}
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="border-b-2 border-dashed border-black my-2"></div>
+                <div class="border-t border-black my-2 dashed"></div>
 
                 <!-- Totals -->
-                <div class="space-y-1 text-right">
-                     <div class="flex justify-between text-xl font-bold mt-2">
+                <div class="text-right text-[11px] space-y-1">
+                     <div class="flex justify-between text-base font-black pt-1">
                         <span>TOTAL</span>
                         <span>{{ formatCurrency(order.total_price) }}</span>
                     </div>
@@ -458,7 +511,7 @@ const notifyCurrentStatus = () => {
                 
                 <!-- Footer -->
                 <div class="text-center mt-6 text-[10px] space-y-1 mb-4">
-                    <p>¡Gracias por su compra!</p>
+                    <p class="font-medium">¡Gracias por su compra!</p>
                     <p class="italic">Para consultas sobre su envío, contáctenos.</p>
                 </div>
             </div>

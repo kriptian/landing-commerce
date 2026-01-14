@@ -120,13 +120,27 @@ class ReportController extends Controller
         foreach ($salesForProfit as $sale) {
             foreach ($sale->items as $item) {
                 $purchasePrice = 0;
-                if ($item->variant && $item->variant->purchase_price > 0) {
+                
+                // 1. Prioridad: Costo guardado (Snapshot) en el momento de la venta
+                if (!is_null($item->purchase_price) && $item->purchase_price !== '') {
+                    $purchasePrice = $item->purchase_price;
+                }
+                // 2. Fallback: Costo actual de la variante (si existe)
+                elseif ($item->variant && $item->variant->purchase_price > 0) {
                     $purchasePrice = $item->variant->purchase_price;
-                } elseif ($item->product && $item->product->purchase_price > 0) {
+                } 
+                // 3. Fallback: Costo actual del producto padre
+                elseif ($item->product && $item->product->purchase_price > 0) {
                     $purchasePrice = $item->product->purchase_price;
                 }
 
-                if ($purchasePrice > 0) {
+                // FIX: Calcular ganancia incluso si el costo es 0 (margen 100%)
+                // Pero mantenemos la verificación > 0 solo para el costo si queremos ser estrictos, 
+                // OJO: El usuario se quejaba de "profit is 0". Si costo es 0, profit = precio venta.
+                // Cambiamos la condición: Siempre calculamos profit, asumiendo costo 0 si no hay dato.
+                
+                // ¿Deberíamos filtrar ventas con precio 0? Probablemente sí para no ensuciar.
+                if ($item->unit_price > 0) {
                     $profit = ($item->unit_price - $purchasePrice) * $item->quantity;
                     $totalProfit += $profit;
                 }

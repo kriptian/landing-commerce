@@ -2169,7 +2169,7 @@ watch(galleryItems, (newItems, oldItems) => {
 
     <footer class="bg-white mt-16 border-t">
         <div class="container mx-auto px-6 py-4 text-center text-gray-500">
-            <p>&copy; 2025 {{ store.name }}</p>
+            <p>&copy; {{ new Date().getFullYear() }} {{ store.name }}</p>
         </div>
     </footer>
 

@@ -423,13 +423,28 @@ class PhysicalSaleController extends Controller
                     }
                 }
 
-                // Obtener opciones de variante si existe
+                // Obtener opciones de variante si existe y determinar costo (purchase_price)
                 $variantOptions = null;
+                $purchasePriceSnapshot = null;
+
                 if ($itemData['variant_id']) {
+                    // Reutilizamos la búsqueda de variante si ya se hizo arriba, o buscamos de nuevo si es necesario
+                    // Nota: Arriba se busca $variant para stock, pero es local al bloque if.
+                    // Buscamos aquí para asegurar disponibilidad
                     $variant = ProductVariant::find($itemData['variant_id']);
                     if ($variant) {
                         $variantOptions = $variant->options;
+                        // Prioridad costo variante > costo producto
+                        $purchasePriceSnapshot = $variant->purchase_price;
+                        
+                        // Si la variante no tiene costo, intentar usar el del producto padre como fallback
+                        if (is_null($purchasePriceSnapshot) || $purchasePriceSnapshot === '') {
+                             $purchasePriceSnapshot = $product->purchase_price;
+                        }
                     }
+                } else {
+                    // Producto simple
+                    $purchasePriceSnapshot = $product->purchase_price;
                 }
 
                 // Crear el item de la venta
@@ -443,6 +458,7 @@ class PhysicalSaleController extends Controller
                     'variant_options' => $variantOptions,
                     'original_price' => $itemData['original_price'] ?? null,
                     'discount_percent' => $itemData['discount_percent'] ?? 0,
+                    'purchase_price' => $purchasePriceSnapshot, // Snapshot del costo
                 ]);
             }
 
