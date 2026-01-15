@@ -34,6 +34,7 @@ const form = useForm({
     tiktok_url: store?.tiktok_url || '',
     custom_domain: store?.custom_domain || '',
     phone: store?.phone || '',
+    address: store?.address || '',
 });
 
 const logoPreview = ref(null);
@@ -131,6 +132,19 @@ const updateProfileInformation = () => {
                         placeholder="57xxxxxxxxxx"
                     />
                     <InputError class="mt-2" :message="form.errors.phone" />
+                </div>
+
+                <div>
+                    <InputLabel for="address" value="Dirección (Opcional)" />
+                    <TextInput
+                        id="address"
+                        type="text"
+                        class="mt-1 block w-full"
+                        v-model="form.address"
+                        autocomplete="address"
+                        placeholder="Calle 123 # 45-67"
+                    />
+                    <InputError class="mt-2" :message="form.errors.address" />
                 </div>
                 <div>
                     <InputLabel for="store_name" value="Nombre de la Tienda" />

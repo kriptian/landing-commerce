@@ -405,9 +405,10 @@ const notifyCurrentStatus = () => {
                     <!-- Intentar mostrar info de la tienda si está disponible en 'store' prop o similar -->
                     <div v-if="store" class="text-[10px] space-y-0.5" style="font-size: 10px;">
                         <p v-if="store.nit">NIT: {{ store.nit }}</p>
-                        <p v-if="store.phone" class="whitespace-normal">Tel: {{ store.phone }}</p>
                         <p v-if="store.address" class="whitespace-normal">{{ store.address }}</p>
+                        <p v-if="store.phone" class="whitespace-normal">Tel: {{ store.phone?.startsWith('57') ? store.phone.substring(2) : store.phone }}</p>
                         <p v-if="store.email" class="whitespace-normal break-words">{{ store.email }}</p>
+                        <p v-if="store.custom_domain" class="whitespace-normal break-words">{{ store.custom_domain }}</p>
                     </div>
                 </div>
 
