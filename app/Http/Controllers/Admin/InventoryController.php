@@ -181,7 +181,7 @@ class InventoryController extends Controller
         if (empty($term)) return response()->json([]);
 
         $products = $request->user()->store->products()
-            ->with(['variants']) // Cargar variantes
+            ->with(['variants', 'variantOptions.children']) // Cargar variantes y variant_options para distinguir simples vs configurables
             ->where(function($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
                   ->orWhere('barcode', 'like', "%{$term}%");

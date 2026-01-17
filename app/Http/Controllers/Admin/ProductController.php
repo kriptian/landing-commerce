@@ -137,18 +137,19 @@ class ProductController extends Controller
         if ($request->has('variant_attributes')) {
             $productData['variant_attributes'] = $request->input('variant_attributes');
         }
-        // Si no se envía la bandera, considerar true por defecto
-        if (!array_key_exists('track_inventory', $productData)) {
-            $productData['track_inventory'] = true;
-        }
-        // Si no se controla inventario, normalizamos cantidades nulas
-        if (!$productData['track_inventory']) {
-            $productData['quantity'] = 0;
-            $productData['alert'] = null;
-        }
+        
+        // Verificar si hay variantes ANTES de procesar inventario
         $hasVariants = $request->has('variants') && count($request->variants) > 0;
 
         if ($hasVariants) {
+            // Para productos con variantes
+            // Si no se envía la bandera, considerar true por defecto
+            if (!array_key_exists('track_inventory', $productData)) {
+                $productData['track_inventory'] = true;
+            }
+            // Convertir a boolean si viene como string
+            $productData['track_inventory'] = (bool) $productData['track_inventory'];
+            
             $sum = collect($request->variants)->sum(fn($v) => (int) ($v['stock'] ?? 0));
             // Si no se especificó stock por variante, conservar el inventario total ingresado
             $productData['quantity'] = $sum > 0 ? $sum : (int) ($request->input('quantity', 0));
@@ -156,13 +157,35 @@ class ProductController extends Controller
             if (!isset($productData['alert'])) {
                 $productData['alert'] = null;
             }
+            
+            // Si no se controla inventario, normalizamos cantidades nulas
+            if (!$productData['track_inventory']) {
+                $productData['quantity'] = 0;
+                $productData['alert'] = null;
+            }
         } else {
-             // FIX: Asegurar que se guarde la cantidad para productos simples
-             if (isset($productData['track_inventory']) && $productData['track_inventory']) {
-                 if ($request->has('quantity')) {
-                     $productData['quantity'] = (int) $request->input('quantity');
-                 }
-             }
+            // Para productos simples (sin variantes)
+            // Usamos boolean() para asegurar tipos correctos
+            $shouldTrack = $request->filled('track_inventory') ? $request->boolean('track_inventory') : true;
+            
+            // Establecer track_inventory en productData
+            $productData['track_inventory'] = $shouldTrack;
+             
+            if ($shouldTrack) {
+                // Si controla inventario, forzamos el valor del input quantity
+                // IMPORTANTE: Usar el valor del request directamente, no el de productData que podría estar vacío
+                $productData['quantity'] = (int) $request->input('quantity', 0);
+                // Mantener alert si viene en el request
+                if ($request->filled('alert')) {
+                    $productData['alert'] = (int) $request->input('alert');
+                } else {
+                    $productData['alert'] = null;
+                }
+            } else {
+                // Si no controla inventario, establecer valores a 0/null
+                $productData['quantity'] = 0;
+                $productData['alert'] = null;
+            }
         }
         
         $product = $request->user()->store->products()->create($productData);
@@ -193,6 +216,10 @@ class ProductController extends Controller
                     ]);
                 }
             }
+        } else {
+            // FIX PARANOICO: Si no debería tener variantes, nos aseguramos que no existan
+            // (por si algún Observer o lógica implícita las creó)
+            $product->variants()->delete();
         }
 
         // Guardar variant_options (nuevo sistema jerárquico)
@@ -299,6 +326,17 @@ class ProductController extends Controller
         }
 
         $product->load('images', 'category.parent', 'variants', 'variantOptions.children');
+
+        // FIX: Limpieza bidireccional de estados inconsistentes (GHOST DATA)
+        // 1. Si no hay variantes físicas (rows en product_variants), ignorar definiciones de opciones (variant_options)
+        if ($product->variants->isEmpty()) {
+            $product->setRelation('variantOptions', collect([]));
+        }
+        // 2. Si no hay definiciones de opciones (variant_options), ignorar variantes físicas (product_variants)
+        // Esto previene que el frontend crea que hay variantes cuando solo son datos residuales
+        if ($product->variantOptions->isEmpty()) {
+            $product->setRelation('variants', collect([]));
+        }
 
         // --- FIX DISCREPANCIA STOCK ---
         // Si el producto tiene variantes Y opciones de variantes (es un producto configurable real),
@@ -497,8 +535,18 @@ class ProductController extends Controller
             $productData['specifications'] = json_encode($specArray);
         }
 
+        // Verificar si hay variantes ANTES de procesar inventario
         $hasVariants = $request->has('variants') && count($request->variants) > 0;
+        
         if ($hasVariants) {
+            // Para productos con variantes
+            // Si no se envía la bandera, usar el valor del producto o true por defecto
+            if (!array_key_exists('track_inventory', $productData)) {
+                $productData['track_inventory'] = $product->track_inventory ?? true;
+            }
+            // Convertir a boolean si viene como string
+            $productData['track_inventory'] = (bool) $productData['track_inventory'];
+            
             // FIX: Priorizar la cantidad explícita enviada desde el frontend, ya que Edit.vue calcula la suma correcta (basada en definiciones)
             // y la suma de $request->variants (basada en combinaciones) puede estar inflada (doble conteo).
             if ($request->has('quantity')) {
@@ -511,18 +559,35 @@ class ProductController extends Controller
             if (!isset($productData['alert'])) {
                 $productData['alert'] = null;
             }
-        } else {
-            // FIX: Para productos simples (sin variantes) que controlan inventario, asegurar que se guarde la cantidad
-            if (isset($productData['track_inventory']) && $productData['track_inventory']) {
-                 if ($request->has('quantity')) {
-                     $productData['quantity'] = (int) $request->input('quantity');
-                 }
+            
+            // Si no se controla inventario, normalizamos cantidades nulas
+            if (!$productData['track_inventory']) {
+                $productData['quantity'] = 0;
+                $productData['alert'] = null;
             }
-        }
-        // Si NO se controla inventario, normalizamos cantidades
-        if (!$productData['track_inventory']) {
-            $productData['quantity'] = 0;
-            $productData['alert'] = null;
+        } else {
+            // Para productos simples (sin variantes)
+            // Recuperamos el valor real de track_inventory (del request o del producto)
+            $shouldTrack = $request->filled('track_inventory') ? $request->boolean('track_inventory') : ($product->track_inventory ?? true);
+            
+            // Establecer track_inventory en productData
+            $productData['track_inventory'] = $shouldTrack;
+
+            if ($shouldTrack) {
+                // Si controla inventario, usamos el valor del request directamente
+                // IMPORTANTE: Usar el valor del request directamente, no el de productData que podría estar vacío
+                $productData['quantity'] = (int) $request->input('quantity', $product->quantity);
+                // Mantener alert si viene en el request
+                if ($request->filled('alert')) {
+                    $productData['alert'] = (int) $request->input('alert');
+                } else {
+                    $productData['alert'] = $product->alert ?? null;
+                }
+            } else {
+                // Si no controla inventario, establecer valores a 0/null
+                $productData['quantity'] = 0;
+                $productData['alert'] = null;
+            }
         }
         
         $product->update($productData);

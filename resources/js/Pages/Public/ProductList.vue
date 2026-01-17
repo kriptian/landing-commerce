@@ -882,8 +882,15 @@ const isOutOfStock = (product) => {
     try {
         if (product && product.track_inventory === false) return false;
         
-        // Si tiene variantes, verificar si alguna tiene stock
-        if (product.variants && product.variants.length > 0) {
+        // Si tiene variantes y opciones definidas (ignorar ghost variants)
+        if (product.variants && product.variants.length > 0 && product.variant_options && product.variant_options.length > 0) {
+            
+            // FALLBACK: Si variantes suman 0 pero hay stock global, ignorar variantes
+            const variantSum = product.variants.reduce((acc, v) => acc + (Number(v.stock)||0), 0);
+            if (variantSum === 0 && (Number(product.quantity)||0) > 0) {
+                return false;
+            }
+
             // Verificar si alguna variante tiene stock > 0
             const hasStock = product.variants.some(v => {
                  // Si la variante no trackea inventario, se asume con stock
@@ -907,8 +914,20 @@ const isLowStock = (product) => {
     try {
         if (product && product.track_inventory === false) return false;
 
-        // Si tiene variantes, verificar el estado de CADA una
-        if (product.variants && product.variants.length > 0) {
+        // Si tiene variantes y opciones definidas (ignorar ghost variants)
+        if (product.variants && product.variants.length > 0 && product.variant_options && product.variant_options.length > 0) {
+            
+            // FALLBACK: Si variantes suman 0 pero hay stock global, tratar como simple
+            const variantSum = product.variants.reduce((acc, v) => acc + (Number(v.stock)||0), 0);
+            if (variantSum === 0 && (Number(product.quantity)||0) > 0) {
+                 // Caer al block "else" (lógica simple)… o duplicarla aquí.
+                 // Duplicamos lógica simple para evitar refactor masivo de ifs
+                const qty = Number(product.quantity || 0);
+                const alert = Number(product.alert || 0);
+                if (alert <= 0) return false;
+                return qty <= alert;
+            }
+
             // Verificar primero si está totalmente agotado
             if (isOutOfStock(product)) return false;
 

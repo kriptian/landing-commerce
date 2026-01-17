@@ -167,14 +167,14 @@ const formatVariantName = (variant) => {
 
 // Calcular stock principal
 const calculateMainStock = (product) => {
-    // CORRECCIÓN: Priorizar variants reales. 
-    // Si tiene variantes reales, sumar su stock.
-    if (product.variants && product.variants.length > 0) {
+    // CORRECCIÓN ROBUSTA: Solo sumar stock de variantes si realmente es un producto configurable
+    // (debe tener variantes físicas Y definiciones de opciones).
+    // Esto ignora "ghost variants" que puedan existir por error.
+    if (product.variants && product.variants.length > 0 && product.variant_options && product.variant_options.length > 0) {
         return product.variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
     }
     
     // Si no tiene variantes (aunque tenga variant_options "fantasmas"), usar quantity del producto principal
-    // Esto arregla el bug donde productos simples con opciones residuales mostraban stock 0 o incorrecto
     return Number(product.quantity) || 0;
 };
 
@@ -226,13 +226,16 @@ const closeQuickEntry = () => {
 };
 
 // Función core de búsqueda
-const fetchSearchResults = () => {
-    if (quickSearch.value.length < 2) return;
-    axios.get(route('admin.inventory.search', { q: quickSearch.value }))
-        .then(res => {
-            quickSearchResults.value = res.data;
-        })
-        .catch(err => console.error(err));
+const fetchSearchResults = async () => {
+    if (quickSearch.value.length < 2) return Promise.resolve();
+    try {
+        const res = await axios.get(route('admin.inventory.search', { q: quickSearch.value }));
+        quickSearchResults.value = res.data;
+        return Promise.resolve();
+    } catch (err) {
+        console.error(err);
+        return Promise.resolve(); // Resolver incluso en caso de error para no bloquear
+    }
 };
 
 let quickSearchTimer;
@@ -247,8 +250,21 @@ const searchProductsForModal = () => {
 
 const selectQuickProduct = (product) => {
     selectedQuickProduct.value = JSON.parse(JSON.stringify(product)); // Copia profunda para editar
+    
+    // CORRECCIÓN: Asegurar que quantity esté correctamente establecido para productos simples
+    // Si es producto simple (sin variantes reales), usar calculateMainStock para obtener el stock correcto
+    const hasRealVariants = selectedQuickProduct.value.variants && 
+                           selectedQuickProduct.value.variants.length > 0 && 
+                           selectedQuickProduct.value.variant_options && 
+                           selectedQuickProduct.value.variant_options.length > 0;
+    
+    if (!hasRealVariants) {
+        // Para productos simples, asegurar que quantity tenga el valor correcto
+        selectedQuickProduct.value.quantity = calculateMainStock(selectedQuickProduct.value);
+    }
+    
     // Inicializar campos de edición
-    if (selectedQuickProduct.value.variants && selectedQuickProduct.value.variants.length > 0) {
+    if (hasRealVariants) {
         selectedQuickProduct.value.variants.forEach(v => {
             v.qty_add = '';
             v.new_price = v.price;
@@ -285,33 +301,59 @@ const submitQuickUpdate = (id, type, qtyAdd, purchasePrice, price) => {
     }, {
         preserveScroll: true,
         preserveState: false, // FORCE REFRESH: Ensure props are reloaded to show actual server data
-        onSuccess: () => {
+        onSuccess: async () => {
              // 1. Mostrar Feedback
              showAlert('success', 'Éxito', 'Inventario actualizado correctamente.');
              
              // 2. Refresh inmediato de la lista de búsqueda (Backend Source of Truth)
              // Esto asegura que el "Total Stock" calculado sea el real de base de datos
-             fetchSearchResults();
+             await fetchSearchResults();
 
-             // 3. Actualizar modelo visual actual (Formulario)
+             // 3. Actualizar modelo visual actual (Formulario) con datos frescos del servidor
             if (type === 'product' && selectedQuickProduct.value && selectedQuickProduct.value.id === id) {
-                 if (qty > 0) {
-                     selectedQuickProduct.value.quantity = (Number(selectedQuickProduct.value.quantity) || 0) + qty;
+                 // Buscar el producto actualizado en los resultados de búsqueda
+                 const updatedProduct = quickSearchResults.value.find(p => p.id === id);
+                 if (updatedProduct) {
+                     // Actualizar el producto seleccionado con los datos frescos
+                     selectedQuickProduct.value.quantity = calculateMainStock(updatedProduct);
+                     selectedQuickProduct.value.purchase_price = updatedProduct.purchase_price;
+                     selectedQuickProduct.value.price = updatedProduct.price;
+                 } else {
+                     // Fallback: actualizar manualmente si no se encuentra en los resultados
+                     if (qty > 0) {
+                         selectedQuickProduct.value.quantity = (Number(selectedQuickProduct.value.quantity) || 0) + qty;
+                     }
+                     if (purchasePrice !== undefined) selectedQuickProduct.value.purchase_price = purchasePrice;
+                     if (price !== undefined) selectedQuickProduct.value.price = price;
                  }
                  selectedQuickProduct.value.qty_add = '';
-                 if (purchasePrice) selectedQuickProduct.value.purchase_price = purchasePrice;
-                 if (price) selectedQuickProduct.value.price = price;
 
             } else if (type === 'variant' && selectedQuickProduct.value) {
-                const v = selectedQuickProduct.value.variants.find(v => v.id === id);
-                if (v) {
-                    if (qty > 0) {
-                        v.stock = (Number(v.stock) || 0) + qty;
+                // Buscar el producto actualizado en los resultados de búsqueda
+                const updatedProduct = quickSearchResults.value.find(p => p.id === selectedQuickProduct.value.id);
+                if (updatedProduct && updatedProduct.variants) {
+                    const updatedVariant = updatedProduct.variants.find(v => v.id === id);
+                    if (updatedVariant) {
+                        const v = selectedQuickProduct.value.variants.find(v => v.id === id);
+                        if (v) {
+                            v.stock = Number(updatedVariant.stock) || 0;
+                            v.purchase_price = updatedVariant.purchase_price;
+                            v.price = updatedVariant.price;
+                        }
                     }
-                    v.qty_add = '';
-                    if (purchasePrice) v.purchase_price = purchasePrice;
-                    if (price) v.price = price;
+                } else {
+                    // Fallback: actualizar manualmente si no se encuentra en los resultados
+                    const v = selectedQuickProduct.value.variants.find(v => v.id === id);
+                    if (v) {
+                        if (qty > 0) {
+                            v.stock = (Number(v.stock) || 0) + qty;
+                        }
+                        if (purchasePrice !== undefined) v.purchase_price = purchasePrice;
+                        if (price !== undefined) v.price = price;
+                    }
                 }
+                const v = selectedQuickProduct.value.variants.find(v => v.id === id);
+                if (v) v.qty_add = '';
             }
             
 
@@ -628,10 +670,7 @@ const startResize = (e) => {
                          <div>
                             <div class="font-medium">{{ p.name }}</div>
                             <div class="text-xs text-gray-500">
-                                Stock Total: {{ (p.variants && p.variants.length > 0) 
-                                    ? p.variants.reduce((s,v)=>s+(Number(v.stock)||0), 0) 
-                                    : (p.quantity || 0) 
-                                }}
+                                Stock Total: {{ calculateMainStock(p) }}
                             </div>
                          </div>
                          <div class="text-indigo-600 opacity-0 group-hover:opacity-100 font-bold text-sm">SELECCIONAR</div>
@@ -646,12 +685,12 @@ const startResize = (e) => {
             <div v-else class="max-h-[60vh] overflow-y-auto pr-2">
                 
                 <!-- CASO: PRODUCTO SIMPLE -->
-                <div v-if="!selectedQuickProduct.variants || selectedQuickProduct.variants.length === 0">
+                <div v-if="!hasVariants(selectedQuickProduct)">
                     <div class="bg-gray-50 p-4 rounded-md border text-sm grid gap-4">
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-gray-500 text-xs">Stock Actual</label>
-                                <div class="font-bold text-lg">{{ selectedQuickProduct.quantity }}</div>
+                                <div class="font-bold text-lg">{{ calculateMainStock(selectedQuickProduct) }}</div>
                             </div>
                             <div>
                                 <label class="block text-gray-700 font-bold mb-1">Agregar Stock (+)</label>

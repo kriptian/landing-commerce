@@ -114,8 +114,16 @@ const handleVariantAddToCart = (product, variant) => {
 
 const handleProductClick = (product) => {
     // Si tiene variantes REALES, abrir modal
-    // Usamos variants (array de modelos) en lugar de variant_options para evitar falsos positivos con opciones fantasma
-    if (product.variants && product.variants.length > 0) {
+    // Validamos variants Y variant_options para ignorar basura (productos simples que parecen variantes)
+    if (product.variants && product.variants.length > 0 && product.variant_options && product.variant_options.length > 0) {
+        
+        // FALLBACK: Si variantes suman 0 stock pero hay cantidad global > 0, tratar como simple (ghost variants)
+        const vSum = product.variants.reduce((acc, v) => acc + (Number(v.stock)||0), 0);
+        if (vSum === 0 && (Number(product.quantity)||0) > 0) {
+            addToCart(product);
+            return;
+        }
+
         openVariantSelector(product);
     } else {
         addToCart(product);
@@ -1932,6 +1940,7 @@ const stopResize = () => {
                                 
                                 <!-- Total -->
                                 <div class="flex flex-col items-end gap-1 min-w-[80px]">
+
                                     <span class="text-xs text-gray-500">Total</span>
                                     <span class="font-semibold text-sm text-gray-900">
                                         {{ formatCurrency(item.quantity * item.unit_price) }}

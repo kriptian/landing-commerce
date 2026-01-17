@@ -223,6 +223,13 @@ const hydrateVariantParents = () => {
         return;
     }
     
+    // FIX PROACTIVO: Si no hay variantes físicas (models) reales, ignorar las opciones de variante
+    // para evitar inconsistencias de "ghost variants" (producto simple que parece tener variantes).
+    if (!props.product.variants || props.product.variants.length === 0) {
+        variantParents.value = [];
+        return;
+    }
+    
     // DEBUG: Log de lo que llega del backend
     
     // Mapa de dependencias desde variant_attributes
@@ -1273,10 +1280,8 @@ const checkEnter = (e) => {
                                                  v-model="form.quantity" 
                                                  type="number" 
                                                  class="block mt-1 w-full rounded-md shadow-sm border-gray-300" 
-                                                 :class="{ 'bg-gray-100': !form.track_inventory || hasSpecificInventory }"
-                                                 :disabled="!form.track_inventory || hasSpecificInventory" 
-                                                 :required="form.track_inventory && !hasSpecificInventory"
-                                                 title="Stock si no hay variantes. Con variantes, se suma automáticamente.">
+                                                 :required="form.track_inventory"
+                                                 title="Stock total del producto">
                                          </div>
                                           <div>
                                              <label for="alert_general" class="block font-medium text-sm text-gray-700">Alerta (Opcional)</label>

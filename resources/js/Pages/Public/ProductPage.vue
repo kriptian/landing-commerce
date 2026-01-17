@@ -694,9 +694,10 @@ const displayStock = computed(() => {
     }
     
     // Sin variante seleccionada: 
-    // Si tiene variantes, sumar el stock de todas para mostrar disponibilidad general
-    // Esto evita mostrar "Agotado" cuando hay variantes disponibles pero no seleccionadas
-    if (props.product.variants && props.product.variants.length > 0) {
+    // CORRECCIÓN: Solo sumar stock de variantes si realmente es un producto configurable
+    // (debe tener variantes físicas Y definiciones de opciones).
+    // Esto ignora "ghost variants" que puedan existir por error.
+    if (props.product.variants && props.product.variants.length > 0 && props.product.variant_options && props.product.variant_options.length > 0) {
         return props.product.variants.reduce((acc, v) => {
             // Si alguna variante no trackea inventario, asumimos stock infinito
             if (v.track_inventory === false) return 999999;
@@ -704,7 +705,7 @@ const displayStock = computed(() => {
         }, 0);
     }
 
-    // Sin variante seleccionada y sin variantes (producto simple): usar inventario total del producto
+    // Sin variante seleccionada y sin variantes REALES (producto simple): usar inventario total del producto
     return Number(props.product.quantity || 0);
 });
 
