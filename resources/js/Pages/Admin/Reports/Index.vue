@@ -551,7 +551,7 @@ const startResize = (e) => {
                                 <div class="flex justify-between items-center mb-4">
                                     <h3 class="text-lg font-semibold">Historial de Ventas Físicas</h3>
                                     <a 
-                                        :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date })"
+                                        :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date, search: physicalSalesFilters?.search })"
                                         v-if="physicalSales && physicalSales.data && physicalSales.data.length > 0"
                                         class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition"
                                     >
@@ -684,7 +684,7 @@ const startResize = (e) => {
                                     <h3 class="text-lg font-semibold text-red-600">Historial de Gastos</h3>
                                     <!-- Botón Exportar (Mismo endpoint, descarga todo el reporte multisheet) -->
                                     <a 
-                                        :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date })"
+                                        :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date, search: physicalSalesFilters?.search })"
                                         class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 focus:outline-none transition"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">

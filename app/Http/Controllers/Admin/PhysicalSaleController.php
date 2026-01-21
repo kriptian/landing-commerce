@@ -564,7 +564,7 @@ class PhysicalSaleController extends Controller
      */
     public function export(Request $request)
     {
-        $filters = $request->only(['start_date', 'end_date']);
+        $filters = $request->only(['start_date', 'end_date', 'search']);
         $fileName = 'balanze-pos-' . now()->format('Y-m-d') . '.xlsx';
         
         return Excel::download(new \App\Exports\PhysicalReportExport($filters), $fileName);

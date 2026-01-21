@@ -22,6 +22,12 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
     {
         $query = Auth::user()->store->physicalSales()->with(['user', 'items', 'items.product', 'items.variant']);
         
+        // Aplicar filtro de búsqueda por número de venta
+        if (!empty($this->filters['search'])) {
+            $search = $this->filters['search'];
+            $query->where('sale_number', 'like', "%{$search}%");
+        }
+        
         if (!empty($this->filters['start_date']) && !empty($this->filters['end_date'])) {
             $appTz = config('app.timezone', 'America/Bogota');
             $startLocal = \Carbon\Carbon::parse($this->filters['start_date'], $appTz)->startOfDay();

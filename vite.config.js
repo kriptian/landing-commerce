@@ -24,4 +24,8 @@ export default defineConfig({
             host: 'localhost',
         },
     },
+    optimizeDeps: {
+        include: ['html2canvas', 'jspdf'],
+        force: true,
+    },
 });
