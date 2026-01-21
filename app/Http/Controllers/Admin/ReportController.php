@@ -88,10 +88,18 @@ class ReportController extends Controller
         $store = $request->user()->store;
         $physicalSalesQuery = $store->physicalSales()->with(['user', 'items.product', 'items.variant']);
         
-        // Búsqueda por número de venta
+        // Búsqueda por número de venta o nombre de producto
         if (!empty($validated['search'])) {
             $search = $validated['search'];
-            $physicalSalesQuery->where('sale_number', 'like', "%{$search}%");
+            $physicalSalesQuery->where(function ($q) use ($search) {
+                $q->where('sale_number', 'like', "%{$search}%")
+                  ->orWhereHas('items', function ($itemQuery) use ($search) {
+                      $itemQuery->where('product_name', 'like', "%{$search}%")
+                                 ->orWhereHas('product', function ($productQuery) use ($search) {
+                                     $productQuery->where('name', 'like', "%{$search}%");
+                                 });
+                  });
+            });
         }
         
         // Aplicar filtros de fecha si existen

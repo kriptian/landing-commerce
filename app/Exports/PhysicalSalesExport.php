@@ -22,10 +22,18 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
     {
         $query = Auth::user()->store->physicalSales()->with(['user', 'items', 'items.product', 'items.variant']);
         
-        // Aplicar filtro de búsqueda por número de venta
+        // Aplicar filtro de búsqueda por número de venta o nombre de producto
         if (!empty($this->filters['search'])) {
             $search = $this->filters['search'];
-            $query->where('sale_number', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('sale_number', 'like', "%{$search}%")
+                  ->orWhereHas('items', function ($itemQuery) use ($search) {
+                      $itemQuery->where('product_name', 'like', "%{$search}%")
+                                 ->orWhereHas('product', function ($productQuery) use ($search) {
+                                     $productQuery->where('name', 'like', "%{$search}%");
+                                 });
+                  });
+            });
         }
         
         if (!empty($this->filters['start_date']) && !empty($this->filters['end_date'])) {
