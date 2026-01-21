@@ -105,7 +105,13 @@ class ReportController extends Controller
             $physicalSalesQuery->whereBetween('created_at', [$startUtc, $endExclusiveUtc]);
         }
         
-        $physicalSales = $physicalSalesQuery->latest()->paginate(20)->withQueryString();
+        // Preservar el parámetro 'type' en la paginación para ventas físicas
+        // CRÍTICO: Siempre preservar 'type=physical' en los links de paginación de ventas físicas
+        // Esto asegura que cuando el usuario hace clic en la paginación, se mantenga en la pestaña correcta
+        $queryParams = $request->only(['start_date', 'end_date', 'search']);
+        // SIEMPRE agregar 'type=physical' a los links de paginación de ventas físicas
+        $queryParams['type'] = 'physical';
+        $physicalSales = $physicalSalesQuery->latest()->paginate(20)->appends($queryParams);
         
         // Calcular estadísticas de ventas físicas
         $physicalSalesStatsQuery = clone $physicalSalesQuery;

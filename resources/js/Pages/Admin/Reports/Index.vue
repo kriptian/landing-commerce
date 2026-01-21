@@ -1,9 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
 import BarChart from '@/Components/BarChart.vue';
-import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 
 const props = defineProps({
     orders: Object,
@@ -259,12 +259,27 @@ const updateFades = () => {
     showLeftFade.value = left > 0;
     showRightFade.value = left < (maxScrollLeft - 1);
 };
+const page = usePage();
+
+// Sincronizar reportType con el parámetro 'type' de la URL cuando cambia
+watch(() => page.url, (newUrl) => {
+    const url = new URL(newUrl, window.location.origin);
+    const type = url.searchParams.get('type');
+    if (type === 'physical') {
+        reportType.value = 'physical';
+    } else {
+        reportType.value = 'digital';
+    }
+}, { immediate: true });
+
 onMounted(() => {
     // Check if 'type' query param exists and switch tab
     const urlParams = new URLSearchParams(window.location.search);
     const type = urlParams.get('type');
     if (type === 'physical') {
         reportType.value = 'physical';
+    } else {
+        reportType.value = 'digital';
     }
 
     nextTick(() => updateFades());

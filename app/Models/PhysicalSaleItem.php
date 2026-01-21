@@ -20,6 +20,7 @@ class PhysicalSaleItem extends Model
         'variant_options',
         'original_price',
         'discount_percent',
+        'purchase_price',
     ];
 
     protected $casts = [
@@ -28,6 +29,7 @@ class PhysicalSaleItem extends Model
         'subtotal' => 'decimal:2',
         'original_price' => 'decimal:2',
         'discount_percent' => 'decimal:2',
+        'purchase_price' => 'decimal:2',
     ];
 
     public function physicalSale()

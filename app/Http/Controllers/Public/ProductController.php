@@ -107,6 +107,37 @@ class ProductController extends Controller
             }
         }
 
+        // --- ORDENAMIENTO ---
+        $sort = $request->input('sort', 'latest'); // Por defecto: más recientes primero
+        switch ($sort) {
+            case 'name_asc':
+                $productsQuery->orderBy('name', 'asc');
+                break;
+            case 'name_desc':
+                $productsQuery->orderBy('name', 'desc');
+                break;
+            case 'price_asc':
+                $productsQuery->orderBy('price', 'asc');
+                break;
+            case 'price_desc':
+                $productsQuery->orderBy('price', 'desc');
+                break;
+            case 'category_asc':
+                $productsQuery->leftJoin('categories', 'products.category_id', '=', 'categories.id')
+                    ->orderBy('categories.name', 'asc')
+                    ->select('products.*');
+                break;
+            case 'category_desc':
+                $productsQuery->leftJoin('categories', 'products.category_id', '=', 'categories.id')
+                    ->orderBy('categories.name', 'desc')
+                    ->select('products.*');
+                break;
+            case 'latest':
+            default:
+                $productsQuery->latest();
+                break;
+        }
+
         // --- FIN DE LA LÓGICA ---
 
         // Verificar si hay productos con promoción en toda la tienda (no solo en la página actual)
@@ -144,7 +175,7 @@ class ProductController extends Controller
         }
 
         return Inertia::render('Public/ProductList', [
-            'products' => $productsQuery->latest()->paginate(36)->withQueryString(),
+            'products' => $productsQuery->paginate(36)->withQueryString(),
             'store' => [
                 'id' => $store->id,
                 'name' => $store->name,
@@ -189,6 +220,7 @@ class ProductController extends Controller
                 'categories' => $request->input('categories'),
                 'search' => $request->input('search'),
                 'promo' => $request->boolean('promo'),
+                'sort' => $request->input('sort', 'latest'),
             ],
         ]);
     }
@@ -210,9 +242,24 @@ class ProductController extends Controller
             ->when($product->category_id, function ($q) use ($product) {
                 $q->where('category_id', $product->category_id);
             })
+            ->with(['variants:id,product_id,stock', 'variantOptions:id,product_id'])
             ->latest()
             ->take(12)
             ->get(['id','name','price','promo_active','promo_discount_percent','quantity','alert','track_inventory','main_image_url']);
+
+        // Calcular stock total para productos relacionados considerando variantes
+        $related = $related->map(function ($relatedProduct) {
+            // Solo calcular stock de variantes si realmente es un producto configurable
+            // (debe tener variantes físicas Y definiciones de opciones)
+            if ($relatedProduct->variants && $relatedProduct->variants->count() > 0 
+                && $relatedProduct->variantOptions && $relatedProduct->variantOptions->count() > 0) {
+                $relatedProduct->quantity = $relatedProduct->variants->sum('stock');
+            }
+            // Remover las relaciones del objeto para no enviarlas al frontend
+            $relatedProduct->unsetRelation('variants');
+            $relatedProduct->unsetRelation('variantOptions');
+            return $relatedProduct;
+        });
 
         // Te puede interesar: otros productos de la tienda, preferiblemente de otra categoría y sin duplicar los relacionados
         $excludeIds = $related->pluck('id')->push($product->id)->all();
@@ -222,9 +269,24 @@ class ProductController extends Controller
             ->when($product->category_id, function ($q) use ($product) {
                 $q->where('category_id', '!=', $product->category_id);
             })
+            ->with(['variants:id,product_id,stock', 'variantOptions:id,product_id'])
             ->inRandomOrder()
             ->take(12)
             ->get(['id','name','price','promo_active','promo_discount_percent','quantity','alert','track_inventory','main_image_url']);
+
+        // Calcular stock total para productos sugeridos considerando variantes
+        $youMayLike = $youMayLike->map(function ($suggestedProduct) {
+            // Solo calcular stock de variantes si realmente es un producto configurable
+            // (debe tener variantes físicas Y definiciones de opciones)
+            if ($suggestedProduct->variants && $suggestedProduct->variants->count() > 0 
+                && $suggestedProduct->variantOptions && $suggestedProduct->variantOptions->count() > 0) {
+                $suggestedProduct->quantity = $suggestedProduct->variants->sum('stock');
+            }
+            // Remover las relaciones del objeto para no enviarlas al frontend
+            $suggestedProduct->unsetRelation('variants');
+            $suggestedProduct->unsetRelation('variantOptions');
+            return $suggestedProduct;
+        });
         // Crawler: OG por producto
         if ($this->isCrawler(request())) {
             $title = $product->name . ' · ' . $store->name;

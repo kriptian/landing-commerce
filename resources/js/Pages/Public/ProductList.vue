@@ -131,12 +131,14 @@ const props = defineProps({
 });
 
 const search = ref(props.filters.search);
+const sort = ref(props.filters.sort || 'latest');
 
 // --- LÓGICA PARA LA BÚSQUEDA ANIMADA ---
 const isSearchActive = ref(false);
 const isClosingSearch = ref(false); // Bandera para evitar que blur reabra la búsqueda
 const drawerOpen = ref(false);
 const showNotifications = ref(false);
+const showSortMenu = ref(false); // Estado para mostrar/ocultar el menú de ordenamiento
 const expanded = ref({});
 
 // Funciones para notificaciones
@@ -226,7 +228,11 @@ const toggleNode = async (cat) => {
   }
 };
 const applyImmediate = (categoryId) => {
-  router.get(route('catalogo.index', { store: props.store.slug }), { category: categoryId, search: search.value || undefined }, { preserveState: true, replace: true, preserveScroll: true });
+  router.get(route('catalogo.index', { store: props.store.slug }), { 
+    category: categoryId, 
+    search: search.value || undefined,
+    sort: sort.value !== 'latest' ? sort.value : undefined
+  }, { preserveState: true, replace: true, preserveScroll: true });
   drawerOpen.value = false;
 };
 // Función para manejar hover/click en categorías del menú completo - abre dropdown
@@ -355,9 +361,50 @@ const goToHome = () => {
   // Siempre regresar a la página principal sin filtros
   router.get(route('catalogo.index', { store: props.store.slug }), {}, { preserveState: true, replace: true, preserveScroll: true });
   drawerOpen.value = false;
+  sort.value = 'latest'; // Resetear ordenamiento al ir a inicio
 };
 const applySearch = () => {
-  router.get(route('catalogo.index', { store: props.store.slug }), { search: search.value || undefined, category: props.filters.category || undefined }, { preserveState: true, replace: true, preserveScroll: true });
+  router.get(route('catalogo.index', { store: props.store.slug }), { 
+    search: search.value || undefined, 
+    category: props.filters.category || undefined,
+    sort: sort.value !== 'latest' ? sort.value : undefined
+  }, { preserveState: true, replace: true, preserveScroll: true });
+};
+
+const applySort = () => {
+  router.get(route('catalogo.index', { store: props.store.slug }), { 
+    search: search.value || undefined, 
+    category: props.filters.category || undefined,
+    categories: props.filters.categories || undefined,
+    promo: props.filters.promo || undefined,
+    sort: sort.value !== 'latest' ? sort.value : undefined
+  }, { preserveState: true, replace: true, preserveScroll: true });
+  showSortMenu.value = false; // Cerrar el menú después de aplicar
+};
+
+const resetFilters = () => {
+  sort.value = 'latest';
+  search.value = '';
+  router.get(route('catalogo.index', { store: props.store.slug }), {}, { preserveState: true, replace: true, preserveScroll: true });
+  showSortMenu.value = false;
+};
+
+const toggleSortMenu = () => {
+  showSortMenu.value = !showSortMenu.value;
+};
+
+// Función para obtener el texto del ordenamiento actual
+const getSortLabel = () => {
+  const labels = {
+    'latest': 'Más recientes',
+    'name_asc': 'Nombre (A-Z)',
+    'name_desc': 'Nombre (Z-A)',
+    'price_asc': 'Precio: menor a mayor',
+    'price_desc': 'Precio: mayor a menor',
+    'category_asc': 'Categoría (A-Z)',
+    'category_desc': 'Categoría (Z-A)'
+  };
+  return labels[sort.value] || 'Ordenar';
 };
 const searchInput = ref(null); // Referencia al input de búsqueda
 
@@ -754,6 +801,15 @@ watch(() => props.store, (newStore, oldStore) => {
     });
 }, { immediate: true, deep: true });
 
+// Watch para sincronizar el valor de sort cuando cambien los props.filters
+watch(() => props.filters?.sort, (newSort) => {
+    if (newSort) {
+        sort.value = newSort;
+    } else {
+        sort.value = 'latest';
+    }
+}, { immediate: true });
+
 // Watch adicional para props.filters para detectar cambios de categoría
 watch(() => props.filters?.category, () => {
     // Forzar re-evaluación cuando cambia la categoría
@@ -771,14 +827,21 @@ watch(() => props.hasProductsWithPromo, () => {
     });
 }, { immediate: true });
 const goToPromo = () => {
-    router.get(route('catalogo.index', { store: props.store.slug }), { promo: 1 }, { preserveState: true, replace: true, preserveScroll: true });
+    router.get(route('catalogo.index', { store: props.store.slug }), { 
+        promo: true,
+        sort: sort.value !== 'latest' ? sort.value : undefined
+    }, { preserveState: true, replace: true, preserveScroll: true });
     drawerOpen.value = false;
 };
 
 
 watch(search, (value) => {
     setTimeout(() => {
-        router.get(route('catalogo.index', { store: props.store.slug }), { search: value }, {
+        router.get(route('catalogo.index', { store: props.store.slug }), { 
+            search: value,
+            category: props.filters.category || undefined,
+            sort: sort.value !== 'latest' ? sort.value : undefined
+        }, {
             preserveState: true,
             replace: true,
             preserveScroll: true,
@@ -1187,6 +1250,14 @@ onMounted(() => {
     };
     document.addEventListener('click', window.handleClickOutsideNotifications);
     
+    // Listener para cerrar el menú de ordenamiento al hacer clic fuera
+    window.handleClickOutsideSortMenu = (e) => {
+        if (showSortMenu.value && !e.target.closest('[data-sort-menu]')) {
+            showSortMenu.value = false;
+        }
+    };
+    document.addEventListener('click', window.handleClickOutsideSortMenu);
+    
     // Configurar listener para window width
     if (typeof window !== 'undefined') {
         window.addEventListener('resize', updateWindowWidth);
@@ -1203,6 +1274,9 @@ onBeforeUnmount(() => {
         window.removeEventListener('resize', updateWindowWidth);
         if (window.handleClickOutsideNotifications) {
             document.removeEventListener('click', window.handleClickOutsideNotifications);
+        }
+        if (window.handleClickOutsideSortMenu) {
+            document.removeEventListener('click', window.handleClickOutsideSortMenu);
         }
     }
     document.removeEventListener('click', handleClickOutside);
@@ -1389,10 +1463,126 @@ watch(galleryItems, (newItems, oldItems) => {
                         </button>
                         <!-- Búsqueda en header Banner & Logo -->
                         <transition name="search-expand">
-                            <div v-if="!isSearchActive" class="flex items-center">
+                            <div v-if="!isSearchActive" class="flex items-center gap-2">
                                 <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                                 </button>
+                                <!-- Botón de filtro/ordenamiento -->
+                                <div class="relative" @click.stop data-sort-menu>
+                                    <button 
+                                        @click="toggleSortMenu" 
+                                        class="p-2 rounded-lg hover:bg-gray-100 transition-colors relative" 
+                                        aria-label="Ordenar productos"
+                                        :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}"
+                                    >
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                                        </svg>
+                                        <span v-if="sort !== 'latest'" class="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></span>
+                                    </button>
+                                    <!-- Menú dropdown de ordenamiento -->
+                                    <transition
+                                        enter-active-class="transition ease-out duration-200"
+                                        enter-from-class="opacity-0 scale-95 translate-y-1"
+                                        enter-to-class="opacity-100 scale-100 translate-y-0"
+                                        leave-active-class="transition ease-in duration-150"
+                                        leave-from-class="opacity-100 scale-100 translate-y-0"
+                                        leave-to-class="opacity-0 scale-95 translate-y-1"
+                                    >
+                                        <div 
+                                            v-if="showSortMenu" 
+                                            class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50"
+                                            @click.stop
+                                        >
+                                            <div class="px-4 py-2 border-b border-gray-200">
+                                                <h3 class="text-sm font-semibold text-gray-900">Ordenar por</h3>
+                                            </div>
+                                            <div class="py-1">
+                                                <button 
+                                                    @click="sort = 'latest'; applySort()" 
+                                                    class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                    :class="sort === 'latest' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                                >
+                                                    <span>Más recientes</span>
+                                                    <svg v-if="sort === 'latest'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    @click="sort = 'name_asc'; applySort()" 
+                                                    class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                    :class="sort === 'name_asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                                >
+                                                    <span>Nombre (A-Z)</span>
+                                                    <svg v-if="sort === 'name_asc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    @click="sort = 'name_desc'; applySort()" 
+                                                    class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                    :class="sort === 'name_desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                                >
+                                                    <span>Nombre (Z-A)</span>
+                                                    <svg v-if="sort === 'name_desc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    @click="sort = 'category_asc'; applySort()" 
+                                                    class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                    :class="sort === 'category_asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                                >
+                                                    <span>Categoría (A-Z)</span>
+                                                    <svg v-if="sort === 'category_asc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    @click="sort = 'category_desc'; applySort()" 
+                                                    class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                    :class="sort === 'category_desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                                >
+                                                    <span>Categoría (Z-A)</span>
+                                                    <svg v-if="sort === 'category_desc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    @click="sort = 'price_asc'; applySort()" 
+                                                    class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                    :class="sort === 'price_asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                                >
+                                                    <span>Precio: menor a mayor</span>
+                                                    <svg v-if="sort === 'price_asc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    @click="sort = 'price_desc'; applySort()" 
+                                                    class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                    :class="sort === 'price_desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                                >
+                                                    <span>Precio: mayor a menor</span>
+                                                    <svg v-if="sort === 'price_desc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            <div class="border-t border-gray-200 py-1">
+                                                <button 
+                                                    @click="resetFilters()" 
+                                                    class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                                                >
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                    </svg>
+                                                    <span>Deshacer filtros</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </transition>
+                                </div>
                             </div>
                             <div v-else class="flex items-center gap-2 min-w-[200px] sm:min-w-[280px]">
                                 <input 
@@ -1449,10 +1639,126 @@ watch(galleryItems, (newItems, oldItems) => {
                     </button>
                     <!-- Búsqueda en header Fit -->
                     <transition name="search-expand">
-                        <div v-if="!isSearchActive" class="flex items-center">
+                        <div v-if="!isSearchActive" class="flex items-center gap-2">
                             <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-700" aria-label="Buscar" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                             </button>
+                            <!-- Botón de filtro/ordenamiento -->
+                            <div class="relative" @click.stop data-sort-menu>
+                                <button 
+                                    @click="toggleSortMenu" 
+                                    class="p-2 rounded-lg hover:bg-gray-100 transition-colors relative" 
+                                    aria-label="Ordenar productos"
+                                    :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}"
+                                >
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                                    </svg>
+                                    <span v-if="sort !== 'latest'" class="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></span>
+                                </button>
+                                <!-- Menú dropdown de ordenamiento (mismo que en header Banner) -->
+                                <transition
+                                    enter-active-class="transition ease-out duration-200"
+                                    enter-from-class="opacity-0 scale-95 translate-y-1"
+                                    enter-to-class="opacity-100 scale-100 translate-y-0"
+                                    leave-active-class="transition ease-in duration-150"
+                                    leave-from-class="opacity-100 scale-100 translate-y-0"
+                                    leave-to-class="opacity-0 scale-95 translate-y-1"
+                                >
+                                    <div 
+                                        v-if="showSortMenu" 
+                                        class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50"
+                                        @click.stop
+                                    >
+                                        <div class="px-4 py-2 border-b border-gray-200">
+                                            <h3 class="text-sm font-semibold text-gray-900">Ordenar por</h3>
+                                        </div>
+                                        <div class="py-1">
+                                            <button 
+                                                @click="sort = 'latest'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'latest' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Más recientes</span>
+                                                <svg v-if="sort === 'latest'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'name_asc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'name_asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Nombre (A-Z)</span>
+                                                <svg v-if="sort === 'name_asc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'name_desc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'name_desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Nombre (Z-A)</span>
+                                                <svg v-if="sort === 'name_desc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'category_asc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'category_asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Categoría (A-Z)</span>
+                                                <svg v-if="sort === 'category_asc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'category_desc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'category_desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Categoría (Z-A)</span>
+                                                <svg v-if="sort === 'category_desc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'price_asc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'price_asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Precio: menor a mayor</span>
+                                                <svg v-if="sort === 'price_asc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'price_desc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'price_desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Precio: mayor a menor</span>
+                                                <svg v-if="sort === 'price_desc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <div class="border-t border-gray-200 py-1">
+                                            <button 
+                                                @click="resetFilters()" 
+                                                class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                </svg>
+                                                <span>Deshacer filtros</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </transition>
+                            </div>
                         </div>
                         <div v-else class="flex items-center gap-2 min-w-[200px] sm:min-w-[280px]">
                             <input 
@@ -1693,13 +1999,129 @@ watch(galleryItems, (newItems, oldItems) => {
                     </div>
                     
                     <transition name="search-expand">
-                        <div v-if="!isSearchActive" class="flex items-center">
+                        <div v-if="!isSearchActive" class="flex items-center gap-2">
                             <button @click="toggleSearch" class="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
                                 </svg>
                             </button>
+                            <!-- Botón de filtro/ordenamiento -->
+                            <div class="relative" @click.stop data-sort-menu>
+                                <button 
+                                    @click="toggleSortMenu" 
+                                    class="p-2 rounded-lg hover:bg-gray-100 transition-colors relative" 
+                                    aria-label="Ordenar productos"
+                                    :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}"
+                                >
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                                    </svg>
+                                    <span v-if="sort !== 'latest'" class="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></span>
+                                </button>
+                                <!-- Menú dropdown de ordenamiento (reutilizar el mismo componente) -->
+                                <transition
+                                    enter-active-class="transition ease-out duration-200"
+                                    enter-from-class="opacity-0 scale-95 translate-y-1"
+                                    enter-to-class="opacity-100 scale-100 translate-y-0"
+                                    leave-active-class="transition ease-in duration-150"
+                                    leave-from-class="opacity-100 scale-100 translate-y-0"
+                                    leave-to-class="opacity-0 scale-95 translate-y-1"
+                                >
+                                    <div 
+                                        v-if="showSortMenu" 
+                                        class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50"
+                                        @click.stop
+                                    >
+                                        <div class="px-4 py-2 border-b border-gray-200">
+                                            <h3 class="text-sm font-semibold text-gray-900">Ordenar por</h3>
+                                        </div>
+                                        <div class="py-1">
+                                            <button 
+                                                @click="sort = 'latest'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'latest' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Más recientes</span>
+                                                <svg v-if="sort === 'latest'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'name_asc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'name_asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Nombre (A-Z)</span>
+                                                <svg v-if="sort === 'name_asc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'name_desc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'name_desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Nombre (Z-A)</span>
+                                                <svg v-if="sort === 'name_desc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'category_asc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'category_asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Categoría (A-Z)</span>
+                                                <svg v-if="sort === 'category_asc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'category_desc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'category_desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Categoría (Z-A)</span>
+                                                <svg v-if="sort === 'category_desc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'price_asc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'price_asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Precio: menor a mayor</span>
+                                                <svg v-if="sort === 'price_asc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                @click="sort = 'price_desc'; applySort()" 
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                                :class="sort === 'price_desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+                                            >
+                                                <span>Precio: mayor a menor</span>
+                                                <svg v-if="sort === 'price_desc'" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <div class="border-t border-gray-200 py-1">
+                                            <button 
+                                                @click="resetFilters()" 
+                                                class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                </svg>
+                                                <span>Deshacer filtros</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </transition>
                             </div>
+                        </div>
                         <div v-else class="flex items-center gap-2 min-w-[200px] sm:min-w-[280px]">
                             <input 
                                 ref="searchInput" 
@@ -1729,7 +2151,6 @@ watch(galleryItems, (newItems, oldItems) => {
         ]"
         :style="bodyStyleObj"
     >
-
 		<!-- Galería de productos destacados o imágenes personalizadas -->
 		<div 
 			v-if="galleryItems.length > 0 && !isSearchActive && !search" 
