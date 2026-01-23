@@ -28,6 +28,9 @@ class StoreSetupController extends Controller
             'logo' => 'nullable|image|max:1024', // 1MB Max
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:255',
+            'address_two' => 'nullable|string|max:255',
+            'address_three' => 'nullable|string|max:255',
+            'address_four' => 'nullable|string|max:255',
             'facebook_url' => 'nullable|url|max:255',
             'instagram_url' => 'nullable|url|max:255',
             'tiktok_url' => 'nullable|url|max:255',

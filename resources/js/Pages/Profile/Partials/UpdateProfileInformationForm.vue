@@ -35,6 +35,9 @@ const form = useForm({
     custom_domain: store?.custom_domain || '',
     phone: store?.phone || '',
     address: store?.address || '',
+    address_two: store?.address_two || '',
+    address_three: store?.address_three || '',
+    address_four: store?.address_four || '',
 });
 
 const logoPreview = ref(null);
@@ -145,6 +148,42 @@ const updateProfileInformation = () => {
                         placeholder="Calle 123 # 45-67"
                     />
                     <InputError class="mt-2" :message="form.errors.address" />
+                </div>
+
+                <div>
+                    <InputLabel for="address_two" value="Dirección Sede 2 (Opcional)" />
+                    <TextInput
+                        id="address_two"
+                        type="text"
+                        class="mt-1 block w-full"
+                        v-model="form.address_two"
+                        placeholder="Calle 456 # 78-90"
+                    />
+                    <InputError class="mt-2" :message="form.errors.address_two" />
+                </div>
+
+                <div>
+                    <InputLabel for="address_three" value="Dirección Sede 3 (Opcional)" />
+                    <TextInput
+                        id="address_three"
+                        type="text"
+                        class="mt-1 block w-full"
+                        v-model="form.address_three"
+                        placeholder="Carrera 789 # 12-34"
+                    />
+                    <InputError class="mt-2" :message="form.errors.address_three" />
+                </div>
+
+                <div>
+                    <InputLabel for="address_four" value="Dirección Sede 4 (Opcional)" />
+                    <TextInput
+                        id="address_four"
+                        type="text"
+                        class="mt-1 block w-full"
+                        v-model="form.address_four"
+                        placeholder="Transversal 321 # 56-78"
+                    />
+                    <InputError class="mt-2" :message="form.errors.address_four" />
                 </div>
                 <div>
                     <InputLabel for="store_name" value="Nombre de la Tienda" />

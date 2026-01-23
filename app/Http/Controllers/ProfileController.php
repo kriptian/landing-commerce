@@ -53,6 +53,9 @@ class ProfileController extends Controller
                 'custom_domain' => ['nullable','string','max:255', Rule::unique('stores','custom_domain')->ignore($store->id)],
                 'phone' => ['nullable','string','max:20'],
                 'address' => ['nullable','string','max:255'],
+                'address_two' => ['nullable','string','max:255'],
+                'address_three' => ['nullable','string','max:255'],
+                'address_four' => ['nullable','string','max:255'],
             ]);
 
             // Renombramos 'store_name' a 'name' para que coincida con la columna de la base de datos

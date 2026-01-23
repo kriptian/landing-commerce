@@ -60,9 +60,18 @@ class PhysicalSaleController extends Controller
         $salesQuery = $store->physicalSales()->with(['user', 'items.product', 'items.variant']);
         
         // Búsqueda por número de venta
+        // Búsqueda por número de venta o nombre de producto
         if (!empty($validated['search'])) {
             $search = $validated['search'];
-            $salesQuery->where('sale_number', 'like', "%{$search}%");
+            $salesQuery->where(function ($q) use ($search) {
+                $q->where('sale_number', 'like', "%{$search}%")
+                  ->orWhereHas('items', function ($itemQuery) use ($search) {
+                      $itemQuery->where('product_name', 'like', "%{$search}%")
+                                 ->orWhereHas('product', function ($productQuery) use ($search) {
+                                     $productQuery->where('name', 'like', "%{$search}%");
+                                 });
+                  });
+            });
         }
         
         if (!empty($validated['start_date']) && !empty($validated['end_date'])) {

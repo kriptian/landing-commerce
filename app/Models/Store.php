@@ -17,7 +17,10 @@ class Store extends Model
         'max_users',
         'logo_url',
         'phone',        
-        'address',      
+        'address',
+        'address_two',
+        'address_three',
+        'address_four',      
         'facebook_url', 
         'instagram_url',
         'tiktok_url', // <-- ¡AQUÍ ESTÁ EL CAMBIO!

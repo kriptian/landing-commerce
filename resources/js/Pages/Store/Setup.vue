@@ -10,6 +10,9 @@ const form = useForm({
     logo: null,
     phone: props.store.phone,
     address: props.store.address,
+    address_two: props.store.address_two,
+    address_three: props.store.address_three,
+    address_four: props.store.address_four,
     facebook_url: props.store.facebook_url,
     instagram_url: props.store.instagram_url,
     tiktok_url: props.store.tiktok_url, // <-- 1. CAMPO NUEVO EN EL FORMULARIO
@@ -51,8 +54,23 @@ const submit = () => {
                 </div>
 
                 <div class="mb-4">
-                    <label for="address" class="block font-medium text-sm text-gray-700">Dirección</label>
+                    <label for="address" class="block font-medium text-sm text-gray-700">Dirección Principal</label>
                     <input id="address" v-model="form.address" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                </div>
+                
+                <div class="mb-4">
+                    <label for="address_two" class="block font-medium text-sm text-gray-700">Dirección Sede 2 (Opcional)</label>
+                    <input id="address_two" v-model="form.address_two" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                </div>
+                
+                <div class="mb-4">
+                    <label for="address_three" class="block font-medium text-sm text-gray-700">Dirección Sede 3 (Opcional)</label>
+                    <input id="address_three" v-model="form.address_three" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
+                </div>
+                
+                <div class="mb-4">
+                    <label for="address_four" class="block font-medium text-sm text-gray-700">Dirección Sede 4 (Opcional)</label>
+                    <input id="address_four" v-model="form.address_four" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
                 </div>
 
                 <div class="mb-4">

@@ -41,10 +41,11 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
             $startLocal = \Carbon\Carbon::parse($this->filters['start_date'], $appTz)->startOfDay();
             $endLocal = \Carbon\Carbon::parse($this->filters['end_date'], $appTz)->endOfDay();
             
-            $query->whereRaw(
-                "DATE(CONVERT_TZ(created_at, 'UTC', ?)) BETWEEN ? AND ?",
-                [$appTz, $startLocal->toDateString(), $endLocal->toDateString()]
-            );
+            // Convertir a UTC para consultar la base de datos
+            $startUtc = $startLocal->copy()->timezone('UTC');
+            $endExclusiveUtc = $endLocal->copy()->addDay()->startOfDay()->timezone('UTC');
+
+            $query->whereBetween('created_at', [$startUtc, $endExclusiveUtc]);
         }
         
         $sales = $query->orderByDesc('created_at')->get();
@@ -53,6 +54,14 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
         foreach ($sales as $sale) {
             // Si la venta no tiene items, exportarla igual con datos básicos
             if ($sale->items->isEmpty()) {
+                // Verificar si el filtro de búsqueda aplica a la venta vacía (solo por número)
+                if (!empty($this->filters['search'])) {
+                    $search = strtolower($this->filters['search']);
+                    if (!str_contains(strtolower($sale->sale_number), $search)) {
+                        continue;
+                    }
+                }
+
                 $rows->push([
                     $sale->sale_number,
                     $sale->user->name ?? 'N/A',
@@ -74,6 +83,33 @@ class PhysicalSalesExport implements FromCollection, WithHeadings, WithTitle
             }
             
             foreach ($sale->items as $item) {
+                // --- FILTRADO ESTRICTO DE ITEMS ---
+                // Si hay un término de búsqueda, mostrar la fila SOLO si:
+                // 1. El item coincide con la búsqueda
+                // 2. O el número de venta coincide con la búsqueda (en cuyo caso mostramos todos los items de esa venta)
+                if (!empty($this->filters['search'])) {
+                    $search = strtolower($this->filters['search']);
+                    $itemMatches = false;
+                    
+                    // Chequear nombre del producto en el item
+                    if ($item->product_name && str_contains(strtolower($item->product_name), $search)) {
+                        $itemMatches = true;
+                    } 
+                    // Chequear nombre del producto relacion
+                    elseif ($item->product && str_contains(strtolower($item->product->name), $search)) {
+                        $itemMatches = true;
+                    }
+                    
+                    // Chequear número de venta
+                    $saleMatches = str_contains(strtolower($sale->sale_number), $search);
+
+                    // Si no coincide ni el item ni la venta, saltar este item
+                    if (!$itemMatches && !$saleMatches) {
+                        continue;
+                    }
+                }
+                // ---------------------------------
+
                 $name = $item->product_name ?? optional($item->product)->name;
                 $options = $item->variant_options ?? optional($item->variant)->options;
                 $optionsText = '';

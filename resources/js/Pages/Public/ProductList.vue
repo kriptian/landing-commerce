@@ -1624,12 +1624,23 @@ watch(galleryItems, (newItems, oldItems) => {
         
         <!-- Header Default y Fit (estilos normales) -->
         <nav v-else class="container mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 relative" :class="{ 'flex-wrap': menuType === 'full' && categories.length > 5 }">
-            <!-- Menú hamburguesa - solo visible si menuType es hamburger -->
-            <button v-if="menuType === 'hamburger' && headerStyle !== 'fit'" @click="openDrawer" class="p-2 rounded-lg hover:bg-gray-100 transition-colors z-10 flex-shrink-0 text-gray-700" aria-label="Abrir menú" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/>
-                </svg>
-            </button>
+            <div class="flex items-center gap-2">
+                <!-- Menú hamburguesa - solo visible si menuType es hamburger -->
+                <button v-if="menuType === 'hamburger' && headerStyle !== 'fit'" @click="openDrawer" class="p-2 rounded-lg hover:bg-gray-100 transition-colors z-10 flex-shrink-0 text-gray-700" aria-label="Abrir menú" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : {}">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/>
+                    </svg>
+                </button>
+
+                <!-- Dirección del cliente si está logueado (móvil y desktop) - MOVIDO AQUÍ -->
+                <div v-if="$page.props.customer?.user && $page.props.customer?.defaultAddress" class="flex items-center gap-1.5 sm:gap-2 text-xs px-2 sm:px-3 py-1.5 rounded-lg bg-gray-100 flex-shrink-0 max-w-[120px] sm:max-w-[150px]" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor, backgroundColor: 'rgba(0,0,0,0.05)' } : {}">
+                    <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <span class="truncate">{{ $page.props.customer.defaultAddress.city }}</span>
+                </div>
+            </div>
             
             <!-- Header Fit - solo iconos - SOLO si NO está en modo por defecto -->
             <template v-if="headerStyle === 'fit' && !catalogUseDefault">
@@ -1924,14 +1935,7 @@ watch(galleryItems, (newItems, oldItems) => {
 
             <!-- Lupa / Búsqueda expandible (oculta en header Fit, ya que tiene su propia búsqueda) -->
             <div v-if="headerStyle !== 'fit' || catalogUseDefault" class="flex items-center justify-end gap-2 flex-shrink-0 z-10">
-                <!-- Dirección del cliente si está logueado (móvil y desktop) -->
-                <div v-if="$page.props.customer?.user && $page.props.customer?.defaultAddress" class="flex items-center gap-1.5 sm:gap-2 text-xs px-2 sm:px-3 py-1.5 rounded-lg bg-gray-100 flex-shrink-0 max-w-[120px] sm:max-w-[150px]" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor, backgroundColor: 'rgba(0,0,0,0.05)' } : {}">
-                    <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
-                    <span class="truncate">{{ $page.props.customer.defaultAddress.city }}</span>
-                </div>
+                <!-- Dirección del cliente MOVIDO a la izquierda -->
                 
                 <!-- Botones de autenticación -->
                 <div class="hidden sm:flex items-center gap-2 text-xs" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : { color: '#6B7280' }">
