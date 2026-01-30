@@ -77,11 +77,12 @@ class OrderController extends Controller
             abort(403);
         }
 
-        // Cargamos los items de la orden y, de cada item, cargamos el producto y la variante
-        $order->load('items.product', 'items.variant');
+        // Cargamos los items de la orden y, de cada item, cargamos el producto, la variante y el cupón
+        $order->load('items.product', 'items.variant', 'coupon');
 
         return Inertia::render('Admin/Orders/Show', [
             'order' => $order,
+            'store' => auth()->user()->store,
         ]);
     }
     /**

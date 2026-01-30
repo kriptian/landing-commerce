@@ -19,7 +19,7 @@ class OrdersExport implements FromCollection, WithHeadings
 
     public function collection(): Collection
     {
-        $query = Auth::user()->store->orders()->with(['items', 'items.product', 'items.variant']);
+        $query = Auth::user()->store->orders()->with(['items', 'items.product', 'items.variant', 'coupon']);
         if (!empty($this->filters['start_date']) && !empty($this->filters['end_date'])) {
             $appTz = config('app.timezone', 'America/Bogota');
             $startLocal = \Carbon\Carbon::parse($this->filters['start_date'], $appTz)->startOfDay();
@@ -49,6 +49,11 @@ class OrdersExport implements FromCollection, WithHeadings
 
         $rows = collect();
         foreach ($orders as $order) {
+            $couponCode = $order->coupon ? $order->coupon->code : null;
+            // Calcular subtotal sumando total + descuento (si hay)
+            $discount = $order->discount_amount ?? 0;
+            $subtotal = $order->total_price + $discount;
+
             foreach ($order->items as $item) {
                 $name = $item->product_name ?? optional($item->product)->name;
                 $options = $item->variant_options ?? optional($item->variant)->options;
@@ -56,7 +61,6 @@ class OrdersExport implements FromCollection, WithHeadings
                 if (is_array($options) || $options instanceof \ArrayAccess) {
                     $optionsText = collect($options)->map(fn($val, $key) => "$key: $val")->implode(', ');
                 }
-                $fullName = trim($name . ($optionsText ? " (".$optionsText.")" : ''));
 
                 $rows->push([
                     $order->sequence_number ?? $order->id,
@@ -66,16 +70,19 @@ class OrdersExport implements FromCollection, WithHeadings
                     $order->customer_address,
                     $order->created_at->timezone(config('app.timezone', 'UTC'))->format('Y-m-d H:i'),
                     $order->status,
+                    $subtotal,
+                    $discount > 0 ? $discount : 0,
+                    $couponCode,
                     $order->total_price,
-                    $item->quantity,
-                    $fullName,
+                    $name,
+                    $optionsText,
                     $item->quantity,
                     $item->unit_price,
                 ]);
             }
         }
         // Si no hay ítems (p.ej., una sola orden sin ítems o filtro vacío), devolvemos una fila vacía
-        return $rows->isEmpty() ? collect([[null,null,null,null,null,null,null,null,null,null,null,null]]) : $rows;
+        return $rows->isEmpty() ? collect([[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null]]) : $rows;
     }
 
     /**
@@ -91,9 +98,12 @@ class OrdersExport implements FromCollection, WithHeadings
             'Dirección',
             'Fecha',
             'Estado',
-            'Total Orden',
-            '# Items',
+            'Subtotal',
+            'Descuento',
+            'Cupón',
+            'Total Final',
             'Producto',
+            'Variante',
             'Cantidad',
             'Precio Unitario',
         ];
