@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
+import CookieConsent from '@/Components/CookieConsent.vue';
 
 const open = ref(false);
 const form = useForm({
@@ -352,6 +353,7 @@ const showEmailExists = ref(false);
             </div>
         </footer>
     </div>
+    <CookieConsent />
 </template>
 
 <style>

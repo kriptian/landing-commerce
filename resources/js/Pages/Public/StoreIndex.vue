@@ -1,5 +1,6 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
+import CookieConsent from '@/Components/CookieConsent.vue';
 
 defineProps({
     stores: Array,
@@ -39,4 +40,5 @@ defineProps({
             </div>
         </main>
     </div>
+    <CookieConsent />
 </template>

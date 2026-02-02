@@ -12,6 +12,7 @@ const updateWindowWidth = () => {
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import Pagination from '@/Components/Pagination.vue';
+import CookieConsent from '@/Components/CookieConsent.vue';
 
 // Navegación por niveles: cache de hijos y pila de navegación para categorías principales
 const childrenCache = ref(new Map()); // parentId -> items
@@ -2701,6 +2702,7 @@ watch(galleryItems, (newItems, oldItems) => {
             </span>
     </Link>
     </div>
+    <CookieConsent />
 </template>
 
 <style scoped>

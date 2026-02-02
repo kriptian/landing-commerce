@@ -3,6 +3,7 @@ import ProductGallery from '@/Components/Product/ProductGallery.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
+import CookieConsent from '@/Components/CookieConsent.vue';
 import { useToast } from 'vue-toastification';
 
 // Referencia al componente ProductGallery
@@ -1192,6 +1193,7 @@ const getVariantDisplayPrices = (variant) => {
             <p>&copy; {{ new Date().getFullYear() }} {{ store.name }}</p>
         </div>
     </footer>
+    <CookieConsent />
 </template>
 
 <style>
