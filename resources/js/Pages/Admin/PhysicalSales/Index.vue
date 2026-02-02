@@ -395,8 +395,32 @@ const discountAmount = computed(() => {
     return discount.value;
 });
 
+// Costo de envío
+const includeDeliveryCost = ref(false);
+const deliveryCost = ref(0);
+
+// Inicializar con valores de la tienda si existen, pero solo si no hay items en el carrito (o siempre, según preferencia)
+// El usuario reportó que no tomaba el valor. Vamos a asegurar que si activa el check, tome el valor.
+onMounted(() => {
+    if (props.store?.delivery_cost_active) {
+         // Opcional: activar por defecto
+         // includeDeliveryCost.value = true; 
+         // deliveryCost.value = parseFloat(props.store.delivery_cost);
+    }
+});
+
+watch(includeDeliveryCost, (newValue) => {
+    if (newValue && deliveryCost.value === 0 && props.store?.delivery_cost) {
+        deliveryCost.value = parseFloat(props.store.delivery_cost);
+    }
+});
+
 const total = computed(() => {
-    return subtotal.value - discountAmount.value;
+    let t = subtotal.value - discountAmount.value;
+    if (includeDeliveryCost.value) {
+        t += parseFloat(deliveryCost.value) || 0;
+    }
+    return t;
 });
 
 // Filtrar productos por categoría
@@ -1070,6 +1094,7 @@ const processSale = async () => {
         tax: 0,
         discount: discountAmount.value,
         total: total.value,
+        delivery_cost: includeDeliveryCost.value ? (parseFloat(deliveryCost.value) || 0) : 0,
         payment_method: paymentMethod.value,
         notes: saleNotes.value,
     };
@@ -1727,6 +1752,30 @@ const stopResize = () => {
                             </svg>
                         </span>
                     </div>
+                    
+                    <!-- Costo de envío -->
+                    <div class="flex justify-between text-sm items-center">
+                        <label class="flex items-center text-gray-700 gap-2 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                v-model="includeDeliveryCost"
+                                class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 w-4 h-4"
+                            >
+                            <span>Incluir Envío:</span>
+                        </label>
+                        <div v-if="includeDeliveryCost" class="relative w-32">
+                            <span class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                            <input 
+                                type="number" 
+                                v-model="deliveryCost" 
+                                class="w-full text-right border border-gray-300 rounded text-sm py-1 pl-6 pr-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="0"
+                                min="0"
+                            >
+                        </div>
+                        <span v-else class="text-gray-500 text-xs italic">No aplica</span>
+                    </div>
+
                     <div class="pt-2 border-t border-gray-300">
                         <div class="flex justify-between items-center mb-3">
                             <span class="text-base font-bold text-gray-900">Total Compra:</span>
@@ -1992,6 +2041,30 @@ const stopResize = () => {
                             </svg>
                         </span>
                     </div>
+
+                    <!-- Costo de envío Móvil -->
+                    <div class="flex justify-between text-sm items-center">
+                        <label class="flex items-center text-gray-700 gap-2 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                v-model="includeDeliveryCost"
+                                class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 w-4 h-4"
+                            >
+                            <span>Incluir Envío:</span>
+                        </label>
+                        <div v-if="includeDeliveryCost" class="relative w-32">
+                            <span class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                            <input 
+                                type="number" 
+                                v-model="deliveryCost" 
+                                class="w-full text-right border border-gray-300 rounded text-sm py-1 pl-6 pr-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="0"
+                                min="0"
+                            >
+                        </div>
+                        <span v-else class="text-gray-500 text-xs italic">No aplica</span>
+                    </div>
+
                     <div class="flex justify-between items-center pt-2 border-t border-gray-300">
                         <span class="text-base font-bold text-gray-900">Total Compra:</span>
                         <span class="text-base font-bold text-green-600">{{ formatCurrency(total) }}</span>
@@ -2087,6 +2160,11 @@ const stopResize = () => {
                     <div v-if="discountAmount > 0" class="flex justify-between mb-2 text-red-600">
                         <span>Descuento ({{ discountType === 'percentage' ? discount + '%' : 'Monto' }}):</span>
                         <span>-{{ formatCurrency(discountAmount) }}</span>
+                    </div>
+
+                    <div v-if="includeDeliveryCost && parseFloat(deliveryCost) > 0" class="flex justify-between mb-2 text-gray-600">
+                        <span>Costo de Envío:</span>
+                        <span>{{ formatCurrency(deliveryCost) }}</span>
                     </div>
                     
                     <div class="flex justify-between font-bold text-lg pt-2 border-t">
@@ -2237,7 +2315,7 @@ const stopResize = () => {
                                         >
                                             <!-- Original Price (Strikethrough) -->
                                             <span style="text-decoration: line-through; color: #9ca3af;" class="text-[9px]">
-                                                Precio Normal: {{ formatCurrency(item.original_price || (item.unit_price * 100 / (100 - item.discount_percent))) }}
+                                                Precio habitual: {{ formatCurrency(item.original_price || (item.unit_price * 100 / (100 - item.discount_percent))) }}
                                             </span>
                                             
                                             <!-- Discount Tag -->
@@ -2266,6 +2344,10 @@ const stopResize = () => {
                              <div v-if="lastCreatedSale?.discount > 0" class="flex justify-between text-gray-600">
                                 <span>Descuento</span>
                                 <span>-{{ formatCurrency(lastCreatedSale.discount) }}</span>
+                            </div>
+                             <div v-if="parseFloat(lastCreatedSale?.delivery_cost) > 0" class="flex justify-between text-gray-600">
+                                <span>Costo de envío</span>
+                                <span>{{ formatCurrency(lastCreatedSale.delivery_cost) }}</span>
                             </div>
                              <div class="flex justify-between text-base font-black pt-1">
                                 <span>TOTAL</span>

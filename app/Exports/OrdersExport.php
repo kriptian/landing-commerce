@@ -70,7 +70,9 @@ class OrdersExport implements FromCollection, WithHeadings
                     $order->customer_address,
                     $order->created_at->timezone(config('app.timezone', 'UTC'))->format('Y-m-d H:i'),
                     $order->status,
-                    $subtotal,
+
+                    $subtotal - ($order->delivery_cost ?? 0), // Subtotal real de mercancía
+                    $order->delivery_cost ?? 0,
                     $discount > 0 ? $discount : 0,
                     $couponCode,
                     $order->total_price,
@@ -99,6 +101,7 @@ class OrdersExport implements FromCollection, WithHeadings
             'Fecha',
             'Estado',
             'Subtotal',
+            'Costo de Envío',
             'Descuento',
             'Cupón',
             'Total Final',

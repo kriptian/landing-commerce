@@ -288,7 +288,11 @@ const notifyCurrentStatus = () => {
                                 <div class="space-y-1">
                                     <div v-if="order.discount_amount > 0" class="flex justify-end gap-8 text-gray-600">
                                         <span>Subtotal:</span>
-                                        <span>{{ formatCurrency(parseFloat(order.total_price) + parseFloat(order.discount_amount)) }}</span>
+                                        <span>{{ formatCurrency(parseFloat(order.total_price) + parseFloat(order.discount_amount) - parseFloat(order.delivery_cost || 0)) }}</span>
+                                    </div>
+                                    <div v-if="parseFloat(order.delivery_cost) > 0" class="flex justify-end gap-8 text-gray-600">
+                                        <span>Costo de Envío:</span>
+                                        <span>{{ formatCurrency(order.delivery_cost) }}</span>
                                     </div>
                                     <div v-if="order.discount_amount > 0" class="flex justify-end gap-8 text-red-600">
                                         <span>Descuento (Cupón: {{ order.coupon?.code || 'Aplicado' }}):</span>
@@ -489,7 +493,11 @@ const notifyCurrentStatus = () => {
             <div class="text-right text-[11px] space-y-1">
                  <div v-if="order.discount_amount > 0" class="flex justify-between text-gray-600">
                     <span>Subtotal</span>
-                    <span>{{ formatCurrency(parseFloat(order.total_price) + parseFloat(order.discount_amount)) }}</span>
+                    <span>{{ formatCurrency(parseFloat(order.total_price) + parseFloat(order.discount_amount) - parseFloat(order.delivery_cost || 0)) }}</span>
+                </div>
+                 <div v-if="parseFloat(order.delivery_cost) > 0" class="flex justify-between text-gray-600">
+                    <span>Costo de Envío</span>
+                    <span>{{ formatCurrency(order.delivery_cost) }}</span>
                 </div>
                  <div v-if="order.discount_amount > 0" class="flex justify-between text-gray-600">
                     <span>Descuento {{ order.coupon ? '(' + order.coupon.code + ')' : '' }}</span>

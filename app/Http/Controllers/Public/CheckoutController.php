@@ -162,7 +162,16 @@ class CheckoutController extends Controller
         if (!$coupon) {
             return response()->json([
                 'valid' => false,
-                'message' => 'Código de cupón no encontrado',
+                'message' => 'Cupón no válido',
+            ]);
+        }
+
+        // Validate that user is logged in
+        if (!$request->user('customer')) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'Debes iniciar sesión para usar este cupón',
+                'code' => 'LOGIN_REQUIRED'
             ]);
         }
 
@@ -404,6 +413,14 @@ class CheckoutController extends Controller
             }
         }
 
+        // --- INICIO COSTO DE DOMICILIO ---
+        $deliveryCost = 0;
+        if ($store->delivery_cost_active && $store->delivery_cost > 0) {
+            $deliveryCost = (float) $store->delivery_cost;
+            $totalPrice += $deliveryCost;
+        }
+        // --- FIN COSTO DE DOMICILIO ---
+
         // Obtener cliente autenticado
         $customer = $request->user('customer');
         if ($customer && $customer->store_id !== $store->id) {
@@ -432,6 +449,7 @@ class CheckoutController extends Controller
             'customer_address' => $validated['customer_address'],
             'total_price' => $totalPrice,
             'discount_amount' => $discountAmount,
+            'delivery_cost' => $deliveryCost, // Guardar el costo por separado
             'status' => 'recibido',
         ]);
         $store->forceFill(['order_sequence' => $nextSequence])->save();
@@ -503,6 +521,11 @@ class CheckoutController extends Controller
                 ? $coupon->value . '%' 
                 : '$' . number_format($coupon->value, 0, ',', '.');
             $whatsappMessage .= "*Descuento (Cupón: {$coupon->code} - {$discountType}):* -$" . number_format($discountAmount, 0, ',', '.') . "\n";
+        }
+
+        // Mostrar costo de envío si existe
+        if ($deliveryCost > 0) {
+            $whatsappMessage .= "*Costo de envío:* $" . number_format($deliveryCost, 0, ',', '.') . "\n";
         }
         
         $whatsappMessage .= "*Total del Pedido:* $" . number_format($order->total_price, 0, ',', '.') . "\n\n";

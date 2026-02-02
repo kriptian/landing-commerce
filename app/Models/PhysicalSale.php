@@ -19,6 +19,7 @@ class PhysicalSale extends Model
         'total',
         'payment_method',
         'notes',
+        'delivery_cost',
     ];
 
     protected $casts = [
@@ -26,6 +27,7 @@ class PhysicalSale extends Model
         'tax' => 'decimal:2',
         'discount' => 'decimal:2',
         'total' => 'decimal:2',
+        'delivery_cost' => 'decimal:2',
     ];
 
     public function store()

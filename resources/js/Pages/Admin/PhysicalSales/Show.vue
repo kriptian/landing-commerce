@@ -400,6 +400,10 @@ onMounted(() => {
                                         <span>Descuento manual:</span>
                                         <span>-{{ formatCurrency(sale.discount) }}</span>
                                     </div>
+                                    <div v-if="parseFloat(sale.delivery_cost) > 0" class="flex justify-between text-gray-800">
+                                        <span>Costo de Envío:</span>
+                                        <span>{{ formatCurrency(sale.delivery_cost) }}</span>
+                                    </div>
                                     <div class="flex justify-between text-lg font-bold pt-2 border-t">
                                         <span>Total:</span>
                                         <span>{{ formatCurrency(sale.total) }}</span>
@@ -526,6 +530,10 @@ onMounted(() => {
                      <div v-if="sale.discount > 0" class="flex justify-between text-gray-600">
                         <span>Descuento</span>
                         <span>-{{ formatCurrency(sale.discount) }}</span>
+                    </div>
+                     <div v-if="parseFloat(sale.delivery_cost) > 0" class="flex justify-between text-gray-600">
+                        <span>Costo de envío</span>
+                        <span>{{ formatCurrency(sale.delivery_cost) }}</span>
                     </div>
                      <div class="flex justify-between text-base font-black pt-1">
                         <span>TOTAL</span>

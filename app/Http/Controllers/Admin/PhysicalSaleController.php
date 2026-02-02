@@ -359,6 +359,7 @@ class PhysicalSaleController extends Controller
             'total' => 'required|numeric|min:0',
             'payment_method' => 'required|string|in:efectivo,tarjeta,transferencia,mixto',
             'notes' => 'nullable|string',
+            'delivery_cost' => 'nullable|numeric|min:0',
         ]);
 
         $store = $request->user()->store;
@@ -419,6 +420,7 @@ class PhysicalSaleController extends Controller
                 'subtotal' => $validated['subtotal'],
                 'tax' => $validated['tax'] ?? 0,
                 'discount' => $validated['discount'] ?? 0,
+                'delivery_cost' => $validated['delivery_cost'] ?? 0,
                 'total' => $validated['total'],
                 'payment_method' => $validated['payment_method'],
                 'notes' => $validated['notes'] ?? null,

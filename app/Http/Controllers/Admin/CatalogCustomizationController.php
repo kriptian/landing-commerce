@@ -45,6 +45,8 @@ class CatalogCustomizationController extends Controller
                 'catalog_body_text_color' => $store->catalog_body_text_color ?? '#1F2937',
                 'catalog_input_bg_color' => $store->catalog_input_bg_color ?? '#FFFFFF',
                 'catalog_input_text_color' => $store->catalog_input_text_color ?? '#1F2937',
+                'delivery_cost' => $store->delivery_cost ?? 0,
+                'delivery_cost_active' => $store->delivery_cost_active ?? false,
             ],
         ]);
     }
@@ -76,6 +78,8 @@ class CatalogCustomizationController extends Controller
             'catalog_body_text_color' => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',
             'catalog_input_bg_color' => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',
             'catalog_input_text_color' => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',
+            'delivery_cost' => 'nullable|numeric|min:0',
+            'delivery_cost_active' => 'required|boolean',
         ]);
 
         $store = $request->user()->store;

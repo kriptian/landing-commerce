@@ -36,6 +36,8 @@ const form = useForm({
     catalog_purchase_button_color: props.store.catalog_purchase_button_color ?? '#2563EB',
     catalog_cart_bubble_color: props.store.catalog_cart_bubble_color ?? '#2563EB',
     catalog_social_button_color: props.store.catalog_social_button_color ?? '#2563EB',
+    delivery_cost: props.store.delivery_cost ?? 0,
+    delivery_cost_active: props.store.delivery_cost_active ?? false,
 });
 
 const showSuccessModal = ref(false);
@@ -267,6 +269,46 @@ const previewStyles = computed(() => {
                                     <p class="mt-2 text-xs text-gray-500">
                                         Agrega, edita y organiza las imágenes personalizadas de tu galería. Puedes linkear cada imagen a un producto específico.
                                     </p>
+                                </div>
+                            </div>
+
+                            <!-- Configuración de Envíos -->
+                            <div class="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">Configuración de Domicilios</h3>
+                                
+                                <div class="mb-4">
+                                    <label class="flex items-center cursor-pointer mb-4">
+                                        <input
+                                            type="checkbox"
+                                            v-model="form.delivery_cost_active"
+                                            class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                        />
+                                        <span class="ml-3 text-sm font-medium text-gray-700">
+                                            Activar costo de envío automático
+                                        </span>
+                                    </label>
+                                    
+                                    <div v-if="form.delivery_cost_active" class="transition-all duration-300 ease-in-out">
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                                            Costo del Domicilio
+                                        </label>
+                                        <div class="relative rounded-md shadow-sm max-w-xs">
+                                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                                <span class="text-gray-500 sm:text-sm">$</span>
+                                            </div>
+                                            <input
+                                                type="number"
+                                                v-model="form.delivery_cost"
+                                                class="block w-full rounded-md border-gray-300 pl-7 pr-12 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                placeholder="0"
+                                                min="0"
+                                                step="50"
+                                            />
+                                        </div>
+                                        <p class="mt-2 text-xs text-gray-500">
+                                            Este valor se sumará al total en el checkout y se incluirá como "Costo de envío" en el pedido de WhatsApp.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 

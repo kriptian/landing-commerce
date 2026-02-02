@@ -1,7 +1,9 @@
 <script setup>
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
+import AuthRequiredModal from '@/Components/Public/AuthRequiredModal.vue';
+import CookieConsent from '@/Components/CookieConsent.vue';
 
 const props = defineProps({
     cartItems: Array,
@@ -113,6 +115,8 @@ const couponCode = ref('');
 const coupon = ref(null);
 const couponError = ref('');
 const couponLoading = ref(false);
+const showAuthRequiredModal = ref(false); // Modal para loguearse
+
 const discountAmount = computed(() => {
     if (!coupon.value) return 0;
     if (coupon.value.type === 'percentage') {
@@ -123,8 +127,18 @@ const discountAmount = computed(() => {
     }
 });
 
-// Precio total con descuento
-const totalPrice = computed(() => Math.max(0, subtotal.value - discountAmount.value));
+// --- DELIVERY COST LOGIC ---
+const deliveryCost = computed(() => {
+    // Si la tienda tiene activo el domicilio y tiene un costo > 0
+    if (props.store?.delivery_cost_active && Number(props.store?.delivery_cost) > 0) {
+        return Number(props.store.delivery_cost);
+    }
+    return 0;
+});
+// ---------------------------
+
+// Precio total con descuento y envío
+const totalPrice = computed(() => Math.max(0, subtotal.value - discountAmount.value) + deliveryCost.value);
 
 // Aplicar cupón
 const applyCoupon = async () => {
@@ -145,8 +159,15 @@ const applyCoupon = async () => {
             coupon.value = response.data.coupon;
             couponError.value = '';
         } else {
-            couponError.value = response.data.message || 'Cupón inválido';
-            coupon.value = null;
+            // Verificar si es error de autenticación
+            if (response.data.code === 'LOGIN_REQUIRED') {
+                 showAuthRequiredModal.value = true;
+                 coupon.value = null;
+                 // No mostrar error en texto rojo, el modal es suficiente
+            } else {
+                couponError.value = response.data.message || 'Cupón inválido';
+                coupon.value = null;
+            }
         }
     } catch (error) {
         couponError.value = error.response?.data?.message || 'Error al validar el cupón';
@@ -189,7 +210,6 @@ const initializeForm = () => {
 };
 
 // Inicializar al montar
-import { onMounted } from 'vue';
 onMounted(() => {
     initializeForm();
 });
@@ -402,6 +422,11 @@ const submitOrder = () => {
                         <span class="text-lg font-medium">Descuento</span>
                         <span class="text-lg font-semibold">-{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(discountAmount) }}</span>
                     </div>
+                    <!-- Costo de envío -->
+                    <div v-if="deliveryCost > 0" class="flex justify-between items-center text-gray-800">
+                        <span class="text-lg font-medium">Costo de envío</span>
+                        <span class="text-lg font-semibold">{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(deliveryCost) }}</span>
+                    </div>
                     <div class="flex justify-between items-center border-t border-gray-200 pt-3">
                         <span class="text-xl font-bold text-gray-900">Total</span>
                         <span class="text-2xl font-bold text-gray-900">{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(totalPrice) }}</span>
@@ -412,6 +437,9 @@ const submitOrder = () => {
         </div>
     </main>
 
+    <!-- Cookie Consent Banner -->
+    <CookieConsent />
+
     <AlertModal
         :show="showError"
         type="error"
@@ -420,5 +448,11 @@ const submitOrder = () => {
         primary-text="Entendido"
         @primary="showError=false"
         @close="showError=false"
+    />
+
+    <AuthRequiredModal 
+        :show="showAuthRequiredModal"
+        :store="store"
+        @close="showAuthRequiredModal = false"
     />
 </template>

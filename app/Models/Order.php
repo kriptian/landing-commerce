@@ -23,6 +23,7 @@ class Order extends Model
         'discount_amount',
         'status',
         'notes',
+        'delivery_cost',
     ];
 
     public function items()

@@ -55,6 +55,8 @@ class Store extends Model
             'catalog_promo_banner_text_color',
             'gallery_type',
             'gallery_show_buy_button',
+            'delivery_cost',
+            'delivery_cost_active',
         ];
 
     /**
