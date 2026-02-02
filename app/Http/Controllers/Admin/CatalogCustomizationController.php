@@ -47,6 +47,8 @@ class CatalogCustomizationController extends Controller
                 'catalog_input_text_color' => $store->catalog_input_text_color ?? '#1F2937',
                 'delivery_cost' => $store->delivery_cost ?? 0,
                 'delivery_cost_active' => $store->delivery_cost_active ?? false,
+                'cookie_consent_active' => $store->cookie_consent_active ?? false,
+                'privacy_policy_text' => $store->privacy_policy_text ?? null,
             ],
         ]);
     }
@@ -80,10 +82,14 @@ class CatalogCustomizationController extends Controller
             'catalog_input_text_color' => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',
             'delivery_cost' => 'nullable|numeric|min:0',
             'delivery_cost_active' => 'required|boolean',
+            'cookie_consent_active' => 'boolean',
+            'privacy_policy_text' => 'nullable|string',
         ]);
 
         $store = $request->user()->store;
-
+        
+        \Illuminate\Support\Facades\Log::info('CatalogCustomization update payload:', $validated);
+        
         // Si usa modo por defecto, limpiamos los colores personalizados pero mantenemos layout
         if ($validated['catalog_use_default']) {
             $validated['catalog_button_color'] = null;

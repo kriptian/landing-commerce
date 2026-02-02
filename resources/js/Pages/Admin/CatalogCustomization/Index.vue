@@ -38,6 +38,8 @@ const form = useForm({
     catalog_social_button_color: props.store.catalog_social_button_color ?? '#2563EB',
     delivery_cost: props.store.delivery_cost ?? 0,
     delivery_cost_active: props.store.delivery_cost_active ?? false,
+    cookie_consent_active: props.store.cookie_consent_active ?? false,
+    privacy_policy_text: props.store.privacy_policy_text ?? '',
 });
 
 const showSuccessModal = ref(false);
@@ -307,6 +309,39 @@ const previewStyles = computed(() => {
                                         </div>
                                         <p class="mt-2 text-xs text-gray-500">
                                             Este valor se sumará al total en el checkout y se incluirá como "Costo de envío" en el pedido de WhatsApp.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Configuración de Políticas de Privacidad y Cookies -->
+                            <div class="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">Políticas de Privacidad y Cookies</h3>
+                                
+                                <div class="mb-4">
+                                    <label class="flex items-center cursor-pointer mb-4">
+                                        <input
+                                            type="checkbox"
+                                            v-model="form.cookie_consent_active"
+                                            class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                        />
+                                        <span class="ml-3 text-sm font-medium text-gray-700">
+                                            Mostrar aviso de cookies y privacidad
+                                        </span>
+                                    </label>
+                                    
+                                    <div v-if="form.cookie_consent_active" class="transition-all duration-300 ease-in-out">
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                                            Texto de Política de Privacidad
+                                        </label>
+                                        <textarea
+                                            v-model="form.privacy_policy_text"
+                                            rows="10"
+                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                            placeholder="Ingresa aquí los términos de tu política de privacidad..."
+                                        ></textarea>
+                                        <p class="mt-2 text-xs text-gray-500">
+                                            Este texto se mostrará en una página dedicada cuando los usuarios hagan clic en "Más información" en el aviso de cookies.
                                         </p>
                                     </div>
                                 </div>

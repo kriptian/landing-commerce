@@ -215,6 +215,7 @@ $reservedSlugs = implode('|', [
 ]);
 Route::pattern('store', "^(?!($reservedSlugs)$)[A-Za-z0-9\-_.]+$");
 
+Route::get('/{store:slug}/privacidad', [PublicProductController::class, 'privacyPolicy'])->name('store.privacy');
 Route::get('/{store:slug}', [PublicProductController::class, 'index'])->name('catalogo.index');
 Route::get('/{store:slug}/categories/{category}/children', [PublicProductController::class, 'children'])->name('catalog.categories.children');
 Route::get('/{store:slug}/producto/{product}', [PublicProductController::class, 'show'])->name('catalogo.show');

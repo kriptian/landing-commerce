@@ -211,6 +211,7 @@ class ProductController extends Controller
                 'catalog_body_text_color' => $store->catalog_body_text_color ?? '#1F2937',
                 'catalog_input_bg_color' => $store->catalog_input_bg_color ?? '#FFFFFF',
                 'catalog_input_text_color' => $store->catalog_input_text_color ?? '#1F2937',
+                'cookie_consent_active' => $store->cookie_consent_active ?? false,
             ],
             'categories' => $categories, // Mandamos solo las categorías principales para los botones
             'hasProductsWithPromo' => $hasProductsWithPromo, // Información global sobre productos con promoción
@@ -407,9 +408,27 @@ class ProductController extends Controller
                 'catalog_body_text_color' => $store->catalog_body_text_color ?? '#1F2937',
                 'catalog_input_bg_color' => $store->catalog_input_bg_color ?? '#FFFFFF',
                 'catalog_input_text_color' => $store->catalog_input_text_color ?? '#1F2937',
+                'cookie_consent_active' => $store->cookie_consent_active ?? false,
             ],
             'related' => $related,
             'suggested' => $youMayLike,
+        ]);
+    }
+
+    // Nueva página de política de privacidad
+    public function privacyPolicy(Store $store)
+    {
+        return inertia('Public/PrivacyPolicy', [
+            'store' => [
+                'id' => $store->id,
+                'name' => $store->name,
+                'slug' => $store->slug,
+                'logo_url' => $store->logo_url,
+                'catalog_button_bg_color' => $store->catalog_button_bg_color ?? '#2563EB',
+                'catalog_button_text_color' => $store->catalog_button_text_color ?? '#FFFFFF',
+                'catalog_use_default' => $store->catalog_use_default ?? true,
+            ],
+            'privacyPolicy' => $store->privacy_policy_text,
         ]);
     }
 

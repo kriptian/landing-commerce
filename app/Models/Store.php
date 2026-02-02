@@ -57,7 +57,20 @@ class Store extends Model
             'gallery_show_buy_button',
             'delivery_cost',
             'delivery_cost_active',
+            'cookie_consent_active',
+            'privacy_policy_text',
+            'cookie_consent_active',
+            'privacy_policy_text',
         ];
+
+    protected $casts = [
+        'delivery_cost_active' => 'boolean',
+        'cookie_consent_active' => 'boolean',
+        'gallery_show_buy_button' => 'boolean',
+        'catalog_use_default' => 'boolean',
+        'catalog_show_buy_button' => 'boolean',
+        'promo_active' => 'boolean',
+    ];
 
     /**
      * Se ejecuta cuando el modelo "arranca".
