@@ -1,6 +1,9 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch, nextTick, computed, h, onMounted, onBeforeUnmount } from 'vue';
+import PopupModal from '@/Components/Public/PopupModal.vue';
+import RegisterModal from '@/Components/Public/RegisterModal.vue';
+import LoginModal from '@/Components/Public/LoginModal.vue';
 
 // Window width para responsive
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -141,6 +144,8 @@ const drawerOpen = ref(false);
 const showNotifications = ref(false);
 const showSortMenu = ref(false); // Estado para mostrar/ocultar el menú de ordenamiento
 const expanded = ref({});
+const showRegisterModal = ref(false);
+const showLoginModal = ref(false);
 
 // Funciones para notificaciones
 const formatNotificationDate = (date) => {
@@ -700,15 +705,7 @@ const storePromoActive = computed(() => {
         const percent = Number(store.promo_discount_percent || 0);
         
         // Debug temporal - activar para ver valores
-        // if (props.filters?.category) {
-        //     console.log('🔍 storePromoActive en categoría:', {
-        //         promoActiveValue,
-        //         isPromoActive,
-        //         percent,
-        //         result: isPromoActive && percent > 0,
-        //         category: props.filters?.category
-        //     });
-        // }
+
         
         // Solo mostrar si está activo Y tiene porcentaje configurado
         return isPromoActive && percent > 0;
@@ -1302,6 +1299,26 @@ watch(galleryItems, (newItems, oldItems) => {
         </template>
     </Head>
 
+    <!-- CRITICAL: Modals placed at top to guarantee rendering -->
+    <RegisterModal 
+        v-if="true"
+        :show="showRegisterModal" 
+        :store="store" 
+        @close="showRegisterModal = false" 
+    />
+    <LoginModal
+        v-if="true"
+        :show="showLoginModal"
+        :store="store"
+        @close="showLoginModal = false"
+        @switch-to-register="showLoginModal = false; showRegisterModal = true"
+    />
+    <PopupModal 
+        v-if="store.popup_active"
+        :store="store" 
+        @open-register="showRegisterModal = true"
+    />
+
     <!-- Cinta de ofertas arriba del todo (fixed) - siempre visible cuando hay promociones activas -->
     <div v-if="hasAnyPromoGlobally || checkStorePromoDirect" :key="`promo-banner-${storePromoActive || checkStorePromoDirect ? 'store' : 'products'}-${props.filters?.category || 'all'}-${props.filters?.search || ''}-${promoUpdateKey}`" class="fixed top-0 left-0 right-0 z-[60] backdrop-blur-sm" :class="store?.catalog_use_default ? 'bg-red-600/60' : ''" :style="promoBannerStyle">
         <button @click="goToPromo" class="w-full py-2 sm:py-3 shadow-lg transition-all font-extrabold uppercase tracking-wider text-xs sm:text-sm" :class="store?.catalog_use_default ? 'text-white hover:bg-red-600/70' : ''" :style="store?.catalog_use_default ? {} : promoBannerHoverStyle">
@@ -1350,12 +1367,12 @@ watch(galleryItems, (newItems, oldItems) => {
                     <div class="flex items-center gap-3 flex-shrink-0">
                         <!-- Botones de autenticación -->
                         <template v-if="!$page.props.customer?.user">
-                            <Link :href="route('customer.login', { store: store.slug })" class="text-xs sm:text-sm hover:underline">
+                            <button @click="console.log('Click Login Header'); showLoginModal = true" class="text-xs sm:text-sm hover:underline">
                                 Iniciar sesión
-                            </Link>
-                            <Link :href="route('customer.register', { store: store.slug })" class="text-xs sm:text-sm hover:underline">
+                            </button>
+                            <button @click="console.log('Click Register Header'); showRegisterModal = true" class="text-xs sm:text-sm hover:underline">
                                 Registrarse
-                            </Link>
+                            </button>
                         </template>
                         <template v-else>
                             <Link :href="route('customer.account', { store: store.slug })" class="text-xs sm:text-sm hover:underline">
@@ -1941,13 +1958,13 @@ watch(galleryItems, (newItems, oldItems) => {
                 <!-- Botones de autenticación -->
                 <div class="hidden sm:flex items-center gap-2 text-xs" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : { color: '#6B7280' }">
                     <template v-if="!$page.props.customer?.user">
-                        <Link :href="route('customer.login', { store: store.slug })" class="hover:underline px-2 py-1">
+                        <button @click="console.log('Click Login Mobile'); showLoginModal = true" class="hover:underline px-2 py-1">
                             Iniciar sesión
-                        </Link>
+                        </button>
                         <span>|</span>
-                        <Link :href="route('customer.register', { store: store.slug })" class="hover:underline px-2 py-1">
+                        <button @click="console.log('Click Register Mobile'); showRegisterModal = true" class="hover:underline px-2 py-1">
                             Registrarse
-                        </Link>
+                        </button>
                     </template>
                     <template v-else>
                         <Link :href="route('customer.account', { store: store.slug })" class="hover:underline px-2 py-1">
@@ -2354,13 +2371,13 @@ watch(galleryItems, (newItems, oldItems) => {
                             </div>
                         </div>
                         <div v-else class="flex gap-3">
-                            <Link :href="route('customer.login', { store: store.slug })" @click="drawerOpen=false" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                            <button @click="drawerOpen=false; showLoginModal = true" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
                                 Iniciar sesión
-                            </Link>
+                            </button>
                             <span class="text-gray-400">|</span>
-                            <Link :href="route('customer.register', { store: store.slug })" @click="drawerOpen=false" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                            <button @click="drawerOpen=false; showRegisterModal = true" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
                                 Registrarse
-                            </Link>
+                            </button>
                         </div>
                     </div>
                     
@@ -3076,3 +3093,21 @@ watch(galleryItems, (newItems, oldItems) => {
     box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.4);
 }
 </style>
+
+<!-- MODALS -->
+<RegisterModal 
+    :show="showRegisterModal" 
+    :store="store" 
+    @close="showRegisterModal = false" 
+/>
+<LoginModal
+    :show="showLoginModal"
+    :store="store"
+    @close="showLoginModal = false"
+    @switch-to-register="showLoginModal = false; showRegisterModal = true"
+/>
+<PopupModal 
+    v-if="store.popup_active"
+    :store="store" 
+    @open-register="showRegisterModal = true"
+/>

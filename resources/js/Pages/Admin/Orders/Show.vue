@@ -379,14 +379,7 @@ const notifyCurrentStatus = () => {
         </div>
     </AuthenticatedLayout>
 
-    <Modal :show="confirmingSale" @close="closeSaleModal">
-        <div class="p-6">
-            
-            <div class="mt-6 flex justify-end">
-                
-            </div>
-        </div>
-    </Modal>
+
 
     <AlertModal
         :show="showInfo"

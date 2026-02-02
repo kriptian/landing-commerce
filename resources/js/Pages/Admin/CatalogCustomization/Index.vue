@@ -10,6 +10,7 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    products: Array,
 });
 
 const form = useForm({
@@ -40,6 +41,13 @@ const form = useForm({
     delivery_cost_active: props.store.delivery_cost_active ?? false,
     cookie_consent_active: props.store.cookie_consent_active ?? false,
     privacy_policy_text: props.store.privacy_policy_text ?? '',
+    popup_active: props.store.popup_active ?? false,
+    popup_image: null,
+    popup_image_path: props.store.popup_image_path ?? null,
+    popup_button_text: props.store.popup_button_text ?? 'Ver más',
+    popup_button_link: props.store.popup_button_link ?? '',
+    popup_show_button: props.store.popup_show_button ?? true,
+    popup_frequency: props.store.popup_frequency ?? 'session',
 });
 
 const showSuccessModal = ref(false);
@@ -48,8 +56,12 @@ const previewMode = ref('mobile'); // 'mobile' | 'desktop'
 const showResetConfirm = ref(false);
 
 const submit = () => {
-    form.put(route('admin.catalog-customization.update'), {
+    form.transform((data) => ({
+        ...data,
+        _method: 'PUT',
+    })).post(route('admin.catalog-customization.update'), {
         preserveScroll: true,
+        forceFormData: true,
         onSuccess: () => {
             showSuccessModal.value = true;
         },
@@ -57,6 +69,69 @@ const submit = () => {
             // Si hay errores, se mostrarán en el formulario
         },
     });
+};
+
+const getPopupImagePreview = (file) => {
+    if (!file) return '';
+    return URL.createObjectURL(file);
+};
+
+// Logic for Popup Link Type
+const linkType = ref('custom'); // custom, product, register
+const selectedProduct = ref('');
+
+// Initialize linkType based on existing value
+if (props.store.popup_button_link === '#register') {
+    linkType.value = 'register';
+} else if (props.store.popup_button_link && props.store.popup_button_link.includes('/p/')) {
+    // Attempt to guess it's a product? For now default to custom to avoid overwriting unless user explicitly changes
+    linkType.value = 'custom'; 
+}
+
+watch(linkType, (val) => {
+    if (val === 'register') {
+        form.popup_button_link = '#register';
+    } else if (val === 'custom') {
+        if (form.popup_button_link === '#register') form.popup_button_link = '';
+    } else if (val === 'product') {
+        if (form.popup_button_link === '#register') form.popup_button_link = '';
+        selectedProduct.value = ''; // Reset selection
+        productsQuery.value = ''; // Reset search text
+    }
+});
+
+watch(selectedProduct, (val) => {
+    if (linkType.value === 'product' && val) {
+        form.popup_button_link = route('catalogo.show', { store: props.store.slug, product: val });
+        // Update query text to match selected product name if not already
+        const prod = props.products.find(p => p.id === val);
+        if (prod) {
+            productsQuery.value = prod.name;
+        }
+    }
+});
+
+// Searchable Product Logic
+const productsQuery = ref('');
+const showProductDropdown = ref(false);
+const filteredProducts = computed(() => {
+    if (!productsQuery.value) return props.products;
+    const lower = productsQuery.value.toLowerCase();
+    return props.products.filter(p => p.name.toLowerCase().includes(lower));
+});
+
+const selectProduct = (product) => {
+    selectedProduct.value = product.id;
+    productsQuery.value = product.name;
+    showProductDropdown.value = false;
+};
+
+// Close dropdown on outside click
+const closeDropdown = () => {
+    // Small delay to allow click event on item to trigger first
+    setTimeout(() => {
+        showProductDropdown.value = false;
+    }, 200);
 };
 
 const resetToDefaults = () => {
@@ -343,6 +418,160 @@ const previewStyles = computed(() => {
                                         <p class="mt-2 text-xs text-gray-500">
                                             Este texto se mostrará en una página dedicada cuando los usuarios hagan clic en "Más información" en el aviso de cookies.
                                         </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Configuración de Popup Publicitario -->
+                            <div class="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">Publicidad (Popup)</h3>
+                                
+                                <label class="flex items-center cursor-pointer mb-4">
+                                    <input
+                                        type="checkbox"
+                                        v-model="form.popup_active"
+                                        class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                    />
+                                    <span class="ml-3 text-sm font-medium text-gray-700">
+                                        Activar Popup Publicitario
+                                    </span>
+                                </label>
+
+                                <div v-if="form.popup_active" class="mb-4 ml-8">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            :checked="form.popup_frequency === 'hourly'"
+                                            @change="form.popup_frequency = $event.target.checked ? 'hourly' : 'session'"
+                                            class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                        />
+                                        <span class="ml-3 text-sm text-gray-700">
+                                            Mostrar cada hora (Frecuente)
+                                        </span>
+                                    </label>
+                                    <p class="mt-1 ml-7 text-xs text-gray-500">
+                                        Si se activa, el popup aparecerá nuevamente después de 1 hora. Si está desactivado, solo aparecerá una vez por sesión de navegador.
+                                    </p>
+                                </div>
+                                
+                                <div v-if="form.popup_active" class="space-y-4 border-t pt-4">
+                                    <!-- Imagen -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Imagen del Popup</label>
+                                        <div class="flex items-center space-x-4">
+                                            <div v-if="form.popup_image_path || form.popup_image" class="w-24 h-32 bg-gray-100 rounded overflow-hidden shadow-sm flex-shrink-0 relative">
+                                                <img 
+                                                    v-if="form.popup_image"
+                                                    :src="getPopupImagePreview(form.popup_image)" 
+                                                    class="w-full h-full object-cover"
+                                                />
+                                                <img 
+                                                    v-else-if="form.popup_image_path"
+                                                    :src="form.popup_image_path" 
+                                                    class="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                @change="(e) => form.popup_image = e.target.files[0]"
+                                                class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                            />
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-2">
+                                            Dimensiones recomendadas: <span class="font-bold">600x600px</span> (cuadrada) o <span class="font-bold">600x800px</span> (vertical). Evita imágenes muy anchas.
+                                        </p>
+                                    </div>
+
+                                    <!-- Botón Config -->
+                                    <div class="border-t pt-4 mt-4">
+                                        <label class="flex items-center cursor-pointer mb-2">
+                                            <input
+                                                type="checkbox"
+                                                v-model="form.popup_show_button"
+                                                class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                            />
+                                            <span class="ml-2 text-sm font-medium text-gray-700">Mostrar botón de acción</span>
+                                        </label>
+                                        
+                                        <div v-if="form.popup_show_button" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Texto del botón</label>
+                                                <input
+                                                    type="text"
+                                                    v-model="form.popup_button_text"
+                                                    placeholder="Ej: Comprar ahora"
+                                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Enlace</label>
+                                                <select
+                                                    v-model="linkType"
+                                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm mb-2"
+                                                >
+                                                    <option value="custom">URL Personalizada</option>
+                                                    <option value="product">Producto</option>
+                                                    <option value="register">Registro / Login</option>
+                                                </select>
+
+                                                <template v-if="linkType === 'custom'">
+                                                    <input
+                                                        type="text"
+                                                        v-model="form.popup_button_link"
+                                                        placeholder="https://..."
+                                                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                    />
+                                                </template>
+                                                <template v-else-if="linkType === 'product'">
+                                                    <div class="relative">
+                                                        <div class="relative">
+                                                            <input
+                                                                type="text"
+                                                                v-model="productsQuery"
+                                                                @focus="showProductDropdown = true"
+                                                                @blur="closeDropdown"
+                                                                @keydown.enter.prevent="() => {}"
+                                                                placeholder="Buscar producto..."
+                                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm pl-10"
+                                                            />
+                                                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                                                    <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div 
+                                                            v-if="showProductDropdown" 
+                                                            class="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                                        >
+                                                            <div 
+                                                                v-for="product in filteredProducts" 
+                                                                :key="product.id"
+                                                                @mousedown.prevent="selectProduct(product)"
+                                                                class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50 text-gray-900"
+                                                            >
+                                                                <span class="block truncate font-medium">{{ product.name }}</span>
+                                                                <span class="block truncate text-xs text-gray-500">{{ product.price ? '$ ' + Intl.NumberFormat('es-CO').format(product.price) : 'Sin precio' }}</span>
+                                                            </div>
+                                                            <div v-if="filteredProducts.length === 0" class="py-2 px-3 text-gray-500 text-sm">
+                                                                No se encontraron productos
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <p v-if="form.popup_button_link && selectedProduct" class="text-xs text-green-600 mt-1 truncate flex items-center gap-1">
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                                        Producto seleccionado
+                                                    </p>
+                                                </template>
+                                                <template v-else-if="linkType === 'register'">
+                                                    <p class="text-sm text-gray-500 py-2">
+                                                        El botón abrirá el formulario de registro.
+                                                    </p>
+                                                </template>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

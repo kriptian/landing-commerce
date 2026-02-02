@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, watch, ref } from 'vue';
 
 const props = defineProps({
     show: {
@@ -17,26 +17,21 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close']);
-const dialog = ref();
 const showSlot = ref(props.show);
 
+// Sincronizar showSlot con la prop show para animaciones (si las tuviéramos)
+// pero por ahora lo hacemos directo para asegurar funcionamiento.
 watch(
     () => props.show,
-    () => {
-        if (props.show) {
+    (val) => {
+        if (val) {
             document.body.style.overflow = 'hidden';
             showSlot.value = true;
-
-            dialog.value?.showModal();
         } else {
             document.body.style.overflow = '';
-
-            setTimeout(() => {
-                dialog.value?.close();
-                showSlot.value = false;
-            }, 200);
+            showSlot.value = false; // Sin delay para instantáneo
         }
-    },
+    }
 );
 
 const close = () => {
@@ -46,20 +41,17 @@ const close = () => {
 };
 
 const closeOnEscape = (e) => {
-    if (e.key === 'Escape') {
-        e.preventDefault();
-
-        if (props.show) {
-            close();
-        }
+    if (e.key === 'Escape' && props.show) {
+        close();
     }
 };
 
-onMounted(() => document.addEventListener('keydown', closeOnEscape));
+onMounted(() => {
+    document.addEventListener('keydown', closeOnEscape);
+});
 
 onUnmounted(() => {
     document.removeEventListener('keydown', closeOnEscape);
-
     document.body.style.overflow = '';
 });
 
@@ -70,58 +62,48 @@ const maxWidthClass = computed(() => {
         lg: 'sm:max-w-lg',
         xl: 'sm:max-w-xl',
         '2xl': 'sm:max-w-2xl',
-        '3xl': 'sm:max-w-3xl',
-        '4xl': 'sm:max-w-4xl',
-        '5xl': 'sm:max-w-5xl',
-        '6xl': 'sm:max-w-6xl',
     }[props.maxWidth] || 'sm:max-w-2xl';
 });
 </script>
 
 <template>
-    <dialog
-        class="z-50 m-0 min-h-full min-w-full overflow-y-auto bg-transparent backdrop:bg-transparent"
-        ref="dialog"
-    >
-        <div
-            class="fixed inset-0 z-50 overflow-y-auto px-4 py-6 sm:px-0"
-            scroll-region
-        >
-            <Transition
-                enter-active-class="ease-out duration-300"
-                enter-from-class="opacity-0"
-                enter-to-class="opacity-100"
-                leave-active-class="ease-in duration-200"
-                leave-from-class="opacity-100"
-                leave-to-class="opacity-0"
-            >
-                <div
-                    v-show="show"
-                    class="fixed inset-0 transform transition-all"
-                    @click="close"
+    <Teleport to="body">
+        <Transition leave-active-class="duration-200">
+            <div v-if="show" class="fixed inset-0 z-[1000000] overflow-y-auto px-4 py-6 sm:px-0 flex items-center justify-center">
+                
+                <!-- Overlay con Fade -->
+                <Transition
+                    enter-active-class="ease-out duration-300"
+                    enter-from-class="opacity-0"
+                    enter-to-class="opacity-100"
+                    leave-active-class="ease-in duration-200"
+                    leave-from-class="opacity-100"
+                    leave-to-class="opacity-0"
+                >
+                    <div v-if="show" class="fixed inset-0 transform transition-all" @click="close">
+                        <div class="absolute inset-0 bg-gray-900 opacity-75"></div>
+                    </div>
+                </Transition>
+
+                <!-- Contenido Modal con Scale Up -->
+                <Transition
+                    enter-active-class="ease-out duration-300"
+                    enter-from-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                    enter-to-class="opacity-100 translate-y-0 sm:scale-100"
+                    leave-active-class="ease-in duration-200"
+                    leave-from-class="opacity-100 translate-y-0 sm:scale-100"
+                    leave-to-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                 >
                     <div
-                        class="absolute inset-0 bg-gray-500 opacity-75"
-                    />
-                </div>
-            </Transition>
-
-            <Transition
-                enter-active-class="ease-out duration-300"
-                enter-from-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                enter-to-class="opacity-100 translate-y-0 sm:scale-100"
-                leave-active-class="ease-in duration-200"
-                leave-from-class="opacity-100 translate-y-0 sm:scale-100"
-                leave-to-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-            >
-                <div
-                    v-show="show"
-                    class="mb-6 transform overflow-hidden rounded-lg bg-white shadow-xl transition-all sm:mx-auto sm:w-full"
-                    :class="maxWidthClass"
-                >
-                    <slot v-if="showSlot" />
-                </div>
-            </Transition>
-        </div>
-    </dialog>
+                        v-if="show"
+                        class="bg-white rounded-lg shadow-xl transform transition-all sm:w-full sm:mx-auto"
+                        :class="maxWidthClass"
+                        style="position: relative; z-index: 1000001; max-height: 90vh; overflow-y: auto;"
+                    >
+                        <slot v-if="showSlot" />
+                    </div>
+                </Transition>
+            </div>
+        </Transition>
+    </Teleport>
 </template>

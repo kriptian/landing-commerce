@@ -59,8 +59,12 @@ class Store extends Model
             'delivery_cost_active',
             'cookie_consent_active',
             'privacy_policy_text',
-            'cookie_consent_active',
-            'privacy_policy_text',
+            'popup_active',
+            'popup_image_path',
+            'popup_button_text',
+            'popup_button_link',
+            'popup_show_button',
+            'popup_frequency',
         ];
 
     protected $casts = [
@@ -68,9 +72,17 @@ class Store extends Model
         'cookie_consent_active' => 'boolean',
         'gallery_show_buy_button' => 'boolean',
         'catalog_use_default' => 'boolean',
-        'catalog_show_buy_button' => 'boolean',
-        'promo_active' => 'boolean',
+        'popup_active' => 'boolean',
+        'popup_show_button' => 'boolean',
+        'plan_started_at' => 'datetime',
+        'plan_renews_at' => 'datetime',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
 
     /**
      * Se ejecuta cuando el modelo "arranca".

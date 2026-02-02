@@ -20,10 +20,13 @@ class CatalogCustomizationController extends Controller
     public function index(Request $request)
     {
         $store = $request->user()->store;
+        $products = $store->products()->select('id', 'name')->latest()->take(100)->get();
 
         return Inertia::render('Admin/CatalogCustomization/Index', [
+            'products' => $products,
             'store' => [
                 'id' => $store->id,
+                'slug' => $store->slug,
                 'gallery_type' => $store->gallery_type ?? 'products',
                 'gallery_show_buy_button' => $store->gallery_show_buy_button ?? true,
                 'catalog_use_default' => $store->catalog_use_default ?? true,
@@ -49,6 +52,12 @@ class CatalogCustomizationController extends Controller
                 'delivery_cost_active' => $store->delivery_cost_active ?? false,
                 'cookie_consent_active' => $store->cookie_consent_active ?? false,
                 'privacy_policy_text' => $store->privacy_policy_text ?? null,
+                'popup_active' => $store->popup_active ?? false,
+                'popup_image_path' => $store->popup_image_path ?? null,
+                'popup_button_text' => $store->popup_button_text ?? null,
+                'popup_button_link' => $store->popup_button_link ?? null,
+                'popup_show_button' => $store->popup_show_button ?? true,
+                'popup_frequency' => $store->popup_frequency ?? 'session',
             ],
         ]);
     }
@@ -84,12 +93,32 @@ class CatalogCustomizationController extends Controller
             'delivery_cost_active' => 'required|boolean',
             'cookie_consent_active' => 'boolean',
             'privacy_policy_text' => 'nullable|string',
+            'popup_active' => 'boolean',
+            'popup_image' => 'nullable|image|max:2048',
+            'popup_button_text' => 'nullable|string|max:50',
+            'popup_button_link' => 'nullable|string|max:255',
+            'popup_show_button' => 'boolean',
+            'popup_frequency' => 'required|in:session,hourly',
         ]);
 
         $store = $request->user()->store;
         
         \Illuminate\Support\Facades\Log::info('CatalogCustomization update payload:', $validated);
         
+        // Manejo de la imagen del popup
+        if ($request->hasFile('popup_image')) {
+            // Eliminar la imagen anterior si existe
+            if ($store->popup_image_path && file_exists(public_path($store->popup_image_path))) {
+                // Opcional: eliminar el archivo físico
+                // unlink(public_path($store->popup_image_path));
+            }
+            
+            $path = $request->file('popup_image')->store('popups', 'public');
+            $validated['popup_image_path'] = '/storage/' . $path;
+        }
+
+        unset($validated['popup_image']); // No intentamos guardar el archivo en la BD
+
         // Si usa modo por defecto, limpiamos los colores personalizados pero mantenemos layout
         if ($validated['catalog_use_default']) {
             $validated['catalog_button_color'] = null;

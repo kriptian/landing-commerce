@@ -212,6 +212,11 @@ class ProductController extends Controller
                 'catalog_input_bg_color' => $store->catalog_input_bg_color ?? '#FFFFFF',
                 'catalog_input_text_color' => $store->catalog_input_text_color ?? '#1F2937',
                 'cookie_consent_active' => $store->cookie_consent_active ?? false,
+                'popup_active' => $store->popup_active ?? false,
+                'popup_image_path' => $store->popup_image_path,
+                'popup_button_text' => $store->popup_button_text,
+                'popup_button_link' => $store->popup_button_link,
+                'popup_show_button' => $store->popup_show_button ?? false,
             ],
             'categories' => $categories, // Mandamos solo las categorías principales para los botones
             'hasProductsWithPromo' => $hasProductsWithPromo, // Información global sobre productos con promoción
