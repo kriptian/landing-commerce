@@ -174,6 +174,11 @@ class ProductController extends Controller
             })->toArray();
         }
 
+        // Si es una petición AJAX normal (Load More) y no es Inertia, devolver JSON puro
+        if ($request->wantsJson() && !$request->header('X-Inertia')) {
+            return response()->json($productsQuery->paginate(36)->withQueryString());
+        }
+
         return Inertia::render('Public/ProductList', [
             'products' => $productsQuery->paginate(36)->withQueryString(),
             'store' => [

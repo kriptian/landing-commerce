@@ -799,6 +799,80 @@ watch(() => props.store, (newStore, oldStore) => {
     });
 }, { immediate: true, deep: true });
 
+// --- LÓGICA PARA CARGAR MÁS PRODUCTOS (INFINITE SCROLL) ---
+const allProducts = ref([]);
+const nextPageUrl = ref(null);
+const isLoadingMore = ref(false);
+
+// Inicializar y resetear cuando cambian los productos base (filtros o navegación normal)
+watch(() => props.products, (newProducts) => {
+    if (newProducts) {
+        // Si estamos en la página 1, reiniciamos la lista completa
+        if (newProducts.current_page === 1) {
+             console.log("Reiniciando productos (Pagina 1)");
+             allProducts.value = newProducts.data ? [...newProducts.data] : [];
+        } else {
+             // Si recibimos una página > 1 desde Inertia (por navegación normal),
+             // decidimos si reemplazar o anexar.
+             // Para evitar inconsistencias, si la navegación fue via router (cambio de URL),
+             // lo mejor es confiar en lo que llega.
+             // PERO, para nuestro "Load More" manual, usaremos fetch abajo.
+             
+             // Si allProducts está vacío (aterrizaje directo en pg 2), llenarlo.
+             if (allProducts.value.length === 0) {
+                 allProducts.value = newProducts.data ? [...newProducts.data] : [];
+             } 
+             // Si ya tenemos productos, y llega nueva data via props (por ejemplo, el usuario cambia filtro),
+             // el watcher de arriba (current_page === 1) lo manejaría si el filtro resetea la página.
+             // Este bloque else es por si acaso.
+        }
+        nextPageUrl.value = newProducts.next_page_url;
+    }
+}, { immediate: true, deep: true });
+
+const loadMore = async () => {
+    if (!nextPageUrl.value || isLoadingMore.value) return;
+
+    isLoadingMore.value = true;
+    
+    // Usamos fetch simple pidiendo JSON.
+    // Laravel retorna paginación en JSON si se pide 'Accept: application/json'.
+    // Esto evita la recarga de Inertia y hace la transición 100% fluida.
+    try {
+        const response = await fetch(nextPageUrl.value, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            // La respuesta de paginación de Laravel trae los datos directamente o dentro de .data
+            // Usualmente es un objeto Paginator.
+            const newItems = data.data || [];
+            
+            if (newItems.length > 0) {
+                // Filtrar duplicados para seguridad
+                const existingIds = new Set(allProducts.value.map(p => p.id));
+                const uniqueNewItems = newItems.filter(p => !existingIds.has(p.id));
+                allProducts.value = [...allProducts.value, ...uniqueNewItems];
+            }
+            
+            nextPageUrl.value = data.next_page_url;
+            
+            // Actualizar la URL del navegador sin recargar (opcional, para que si refresca quede ahí)
+            // window.history.replaceState({}, '', nextPageUrl.value); 
+        } else {
+            console.error("Error al cargar más productos:", response.status);
+        }
+    } catch (error) {
+        console.error("Error de red al cargar más productos:", error);
+    } finally {
+        isLoadingMore.value = false;
+    }
+};
+
 // Watch para sincronizar el valor de sort cuando cambien los props.filters
 watch(() => props.filters?.sort, (newSort) => {
     if (newSort) {
@@ -2562,8 +2636,8 @@ watch(galleryItems, (newItems, oldItems) => {
         </div>
 
 		<!-- Plantilla Default (Grid 3x3) -->
-		<div v-else-if="products.data.length > 0 && productTemplate === 'default'" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-			<Link v-for="product in products.data" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group block border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
+		<div v-else-if="allProducts.length > 0 && productTemplate === 'default'" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+			<Link v-for="product in allProducts" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group block border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
 				<div class="relative">
 					<img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-40 sm:h-48 md:h-56 object-cover transform group-hover:scale-105 transition duration-300">
 					<span v-if="isOutOfStock(product)" class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">Agotado</span>
@@ -2592,11 +2666,11 @@ watch(galleryItems, (newItems, oldItems) => {
 		</div>
 		
 		<!-- Plantilla Big (Galería dinámica + Grid de tarjetas grandes) -->
-		<div v-else-if="products.data.length > 0 && productTemplate === 'big'" class="space-y-6">
+		<div v-else-if="allProducts.length > 0 && productTemplate === 'big'" class="space-y-6">
 			<!-- Los productos destacados ya se muestran en la galería dinámica arriba -->
 			<!-- Mostrar el resto de productos en formato de grid de tarjetas grandes (2 columnas) -->
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-				<Link v-for="product in products.data.filter(p => !featuredProducts.some(fp => fp.id === p.id))" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group block border rounded-xl shadow-lg overflow-hidden bg-white hover:shadow-xl transition">
+				<Link v-for="product in allProducts.filter(p => !featuredProducts.some(fp => fp.id === p.id))" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group block border rounded-xl shadow-lg overflow-hidden bg-white hover:shadow-xl transition">
 					<div class="relative h-56 bg-gray-200">
 						<img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-full object-cover transform group-hover:scale-105 transition duration-300">
 						<span v-if="isOutOfStock(product)" class="absolute top-3 left-3 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded">Agotado</span>
@@ -2631,8 +2705,8 @@ watch(galleryItems, (newItems, oldItems) => {
 		</div>
 		
 		<!-- Plantilla Full Text (Lista horizontal con texto completo) -->
-		<div v-else-if="products.data.length > 0 && productTemplate === 'full_text'" class="space-y-4">
-			<Link v-for="product in products.data" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group flex gap-4 border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
+		<div v-else-if="allProducts.length > 0 && productTemplate === 'full_text'" class="space-y-4">
+			<Link v-for="product in allProducts" :key="product.id" :href="route('catalogo.show', { store: store.slug, product: product.id })" class="group flex gap-4 border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition">
 				<div class="relative w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0">
 					<img v-if="product.main_image_url" :src="product.main_image_url" alt="Imagen del producto" class="w-full h-full object-cover rounded-l-xl transform group-hover:scale-105 transition duration-300">
 					<span v-if="isOutOfStock(product)" class="absolute top-1 left-1 bg-red-600 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">Agotado</span>
@@ -2674,13 +2748,30 @@ watch(galleryItems, (newItems, oldItems) => {
             </div>
         </div>
         
-        <Pagination v-if="products.data.length > 0" class="mt-8" :links="products.links" />
+        
+        <!-- Botón Ver Más -->
+        <div v-if="nextPageUrl" class="mt-8 flex justify-center">
+            <button 
+                @click="loadMore" 
+                :disabled="isLoadingMore"
+                class="px-8 py-3 font-bold text-lg rounded shadow-lg transition-transform transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 italic"
+                :class="catalogUseDefault ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''"
+                :style="buttonStyleObj"
+            >
+                <svg v-if="isLoadingMore" class="animate-spin h-5 w-5" :class="catalogUseDefault ? 'text-white' : ''" :style="!catalogUseDefault ? { color: buttonTextColor } : {}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span v-else>¡Ver más!</span>
+            </button>
+        </div>
 
     </main>
 
     <footer class="bg-white mt-16 border-t">
         <div class="container mx-auto px-6 py-4 text-center text-gray-500">
             <p>&copy; {{ new Date().getFullYear() }} {{ store.name }}</p>
+            <p class="text-xs mt-1 text-gray-400">Powered by ondigitalsolution.com</p>
         </div>
     </footer>
 
