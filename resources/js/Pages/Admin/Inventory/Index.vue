@@ -112,8 +112,8 @@ const pct = (buy, sell) => {
     const b = Number(buy || 0);
     const s = Number(sell || 0);
     if (!b || !s) return null;
-    if (b <= 0) return null;
-    return Number((((s - b) / b) * 100).toFixed(2));
+    if (s <= 0) return null;
+    return Number((((s - b) / s) * 100).toFixed(2));
 };
 
 // Precios efectivos (con herencia producto → variante)
