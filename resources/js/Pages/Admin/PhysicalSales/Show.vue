@@ -501,7 +501,7 @@ onMounted(() => {
                                 >
                                     <!-- Original Price (Strikethrough) -->
                                     <span style="text-decoration: line-through; color: #9ca3af;" class="text-[9px]">
-                                        Precio Normal: {{ formatCurrency(item.original_price || (item.unit_price * 100 / (100 - item.discount_percent))) }}
+                                        Precio Habitual: {{ formatCurrency(item.original_price || (item.unit_price * 100 / (100 - item.discount_percent))) }}
                                     </span>
                                     
                                     <!-- Discount Tag -->
