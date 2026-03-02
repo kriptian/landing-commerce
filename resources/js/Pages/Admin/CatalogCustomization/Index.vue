@@ -46,8 +46,9 @@ const form = useForm({
     popup_image_path: props.store.popup_image_path ?? null,
     popup_button_text: props.store.popup_button_text ?? 'Ver más',
     popup_button_link: props.store.popup_button_link ?? '',
-    popup_show_button: props.store.popup_show_button ?? true,
     popup_frequency: props.store.popup_frequency ?? 'session',
+    whatsapp_floating_button_active: props.store.whatsapp_floating_button_active ?? false,
+    whatsapp_floating_button_message: props.store.whatsapp_floating_button_message ?? '',
 });
 
 const showSuccessModal = ref(false);
@@ -573,6 +574,37 @@ const previewStyles = computed(() => {
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+
+                            <!-- Configuración de Botón Flotante de WhatsApp -->
+                            <div class="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">Botón Flotante de WhatsApp</h3>
+                                
+                                <label class="flex items-center cursor-pointer mb-4">
+                                    <input
+                                        type="checkbox"
+                                        v-model="form.whatsapp_floating_button_active"
+                                        class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                    />
+                                    <span class="ml-3 text-sm font-medium text-gray-700">
+                                        Activar Botón Flotante en el catálogo
+                                    </span>
+                                </label>
+
+                                <div v-if="form.whatsapp_floating_button_active" class="transition-all duration-300 ease-in-out">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        Mensaje predeterminado de WhatsApp
+                                    </label>
+                                    <textarea
+                                        v-model="form.whatsapp_floating_button_message"
+                                        rows="3"
+                                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                        placeholder="Ej: Hola, tengo una consulta sobre sus productos..."
+                                    ></textarea>
+                                    <p class="mt-2 text-xs text-gray-500">
+                                        Este es el mensaje que aparecerá preescrito cuando los clientes hagan clic en el botón flotante e inicien un chat contigo. Se enviará al número principal de tu tienda.
+                                    </p>
                                 </div>
                             </div>
 

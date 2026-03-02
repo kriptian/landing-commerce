@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
 import CookieConsent from '@/Components/CookieConsent.vue';
+import FloatingWhatsAppButton from '@/Components/FloatingWhatsAppButton.vue';
 
 defineProps({
     stores: Array,
@@ -41,4 +42,10 @@ defineProps({
         </main>
     </div>
     <CookieConsent />
+    
+    <FloatingWhatsAppButton
+        v-if="store?.whatsapp_floating_button_active && store?.phone"
+        :phone-number="store.phone"
+        :message="store.whatsapp_floating_button_message"
+    />
 </template>

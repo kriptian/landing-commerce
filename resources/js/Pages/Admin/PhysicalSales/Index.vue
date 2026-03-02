@@ -2233,8 +2233,8 @@ const stopResize = () => {
                 </div>
                 
                 <!-- Hidden invoice container for PDF generation -->
-                <div id="invoice-content-pos" class="fixed top-0 left-0 w-[80mm] bg-white z-[-100] opacity-0 pointer-events-none">
-                    <div class="bg-white text-black p-2 font-mono text-[11px] leading-tight" style="width: 80mm; margin: 0 auto; font-family: 'Courier New', Courier, monospace;">
+                <div id="invoice-content-pos" class="fixed top-0 left-0 w-[58mm] bg-white z-[-100] opacity-0 pointer-events-none">
+                    <div class="bg-white text-black p-2 font-mono text-[11px] leading-tight" style="width: 58mm; margin: 0 auto; font-family: 'Courier New', Courier, monospace;">
                         <!-- Header -->
                         <div class="text-center mb-4">
                              <img 

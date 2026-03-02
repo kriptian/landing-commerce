@@ -2,6 +2,7 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import CookieConsent from '@/Components/CookieConsent.vue';
+import FloatingWhatsAppButton from '@/Components/FloatingWhatsAppButton.vue';
 
 const open = ref(false);
 const form = useForm({
@@ -354,6 +355,8 @@ const showEmailExists = ref(false);
         </footer>
     </div>
     <CookieConsent />
+    
+    <!-- Assuming we want a general default number for landing, but it requires a store prop. Since Landing doesn't have a store prop directly, I will skip adding it to Landing as it is typically for the Ondigitalsolution platform itself, not a specific store. -->
 </template>
 
 <style>

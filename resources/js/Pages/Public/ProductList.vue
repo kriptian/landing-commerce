@@ -16,6 +16,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import Pagination from '@/Components/Pagination.vue';
 import CookieConsent from '@/Components/CookieConsent.vue';
+import FloatingWhatsAppButton from '@/Components/FloatingWhatsAppButton.vue';
 
 // Navegación por niveles: cache de hijos y pila de navegación para categorías principales
 const childrenCache = ref(new Map()); // parentId -> items
@@ -809,7 +810,7 @@ watch(() => props.products, (newProducts) => {
     if (newProducts) {
         // Si estamos en la página 1, reiniciamos la lista completa
         if (newProducts.current_page === 1) {
-             console.log("Reiniciando productos (Pagina 1)");
+ 
              allProducts.value = newProducts.data ? [...newProducts.data] : [];
         } else {
              // Si recibimos una página > 1 desde Inertia (por navegación normal),
@@ -1441,10 +1442,10 @@ watch(galleryItems, (newItems, oldItems) => {
                     <div class="flex items-center gap-3 flex-shrink-0">
                         <!-- Botones de autenticación -->
                         <template v-if="!$page.props.customer?.user">
-                            <button @click="console.log('Click Login Header'); showLoginModal = true" class="text-xs sm:text-sm hover:underline">
+                            <button @click="showLoginModal = true" class="text-xs sm:text-sm hover:underline">
                                 Iniciar sesión
                             </button>
-                            <button @click="console.log('Click Register Header'); showRegisterModal = true" class="text-xs sm:text-sm hover:underline">
+                            <button @click="showRegisterModal = true" class="text-xs sm:text-sm hover:underline">
                                 Registrarse
                             </button>
                         </template>
@@ -2032,11 +2033,11 @@ watch(galleryItems, (newItems, oldItems) => {
                 <!-- Botones de autenticación -->
                 <div class="hidden sm:flex items-center gap-2 text-xs" :style="!catalogUseDefault && headerTextColor ? { color: headerTextColor } : { color: '#6B7280' }">
                     <template v-if="!$page.props.customer?.user">
-                        <button @click="console.log('Click Login Mobile'); showLoginModal = true" class="hover:underline px-2 py-1">
+                        <button @click="showLoginModal = true" class="hover:underline px-2 py-1">
                             Iniciar sesión
                         </button>
                         <span>|</span>
-                        <button @click="console.log('Click Register Mobile'); showRegisterModal = true" class="hover:underline px-2 py-1">
+                        <button @click="showRegisterModal = true" class="hover:underline px-2 py-1">
                             Registrarse
                         </button>
                     </template>
@@ -2808,12 +2809,10 @@ watch(galleryItems, (newItems, oldItems) => {
             <span v-if="$page.props.cart.count > 0" class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
                 {{ $page.props.cart.count }}
             </span>
-    </Link>
+        </Link>
     </div>
     <CookieConsent />
-</template>
-
-<style scoped>
+<!-- 
 /* Cinta con gradiente y shimmer */
 .promo-ribbon {
 	background: linear-gradient(90deg, #ef4444, #dc2626);
@@ -3183,7 +3182,7 @@ watch(galleryItems, (newItems, oldItems) => {
     transform: translateY(0) scale(1.05);
     box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.4);
 }
-</style>
+-->
 
 <!-- MODALS -->
 <RegisterModal 
@@ -3202,3 +3201,203 @@ watch(galleryItems, (newItems, oldItems) => {
     :store="store" 
     @open-register="showRegisterModal = true"
 />
+
+<FloatingWhatsAppButton
+    v-if="store.whatsapp_floating_button_active && store.phone"
+    :phone-number="store.phone"
+    :message="store.whatsapp_floating_button_message"
+/>
+
+</template>
+
+<style scoped>
+/* Cinta con gradiente y shimmer */
+.promo-ribbon {
+	background: linear-gradient(90deg, #ef4444, #dc2626);
+	position: relative;
+	overflow: hidden;
+}
+.promo-ribbon::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: -50%;
+	width: 50%;
+	height: 100%;
+	background: linear-gradient(120deg, transparent, rgba(255,255,255,.35), transparent);
+	transform: skewX(-20deg);
+	animation: shimmer 2.2s infinite;
+}
+@keyframes shimmer {
+	0% { left: -60%; }
+	60% { left: 120%; }
+	100% { left: 120%; }
+}
+
+/* Marquee horizontal */
+.marquee {
+	position: relative;
+	overflow: hidden;
+	width: 100%;
+}
+.marquee__inner {
+	display: inline-flex;
+	gap: 2rem;
+	white-space: nowrap;
+	animation: marquee 12s linear infinite;
+}
+
+/* Animación de entrada para los productos */
+.fade-up-enter-active,
+.fade-up-leave-active {
+	transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+}
+.fade-up-enter-from,
+.fade-up-leave-to {
+	opacity: 0;
+	transform: translateY(20px);
+}
+
+.product-enter-active {
+	transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.product-enter-from {
+	opacity: 0;
+	transform: scale(0.95) translateY(10px);
+}
+
+/* Ajuste para contenedor drawer content y footer */
+.drawer-content {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+.drawer-footer {
+	margin-top: auto;
+}
+
+/* Categorías Activas */
+.category-active {
+	background-color: #f3f4f6;
+	font-weight: 600;
+	color: #1f2937;
+	border-left: 3px solid #3b82f6;
+}
+
+/* Scroll lateral para las etiquetas */
+.tags-scroll::-webkit-scrollbar {
+	height: 4px; /* Altura de la barra horizontal */
+}
+.tags-scroll::-webkit-scrollbar-thumb {
+	background-color: #cbd5e1; /* Color gris suave */
+	border-radius: 4px;
+}
+.tags-scroll::-webkit-scrollbar-track {
+	background-color: transparent;
+}
+.tags-scroll {
+	-ms-overflow-style: none; /* Ocultar barra en IE/Edge antiguas */
+	scrollbar-width: thin; /* Barra delgada en Firefox */
+}
+
+/* Ocultar scrollbar visualmente manteniendo scroll funcional */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+/* Transiciones básicas de Vue */
+.fade-enter-active, .fade-leave-active {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.fade-enter-from, .fade-leave-to {
+    opacity: 0;
+    transform: scale(0.95);
+}
+
+/* Estilos de transición para el acordeón mejorado */
+.collapse-enter-active, .collapse-leave-active {
+    transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    overflow: hidden;
+}
+
+.collapse-enter-from, .collapse-leave-to {
+    height: 0 !important;
+    opacity: 0;
+}
+
+/* Estilos específicos para el dropdown category */
+.category-dropdown {
+    position: relative;
+}
+
+.category-dropdown .dropdown-menu {
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Efectos hover sutiles para items del menú */
+.dropdown-item-hover:hover {
+    background-color: #f8fafc;
+    color: #2563eb;
+}
+
+/* Transición para slides de menú en móvil */
+.menu-slide-enter-active,
+.menu-slide-leave-active {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.menu-slide-enter-from {
+    opacity: 0;
+    transform: translateX(10px);
+}
+
+.menu-slide-leave-to {
+    opacity: 0;
+    transform: translateX(-10px);
+    position: absolute;
+    width: 100%;
+}
+
+/* Cada nivel del menú es un slide */
+.menu-slide {
+    flex-shrink: 0;
+    background: white;
+    height: 100%;
+    position: relative;
+}
+
+/* Animación de salto vertical y pulso para el botón "COMPRAR" en la galería */
+.buy-now-gallery {
+    animation: bounce-pulse-gallery 2s ease-in-out infinite;
+}
+
+@keyframes bounce-pulse-gallery {
+    0%, 100% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.6);
+    }
+    25% {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 0 0 8px rgba(255, 255, 255, 0);
+    }
+    50% {
+        transform: translateY(0) scale(1.02);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+    }
+    75% {
+        transform: translateY(-2px) scale(1.01);
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+    }
+}
+
+.buy-now-gallery:hover {
+    animation: none;
+    transform: translateY(0) scale(1.05);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.4);
+}
+</style>

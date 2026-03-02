@@ -65,6 +65,8 @@ class Store extends Model
             'popup_button_link',
             'popup_show_button',
             'popup_frequency',
+            'whatsapp_floating_button_active',
+            'whatsapp_floating_button_message',
         ];
 
     protected $casts = [
@@ -74,6 +76,7 @@ class Store extends Model
         'catalog_use_default' => 'boolean',
         'popup_active' => 'boolean',
         'popup_show_button' => 'boolean',
+        'whatsapp_floating_button_active' => 'boolean',
         'plan_started_at' => 'datetime',
         'plan_renews_at' => 'datetime',
     ];

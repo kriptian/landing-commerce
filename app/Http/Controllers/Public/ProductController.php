@@ -217,6 +217,8 @@ class ProductController extends Controller
                 'catalog_input_bg_color' => $store->catalog_input_bg_color ?? '#FFFFFF',
                 'catalog_input_text_color' => $store->catalog_input_text_color ?? '#1F2937',
                 'cookie_consent_active' => $store->cookie_consent_active ?? false,
+                'whatsapp_floating_button_active' => $store->whatsapp_floating_button_active ?? false,
+                'whatsapp_floating_button_message' => $store->whatsapp_floating_button_message,
                 'popup_active' => $store->popup_active ?? false,
                 'popup_image_path' => $store->popup_image_path,
                 'popup_button_text' => $store->popup_button_text,
@@ -340,12 +342,7 @@ class ProductController extends Controller
                     foreach ($parentOption->children as $child) {
                         $imagePath = $child->image_path;
                         
-                        // DEBUG: Log temporal para verificar qué se está cargando
-                        \Log::info('🔍 SHOW - Cargando variant option child', [
-                            'id' => $child->id,
-                            'name' => $child->name,
-                            'image_path_raw' => $imagePath,
-                        ]);
+
                         
                         // Asegurar que image_path esté en el formato correcto
                         if (!empty($imagePath) && !str_starts_with($imagePath, 'http')) {
@@ -367,12 +364,7 @@ class ProductController extends Controller
                             'order' => $child->order,
                         ];
                         
-                        // DEBUG: Verificar qué se está enviando al frontend
-                        \Log::info('🔍 SHOW - Enviando variant option child al frontend', [
-                            'id' => $childData['id'],
-                            'name' => $childData['name'],
-                            'image_path_final' => $childData['image_path'],
-                        ]);
+
                         
                         $parentData['children'][] = $childData;
                     }
@@ -419,6 +411,8 @@ class ProductController extends Controller
                 'catalog_input_bg_color' => $store->catalog_input_bg_color ?? '#FFFFFF',
                 'catalog_input_text_color' => $store->catalog_input_text_color ?? '#1F2937',
                 'cookie_consent_active' => $store->cookie_consent_active ?? false,
+                'whatsapp_floating_button_active' => $store->whatsapp_floating_button_active ?? false,
+                'whatsapp_floating_button_message' => $store->whatsapp_floating_button_message,
             ],
             'related' => $related,
             'suggested' => $youMayLike,

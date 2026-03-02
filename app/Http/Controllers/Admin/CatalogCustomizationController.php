@@ -58,6 +58,8 @@ class CatalogCustomizationController extends Controller
                 'popup_button_link' => $store->popup_button_link ?? null,
                 'popup_show_button' => $store->popup_show_button ?? true,
                 'popup_frequency' => $store->popup_frequency ?? 'session',
+                'whatsapp_floating_button_active' => $store->whatsapp_floating_button_active ?? false,
+                'whatsapp_floating_button_message' => $store->whatsapp_floating_button_message ?? null,
             ],
         ]);
     }
@@ -99,6 +101,8 @@ class CatalogCustomizationController extends Controller
             'popup_button_link' => 'nullable|string|max:255',
             'popup_show_button' => 'boolean',
             'popup_frequency' => 'required|in:session,hourly',
+            'whatsapp_floating_button_active' => 'boolean',
+            'whatsapp_floating_button_message' => 'nullable|string',
         ]);
 
         $store = $request->user()->store;

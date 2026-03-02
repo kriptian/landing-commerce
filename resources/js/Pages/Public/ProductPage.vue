@@ -4,6 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import CookieConsent from '@/Components/CookieConsent.vue';
+import FloatingWhatsAppButton from '@/Components/FloatingWhatsAppButton.vue';
 import { useToast } from 'vue-toastification';
 
 // Referencia al componente ProductGallery
@@ -1194,6 +1195,12 @@ const getVariantDisplayPrices = (variant) => {
         </div>
     </footer>
     <CookieConsent />
+    
+    <FloatingWhatsAppButton
+        v-if="store.whatsapp_floating_button_active && store.phone"
+        :phone-number="store.phone"
+        :message="store.whatsapp_floating_button_message"
+    />
 </template>
 
 <style>
