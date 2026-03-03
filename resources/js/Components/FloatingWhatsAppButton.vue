@@ -15,7 +15,7 @@ const props = defineProps({
 // Create the WhatsApp link
 const whatsappLink = computed(() => {
     // Format phone number by removing spaces, dashes, and plus signs
-    const formattedPhone = props.phoneNumber.replace(/[\s\-+]/g, '');
+    const formattedPhone = String(props.phoneNumber || '').replace(/[\s\-+]/g, '');
     let url = `https://wa.me/${formattedPhone}`;
     
     if (props.message) {

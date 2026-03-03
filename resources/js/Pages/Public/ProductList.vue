@@ -77,21 +77,23 @@ const openNode = async (cat) => {
   if (!childrenCache.value.has(cat.id)) {
     isLevelLoading.value = true;
     try {
-    const res = await fetch(route('catalog.categories.children', { store: props.store.slug, category: cat.id }));
-    const json = await res.json();
-      const children = Array.isArray(json.data) ? json.data : [];
-      childrenCache.value.set(cat.id, children);
-      cacheUpdateKey.value++; // Forzar reactividad
-      // Forzar actualización del DOM
-      await nextTick();
+        const res = await fetch(route('catalog.categories.children', { store: props.store.slug, category: cat.id }));
+        const json = await res.json();
+        const children = Array.isArray(json.data) ? json.data : [];
+        childrenCache.value.set(cat.id, children);
+        cacheUpdateKey.value++; // Forzar reactividad
+        // Forzar actualización del DOM
+        await nextTick();
     } catch (error) {
-      childrenCache.value.set(cat.id, []);
-      cacheUpdateKey.value++; // Forzar reactividad incluso en caso de error
+        console.error("Error fetching subcategories:", error);
+        childrenCache.value.set(cat.id, []);
+        cacheUpdateKey.value++; // Forzar reactividad incluso en caso de error
     } finally {
-    isLevelLoading.value = false;
+        isLevelLoading.value = false;
     }
   } else {
     // Si ya están en cache, igual forzar reactividad para asegurar que se muestren
+    console.log("Cache hit for cat id", cat.id, "children:", childrenCache.value.get(cat.id));
     cacheUpdateKey.value++;
   }
 };
@@ -2468,7 +2470,7 @@ watch(galleryItems, (newItems, oldItems) => {
                     <!-- Contenedor de slides con deslizamiento horizontal -->
                     <div class="relative overflow-hidden" :style="{ height: hasAnyPromoGlobally ? 'calc(100% - 116px)' : 'calc(100% - 73px)' }">
                         <div 
-                            class="menu-slides-container"
+                            class="menu-slides-container flex h-full transition-transform duration-300 ease-in-out"
                             :style="{ 
                                 transform: `translateX(${slideTransform})`,
                                 width: `${totalMenuLevels * 100}%`
@@ -2501,10 +2503,9 @@ watch(galleryItems, (newItems, oldItems) => {
                                             :class="headerStyle === 'fit' && !catalogUseDefault ? 'border-gray-300' : 'border-gray-200'"
                                         ></div>
                                     </div>
-                                    <!-- Contenido de categorías -->
                                     <div class="flex-1 overflow-y-auto">
-                                        <transition-group name="menu-item" tag="div" :key="drawerItemsKey">
-                                            <div v-for="(cat, index) in props.categories" :key="`${cat.id}-${drawerItemsKey}`" class="menu-item-wrapper" :style="{ '--i': index }">
+                                        <div class="flex flex-col">
+                                            <div v-for="(cat, index) in props.categories" :key="`${cat.id}-${drawerItemsKey}`" class="w-full">
                                                 <button 
                                                     class="w-full flex items-center justify-between px-4 py-3.5 transition-colors border-b" 
                                                     :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50 active:bg-gray-300/50 border-gray-300' : 'hover:bg-gray-50 active:bg-gray-100 border-gray-200'"
@@ -2514,7 +2515,7 @@ watch(galleryItems, (newItems, oldItems) => {
                                                         class="font-medium text-sm"
                                                         :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-700' : 'text-gray-800 uppercase'"
                                                     >{{ cat.name }}</span>
-                        <div class="flex items-center gap-2">
+                                                    <div class="flex items-center gap-2">
                                                         <span 
                                                             class="text-xs"
                                                             :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-400' : 'text-gray-500'"
@@ -2524,101 +2525,104 @@ watch(galleryItems, (newItems, oldItems) => {
                                                             class="text-lg leading-none"
                                                             :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-500' : 'text-gray-400'"
                                                         >›</span>
-                        </div>
+                                                    </div>
                                                 </button>
-                    </div>
-                                        </transition-group>
-                        </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             
                             <!-- Niveles anidados: Subcategorías -->
-                            <template v-for="(levelData, levelIndex) in levelChildrenData" :key="`level-${levelData.levelId}-${levelIndex}-${cacheUpdateKey}`">
-                                <div class="menu-slide" :style="{ width: slideWidth }">
-                                    <div class="h-full overflow-y-auto flex flex-col">
-                                        <!-- Botón HOME (siempre visible en niveles anidados) -->
-                                        <div 
-                                            class="border-b flex-shrink-0"
-                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'border-gray-300' : 'border-gray-200'"
+                            <div 
+                                v-for="(levelData, levelIndex) in levelChildrenData" 
+                                :key="`tmpl-level-${levelData.levelId}-${levelIndex}`"
+                                class="menu-slide" 
+                                :style="{ width: slideWidth }"
+                            >
+                                <div class="h-full overflow-y-auto flex flex-col">
+                                    <!-- Botón HOME (siempre visible en niveles anidados) -->
+                                    <div 
+                                        class="border-b flex-shrink-0"
+                                        :class="headerStyle === 'fit' && !catalogUseDefault ? 'border-gray-300' : 'border-gray-200'"
+                                    >
+                                        <button 
+                                            @click="goToHome" 
+                                            class="w-full flex items-center justify-between px-4 py-3.5 transition-colors"
+                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50 active:bg-gray-300/50' : 'hover:bg-blue-50 active:bg-blue-100'"
                                         >
-                                            <button 
-                                                @click="goToHome" 
-                                                class="w-full flex items-center justify-between px-4 py-3.5 transition-colors"
-                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50 active:bg-gray-300/50' : 'hover:bg-blue-50 active:bg-blue-100'"
-                                            >
-                                                <span 
-                                                    class="font-semibold text-sm uppercase"
-                                                    :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-800' : 'text-blue-700'"
-                                                >HOME</span>
-                                                <span 
-                                                    class="text-xs"
-                                                    :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-600' : 'text-blue-600'"
-                                                >›</span>
-                            </button>
-                                            <div 
-                                                class="border-b"
-                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'border-gray-300' : 'border-gray-200'"
-                                            ></div>
-                        </div>
-                                        <!-- Contenido de categorías -->
-                                        <div v-if="levelData.children.length > 0" class="flex-1 overflow-y-auto">
-                                            <transition-group name="menu-item" tag="div" :key="`${levelData.levelId}-${drawerItemsKey}-${cacheUpdateKey}`">
-                                                <div v-for="(cat, index) in levelData.children" :key="`${cat.id}-${drawerItemsKey}`" class="menu-item-wrapper" :style="{ '--i': index }">
-                                                    <!-- Acordeón para subcategorías (dentro de niveles navegados) -->
-                                                    <button 
-                                                        class="w-full flex items-center justify-between px-4 py-3.5 transition-colors border-b" 
-                                                        :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50 active:bg-gray-300/50 border-gray-300' : 'hover:bg-gray-50 active:bg-gray-100 border-gray-200'"
-                                                        @click="cat.has_children_with_products ? toggleNode(cat) : applyImmediate(cat.id)"
-                                                    >
-                                                        <span 
-                                                            class="font-medium text-sm"
-                                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-700' : 'text-gray-800'"
-                                                        >{{ cat.name }}</span>
-                                <div class="flex items-center gap-3">
-                                                            <span 
-                                                                v-if="cat.has_children_with_products" 
-                                                                class="text-lg font-light leading-none min-w-[20px] text-center"
-                                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-600' : 'text-gray-800'"
-                                                            >
-                                                                {{ expanded[cat.id] ? '−' : '+' }}
-                                                            </span>
-                                </div>
-                            </button>
-                                                    <!-- Sub-subcategorías indentadas cuando está expandido -->
-                                                    <transition name="submenu">
-                                                        <div 
-                                                            v-if="expanded[cat.id] && cat.has_children_with_products" 
-                                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'bg-gray-200/30' : 'bg-gray-50/50'"
-                                                        >
-                                                            <template v-if="loadingCategories.has(cat.id)">
-                                                                <div class="px-4 py-3 pl-8 text-xs text-gray-500">Cargando...</div>
-                                                            </template>
-                                                            <transition-group v-else name="submenu-item" tag="div">
-                                                                <button
-                                                                    v-for="(subcat, subIndex) in getLevelChildren(cat.id)"
-                                                                    :key="subcat.id"
-                                                                    class="submenu-item-wrapper w-full flex items-center justify-between px-4 py-2.5 pl-8 transition-colors border-b"
-                                                                    :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-300/50 active:bg-gray-400/50 border-gray-400/50' : 'hover:bg-gray-100 active:bg-gray-150 border-gray-200/50'"
-                                                                    @click="applyImmediate(subcat.id)"
-                                                                    :style="{ '--i': subIndex }"
-                                                                >
-                                                                    <span 
-                                                                        class="font-normal text-sm"
-                                                                        :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-600' : 'text-gray-700'"
-                                                                    >{{ subcat.name }}</span>
-                                                                </button>
-                                                            </transition-group>
-                        </div>
-                                                    </transition>
-                    </div>
-                                            </transition-group>
-                </div>
-                                        <!-- Estados cuando no hay hijos o está cargando -->
-                                        <div v-else-if="levelData.isLoading" class="flex-1 flex items-center justify-center px-4 py-6 text-sm text-gray-500">Cargando...</div>
-                                        <div v-else class="flex-1 flex items-center justify-center px-4 py-6 text-sm text-gray-500">No hay categorías disponibles</div>
+                                            <span 
+                                                class="font-semibold text-sm uppercase"
+                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-800' : 'text-blue-700'"
+                                            >HOME</span>
+                                            <span 
+                                                class="text-xs"
+                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-600' : 'text-blue-600'"
+                                            >›</span>
+                                        </button>
+                                        <div 
+                                            class="border-b"
+                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'border-gray-300' : 'border-gray-200'"
+                                        ></div>
                                     </div>
+                                    <!-- Contenido de categorías -->
+                                    <div v-if="levelData.children && levelData.children.length > 0" class="flex-1 overflow-y-auto">
+                                        <div class="flex flex-col">
+                                            <div v-for="(cat, index) in levelData.children" :key="`${cat.id}-${drawerItemsKey}`" class="w-full">
+                                                <!-- Acordeón para subcategorías (dentro de niveles navegados) -->
+                                                <button 
+                                                    class="w-full flex items-center justify-between px-4 py-3.5 transition-colors border-b" 
+                                                    :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-200/50 active:bg-gray-300/50 border-gray-300' : 'hover:bg-gray-50 active:bg-gray-100 border-gray-200'"
+                                                    @click="cat.has_children_with_products ? toggleNode(cat) : applyImmediate(cat.id)"
+                                                >
+                                                    <span 
+                                                        class="font-medium text-sm"
+                                                        :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-700' : 'text-gray-800'"
+                                                    >{{ cat.name }}</span>
+                                                    <div class="flex items-center gap-3">
+                                                        <span 
+                                                            v-if="cat.has_children_with_products" 
+                                                            class="text-lg font-light leading-none min-w-[20px] text-center"
+                                                            :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-600' : 'text-gray-800'"
+                                                        >
+                                                            {{ expanded[cat.id] ? '−' : '+' }}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                                <!-- Sub-subcategorías indentadas cuando está expandido -->
+                                                <transition name="submenu">
+                                                    <div 
+                                                        v-if="expanded[cat.id] && cat.has_children_with_products" 
+                                                        :class="headerStyle === 'fit' && !catalogUseDefault ? 'bg-gray-200/30' : 'bg-gray-50/50'"
+                                                    >
+                                                        <template v-if="loadingCategories.has(cat.id)">
+                                                            <div class="px-4 py-3 pl-8 text-xs text-gray-500">Cargando...</div>
+                                                        </template>
+                                                        <transition-group v-else name="submenu-item" tag="div">
+                                                            <button
+                                                                v-for="(subcat, subIndex) in getLevelChildren(cat.id)"
+                                                                :key="subcat.id"
+                                                                class="submenu-item-wrapper w-full flex items-center justify-between px-4 py-2.5 pl-8 transition-colors border-b"
+                                                                :class="headerStyle === 'fit' && !catalogUseDefault ? 'hover:bg-gray-300/50 active:bg-gray-400/50 border-gray-400/50' : 'hover:bg-gray-100 active:bg-gray-150 border-gray-200/50'"
+                                                                @click="applyImmediate(subcat.id)"
+                                                                :style="{ '--i': subIndex }"
+                                                            >
+                                                                <span 
+                                                                    class="font-normal text-sm"
+                                                                    :class="headerStyle === 'fit' && !catalogUseDefault ? 'text-gray-600' : 'text-gray-700'"
+                                                                >{{ subcat.name }}</span>
+                                                            </button>
+                                                        </transition-group>
+                                                    </div>
+                                                </transition>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Estados cuando no hay hijos o está cargando -->
+                                    <div v-else-if="levelData.isLoading" class="flex-1 flex items-center justify-center px-4 py-6 text-sm text-gray-500">Cargando...</div>
+                                    <div v-else class="flex-1 flex items-center justify-center px-4 py-6 text-sm text-gray-500">No hay categorías disponibles</div>
                                 </div>
-                            </template>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2812,380 +2816,9 @@ watch(galleryItems, (newItems, oldItems) => {
         </Link>
     </div>
     <CookieConsent />
-<!-- 
-/* Cinta con gradiente y shimmer */
-.promo-ribbon {
-	background: linear-gradient(90deg, #ef4444, #dc2626);
-	position: relative;
-	overflow: hidden;
-}
-.promo-ribbon::before {
-	content: '';
-	position: absolute;
-	top: 0;
-	left: -50%;
-	width: 50%;
-	height: 100%;
-	background: linear-gradient(120deg, transparent, rgba(255,255,255,.35), transparent);
-	transform: skewX(-20deg);
-	animation: shimmer 2.2s infinite;
-}
-@keyframes shimmer {
-	0% { left: -60%; }
-	60% { left: 120%; }
-	100% { left: 120%; }
-}
 
-/* Marquee horizontal */
-.marquee {
-	position: relative;
-	overflow: hidden;
-	width: 100%;
-}
-.marquee__inner {
-	display: inline-flex;
-	gap: 2rem;
-	white-space: nowrap;
-	animation: marquee 12s linear infinite;
-}
-@keyframes marquee {
-	0%   { transform: translateX(0); }
-	100% { transform: translateX(-50%); }
-}
-
-/* Parpadeo suave para el ícono */
-.blink { animation: blink 1.2s ease-in-out infinite; }
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-
-/* Transiciones para el drawer (cortina translúcida) */
-.drawer-enter-active {
-    transition: opacity 0.25s ease;
-}
-
-.drawer-leave-active {
-    transition: opacity 0.25s ease;
-}
-
-.drawer-enter-from {
-    opacity: 0;
-}
-
-.drawer-leave-to {
-    opacity: 0;
-}
-
-.drawer-enter-active > div:last-child {
-    animation: slideInLeft 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.drawer-leave-active > div:last-child {
-    animation: slideOutLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes slideInLeft {
-    from {
-        transform: translateX(-100%);
-    }
-    to {
-        transform: translateX(0);
-    }
-}
-
-@keyframes slideOutLeft {
-    from {
-        transform: translateX(0);
-    }
-    to {
-        transform: translateX(-100%);
-    }
-}
-
-/* Transiciones para búsqueda expandible */
-.search-expand-enter-active,
-.search-expand-leave-active {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.search-expand-enter-from {
-    opacity: 0;
-    transform: scale(0.9) translateX(10px);
-}
-
-.search-expand-leave-to {
-    opacity: 0;
-    transform: scale(0.9) translateX(10px);
-}
-
-.search-expand-enter-to,
-.search-expand-leave-from {
-    opacity: 1;
-    transform: scale(1) translateX(0);
-}
-
-/* Transiciones para la galería de productos - desplazamiento automático hacia la izquierda */
-.slide-fade-enter-active,
-.slide-fade-leave-active {
-    transition: all 0.5s ease-in-out;
-}
-
-.slide-fade-enter-from {
-    opacity: 0;
-    transform: translateX(100%);
-}
-
-.slide-fade-leave-to {
-    opacity: 0;
-    transform: translateX(-100%);
-}
-
-.slide-fade-enter-to,
-.slide-fade-leave-from {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-/* Estilos para la galería con arrastre manual */
-.gallery-slide {
-    will-change: transform;
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-}
-
-/* Efecto de menú hamburguesa estilo chalochalo.co - entrada progresiva desde la izquierda */
-.menu-item-wrapper {
-    margin-bottom: 0;
-}
-
-.menu-item-enter-active {
-    animation: slideReveal 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-    animation-delay: calc(var(--i) * 80ms);
-}
-
-.menu-item-enter-from {
-    opacity: 0;
-    transform: translateX(-50px);
-}
-
-.menu-item-enter-to {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-.menu-item-leave-active {
-    transition: all 0.25s ease-in-out;
-}
-
-.menu-item-leave-from {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-.menu-item-leave-to {
-    opacity: 0;
-    transform: translateX(-20px);
-}
-
-.menu-item-move {
-    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-@keyframes slideReveal {
-    from {
-        opacity: 0;
-        transform: translateX(-50px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-/* Transición para subcategorías */
-.submenu-enter-active {
-    transition: all 0.3s ease-out;
-    overflow: hidden;
-}
-
-.submenu-leave-active {
-    transition: all 0.25s ease-in;
-    overflow: hidden;
-}
-
-.submenu-enter-from {
-    opacity: 0;
-    max-height: 0;
-    transform: translateY(-10px);
-}
-
-.submenu-enter-to {
-    opacity: 1;
-    max-height: 500px;
-    transform: translateY(0);
-}
-
-.submenu-leave-from {
-    opacity: 1;
-    max-height: 500px;
-    transform: translateY(0);
-}
-
-.submenu-leave-to {
-    opacity: 0;
-    max-height: 0;
-    transform: translateY(-10px);
-}
-
-/* Efecto de barrido para subcategorías */
-.submenu-item-wrapper {
-    margin-bottom: 0;
-}
-
-.submenu-item-enter-active {
-    animation: slideReveal 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
-    animation-delay: calc(var(--i) * 60ms);
-}
-
-.submenu-item-enter-from {
-    opacity: 0;
-    transform: translateX(-30px);
-}
-
-.submenu-item-enter-to {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-.submenu-item-leave-active {
-    transition: all 0.2s ease-in-out;
-}
-
-.submenu-item-leave-from {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-.submenu-item-leave-to {
-    opacity: 0;
-    transform: translateX(-15px);
-}
-
-/* Estilos para menú desplegable */
-.dropdown-menu {
-    scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 transparent;
-}
-
-.dropdown-menu::-webkit-scrollbar {
-    width: 6px;
-}
-
-.dropdown-menu::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.dropdown-menu::-webkit-scrollbar-thumb {
-    background-color: #cbd5e1;
-    border-radius: 3px;
-}
-
-.dropdown-menu::-webkit-scrollbar-thumb:hover {
-    background-color: #94a3b8;
-}
-
-/* Estilos para menú completo en móvil */
-.scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-
-.scrollbar-hide::-webkit-scrollbar {
-    display: none;
-}
-
-/* Menú completo responsive */
-.menu-full-container {
-    position: relative;
-}
-
-@media (max-width: 640px) {
-    .menu-full-container {
-        gap: 0.25rem;
-        padding: 0.25rem 0;
-        -webkit-overflow-scrolling: touch;
-        scroll-behavior: smooth;
-        max-width: calc(100vw - 8rem); /* Dejar espacio para logo y búsqueda */
-    }
-    
-    .menu-full-container button {
-        font-size: 0.75rem;
-        padding: 0.375rem 0.625rem;
-        min-width: fit-content;
-        border-radius: 0.375rem;
-        white-space: nowrap;
-    }
-}
-
-@media (min-width: 641px) {
-    .menu-full-container {
-        gap: 0.5rem;
-    }
-}
-
-.submenu-item-move {
-    transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-/* Multi-level Sliding Menu - Contenedor de slides */
-.menu-slides-container {
-    display: flex;
-    height: 100%;
-    transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    will-change: transform;
-}
-
-/* Cada nivel del menú es un slide */
-.menu-slide {
-    flex-shrink: 0;
-    background: white;
-    height: 100%;
-    position: relative;
-}
-
-/* Animación de salto vertical y pulso para el botón "COMPRAR" en la galería */
-.buy-now-gallery {
-    animation: bounce-pulse-gallery 2s ease-in-out infinite;
-}
-
-@keyframes bounce-pulse-gallery {
-    0%, 100% {
-        transform: translateY(0) scale(1);
-        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.6);
-    }
-    25% {
-        transform: translateY(-3px) scale(1.02);
-        box-shadow: 0 0 0 8px rgba(255, 255, 255, 0);
-    }
-    50% {
-        transform: translateY(0) scale(1.02);
-        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
-    }
-    75% {
-        transform: translateY(-2px) scale(1.01);
-        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
-    }
-}
-
-.buy-now-gallery:hover {
-    animation: none;
-    transform: translateY(0) scale(1.05);
-    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.4);
-}
--->
-
-<!-- MODALS -->
-<RegisterModal 
+    <!-- MODALS -->
+    <RegisterModal 
     :show="showRegisterModal" 
     :store="store" 
     @close="showRegisterModal = false" 
@@ -3327,6 +2960,29 @@ watch(galleryItems, (newItems, oldItems) => {
 .collapse-enter-from, .collapse-leave-to {
     height: 0 !important;
     opacity: 0;
+}
+
+/* Transición menu anidado (submenu) */
+.submenu-enter-active, .submenu-leave-active {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    max-height: 800px;
+    overflow: hidden;
+    opacity: 1;
+}
+
+.submenu-enter-from, .submenu-leave-to {
+    max-height: 0;
+    opacity: 0;
+}
+
+/* Submenu items fade in */
+.submenu-item-enter-active, .submenu-item-leave-active {
+    transition: all 0.3s ease;
+}
+
+.submenu-item-enter-from, .submenu-item-leave-to {
+    opacity: 0;
+    transform: translateX(-10px);
 }
 
 /* Estilos específicos para el dropdown category */
