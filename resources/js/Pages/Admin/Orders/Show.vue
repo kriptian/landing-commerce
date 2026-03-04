@@ -393,7 +393,7 @@ const notifyCurrentStatus = () => {
 
     <!-- Hidden invoice container for PDF generation -->
     <div id="invoice-content-digital" class="fixed top-0 left-0 w-[58mm] bg-white z-[-100] opacity-0 pointer-events-none">
-        <div class="bg-white text-black p-2 font-mono text-[11px] leading-tight" style="width: 58mm; margin: 0 auto; font-family: 'Courier New', Courier, monospace;">
+        <div class="bg-white text-black p-2 font-sans text-xs leading-tight" style="width: 58mm; margin: 0 auto;">
             <!-- Header -->
             <div class="text-center mb-4">
                  <img 
@@ -403,8 +403,8 @@ const notifyCurrentStatus = () => {
                     class="h-12 w-auto object-contain mx-auto mb-2 grayscale"
                     crossorigin="anonymous"
                 />
-                <h2 class="font-bold text-base uppercase mb-1">{{ store?.name || $page.props.auth.user.store?.name }}</h2>
-                <div class="text-[10px] space-y-0.5" style="font-size: 10px;">
+                <h2 class="font-normal text-base uppercase mb-1">{{ store?.name || $page.props.auth.user.store?.name }}</h2>
+                <div class="text-[11px] space-y-0.5">
                     <p v-if="store?.nit">NIT: {{ store.nit }}</p>
                     <p v-if="store?.address" class="whitespace-normal">{{ store.address }}</p>
                     <p v-if="store?.address_two" class="whitespace-normal">{{ store.address_two }}</p>
@@ -416,97 +416,97 @@ const notifyCurrentStatus = () => {
                 </div>
             </div>
 
-            <div class="border-b-2 border-dashed border-black my-2"></div>
+            <div class="border-b border-dashed border-black my-2"></div>
 
             <!-- Info Grid -->
-            <div class="mb-3 text-[10px] grid grid-cols-2 gap-x-2 gap-y-1">
+            <div class="mb-3 text-[11px] grid grid-cols-2 gap-x-2 gap-y-1">
                 <div class="col-span-2 text-center mb-1">
-                    <p class="text-sm font-bold">Orden #{{ order.sequence_number ?? order.id }}</p>
-                    <p class="text-[9px] text-gray-500">{{ new Date(order.created_at).toLocaleString('es-CO') }}</p>
+                    <p class="text-sm font-normal">Orden #{{ order.sequence_number ?? order.id }}</p>
+                    <p class="text-[10px]">{{ new Date(order.created_at).toLocaleString('es-CO') }}</p>
                 </div>
                 
                 <div>
-                    <span class="font-bold block text-gray-600">Canal:</span>
+                    <span class="font-normal block">Canal:</span>
                     <span>Tienda Online</span>
                 </div>
                 <div class="text-right">
-                    <span class="font-bold block text-gray-600">Método de Pago:</span>
+                    <span class="font-normal block">Método de Pago:</span>
                     <span class="capitalize">{{ order.payment_method || 'N/A' }}</span>
                 </div>
 
-                <div v-if="order.customer_name" class="col-span-2 mt-1 border-t border-dotted border-gray-300 pt-1">
-                    <p><span class="font-bold text-gray-600">Cliente:</span> {{ order.customer_name }}</p>
-                    <p v-if="order.customer_phone"><span class="font-bold text-gray-600">Tel:</span> {{ order.customer_phone }}</p>
-                    <p v-if="order.customer_address" class="leading-tight"><span class="font-bold text-gray-600">Dir:</span> {{ order.customer_address }}</p>
+                <div v-if="order.customer_name" class="col-span-2 mt-1 border-t border-dashed border-gray-300 pt-1">
+                    <p><span class="font-normal">Cliente:</span> {{ order.customer_name }}</p>
+                    <p v-if="order.customer_phone"><span class="font-normal">Tel:</span> {{ order.customer_phone }}</p>
+                    <p v-if="order.customer_address" class="leading-tight"><span class="font-normal">Dir:</span> {{ order.customer_address }}</p>
                 </div>
             </div>
 
-            <div class="border-b border-black my-2"></div>
+            <div class="border-b border-dashed border-black my-2"></div>
 
             <!-- Items -->
             <div class="mb-4">
                  <!-- Simplified Header -->
-                 <div class="flex justify-between text-[9px] font-bold mb-2 uppercase text-gray-800">
+                 <div class="flex justify-between text-[10px] font-normal mb-2 uppercase">
                     <span>Descripción</span>
                     <span>Total</span>
                 </div>
 
-                <div v-for="item in itemsList" :key="item.id" class="mb-3 border-b border-gray-200 last:border-0 pb-2">
+                <div v-for="item in itemsList" :key="item.id" class="mb-3 border-b border-dashed border-gray-200 last:border-0 pb-2">
                     <!-- Top Row: Product Name -->
-                    <div class="font-bold text-[11px] leading-tight mb-0.5">
+                    <div class="font-normal text-xs leading-tight mb-0.5">
                         {{ item.product_name }}
                     </div>
                     
                     <!-- Variant Info -->
-                    <div v-if="item.variant_options" class="text-[9px] text-gray-500 italic mb-1">
+                    <div v-if="item.variant_options" class="text-[10px] italic mb-1">
                          <span v-for="(value, key) in item.variant_options" :key="key" class="mr-1">
                             {{ value }}
                         </span>
                     </div>
 
                     <!-- Price / Calculation Row -->
-                    <div class="flex justify-between items-start text-[10px] mt-1">
+                    <div class="flex justify-between items-start text-[11px] mt-1">
                          <!-- Left Col: Quantity x Price -->
                         <div class="flex flex-col">
                             <!-- Standard calculation line -->
-                            <span class="text-gray-800">{{ item.quantity }} x {{ formatCurrency(item.unit_price) }}</span>
+                            <span>{{ item.quantity }} x {{ formatCurrency(item.unit_price) }}</span>
                         </div>
                         
                         <!-- Right Col: Line Total -->
-                        <div class="font-bold text-[11px] mt-0.5">
+                        <div class="font-normal text-xs mt-0.5">
                             {{ formatCurrency(item.unit_price * item.quantity) }}
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="border-t border-black my-2 dashed"></div>
+            <div class="border-t border-dashed border-black my-2"></div>
 
             <!-- Totals -->
-            <div class="text-right text-[11px] space-y-1">
-                 <div v-if="order.discount_amount > 0" class="flex justify-between text-gray-600">
+            <div class="text-right text-xs space-y-1">
+                 <div v-if="order.discount_amount > 0" class="flex justify-between">
                     <span>Subtotal</span>
                     <span>{{ formatCurrency(parseFloat(order.total_price) + parseFloat(order.discount_amount) - parseFloat(order.delivery_cost || 0)) }}</span>
                 </div>
-                 <div v-if="parseFloat(order.delivery_cost) > 0" class="flex justify-between text-gray-600">
+                 <div v-if="parseFloat(order.delivery_cost) > 0" class="flex justify-between">
                     <span>Costo de Envío</span>
                     <span>{{ formatCurrency(order.delivery_cost) }}</span>
                 </div>
-                 <div v-if="order.discount_amount > 0" class="flex justify-between text-gray-600">
+                 <div v-if="order.discount_amount > 0" class="flex justify-between">
                     <span>Descuento {{ order.coupon ? '(' + order.coupon.code + ')' : '' }}</span>
                     <span>-{{ formatCurrency(order.discount_amount) }}</span>
                 </div>
-                 <div class="flex justify-between text-base font-black pt-1">
+                 <div class="flex justify-between text-base font-normal pt-1 border-t border-dashed mt-1">
                     <span>TOTAL</span>
                     <span>{{ formatCurrency(order.total_price) }}</span>
                 </div>
             </div>
 
             <!-- Footer -->
-            <div class="text-center mt-6 text-[10px] space-y-1 mb-4">
-                <p class="font-medium">¡Gracias por su compra!</p>
-                 <div v-if="order.notes" class="mt-2 pt-2 border-t border-dotted border-gray-300 text-left">
-                    <p class="font-bold text-[9px] text-gray-500">Notas:</p>
+            <div class="text-center mt-6 text-[11px] space-y-1 mb-4">
+                <p class="font-normal">¡Gracias por su compra!</p>
+                 <div v-if="order.notes" class="mt-2 pt-2 border-t border-dashed border-gray-300 text-left">
+                    <p class="font-normal text-[10px]">Notas:</p>
                     <p class="italic">{{ order.notes }}</p>
                 </div>
             </div>
@@ -515,6 +515,18 @@ const notifyCurrentStatus = () => {
 </template>
 
 <style>
+/* Optimización para impresora térmica: forzar negro y quitar suavizado */
+#invoice-content-digital,
+#invoice-content-digital * {
+    color: black !important;
+    -webkit-font-smoothing: none !important;
+    -moz-osx-font-smoothing: auto !important;
+    text-rendering: optimizeSpeed !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-weight: normal !important;
+    letter-spacing: 0.5px !important;
+}
+
 @media print {
     /* Ocultar todo el contenido normal */
     body * {

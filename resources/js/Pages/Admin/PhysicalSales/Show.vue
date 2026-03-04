@@ -404,7 +404,7 @@ onMounted(() => {
                                         <span>Costo de Envío:</span>
                                         <span>{{ formatCurrency(sale.delivery_cost) }}</span>
                                     </div>
-                                    <div class="flex justify-between text-lg font-bold pt-2 border-t">
+                                    <div class="flex justify-between text-lg font-semibold pt-2 border-t">
                                         <span>Total:</span>
                                         <span>{{ formatCurrency(sale.total) }}</span>
                                     </div>
@@ -419,7 +419,7 @@ onMounted(() => {
     
     <!-- Hidden invoice container for PDF generation -->
     <div id="invoice-content-show" class="fixed top-0 left-0 w-[58mm] bg-white z-[-100] opacity-0 pointer-events-none">
-        <div class="bg-white text-black p-2 font-mono text-[11px] leading-tight" style="width: 58mm; margin: 0 auto; font-family: 'Courier New', Courier, monospace;">
+        <div class="bg-white text-black p-2 font-sans text-xs leading-tight" style="width: 58mm; margin: 0 auto;">
             <!-- Header -->
             <div class="text-center mb-4">
                  <img 
@@ -429,8 +429,8 @@ onMounted(() => {
                     class="h-12 w-auto object-contain mx-auto mb-2 grayscale"
                     crossorigin="anonymous"
                 />
-                <h2 class="font-bold text-base uppercase mb-1">{{ store?.name }}</h2>
-                <div class="text-[10px] space-y-0.5" style="font-size: 10px;">
+                <h2 class="font-normal text-base uppercase mb-1">{{ store?.name }}</h2>
+                <div class="text-[11px] space-y-0.5">
                     <p v-if="store?.nit">NIT: {{ store.nit }}</p>
                     <p v-if="store?.address" class="whitespace-normal">{{ store.address }}</p>
                     <p v-if="store?.address_two" class="whitespace-normal">{{ store.address_two }}</p>
@@ -442,110 +442,110 @@ onMounted(() => {
                 </div>
             </div>
 
-            <div class="border-b-2 border-dashed border-black my-2"></div>
+            <div class="border-b border-dashed border-black my-2"></div>
 
             <div v-if="sale">
                 <!-- Info Grid -->
-                <div class="mb-3 text-[10px] grid grid-cols-2 gap-x-2 gap-y-1">
+                <div class="mb-3 text-[11px] grid grid-cols-2 gap-x-2 gap-y-1">
                     <div class="col-span-2 text-center mb-1">
-                        <p class="text-sm font-bold">Venta #{{ sale.sale_number }}</p>
-                        <p class="text-[9px] text-gray-500">{{ new Date(sale.created_at).toLocaleString('es-CO') }}</p>
+                        <p class="text-sm font-normal">Venta #{{ sale.sale_number }}</p>
+                        <p class="text-[10px]">{{ new Date(sale.created_at).toLocaleString('es-CO') }}</p>
                     </div>
                     
                     <div>
-                        <span class="font-bold block text-gray-600">Vendedor:</span>
+                        <span class="font-normal block">Vendedor:</span>
                         <span>{{ sale.user?.name || $page.props.auth.user.name }}</span>
                     </div>
                     <div class="text-right">
-                        <span class="font-bold block text-gray-600">Método de Pago:</span>
+                        <span class="font-normal block">Método de Pago:</span>
                         <span class="capitalize">{{ sale.payment_method }}</span>
                     </div>
 
-                    <div v-if="sale.customer_name" class="col-span-2 mt-1 border-t border-dotted border-gray-300 pt-1">
-                        <p><span class="font-bold text-gray-600">Cliente:</span> {{ sale.customer_name }}</p>
-                        <p v-if="sale.customer_nit"><span class="font-bold text-gray-600">NIT/CC:</span> {{ sale.customer_nit }}</p>
+                    <div v-if="sale.customer_name" class="col-span-2 mt-1 border-t border-dashed border-gray-300 pt-1">
+                        <p><span class="font-normal">Cliente:</span> {{ sale.customer_name }}</p>
+                        <p v-if="sale.customer_nit"><span class="font-normal">NIT/CC:</span> {{ sale.customer_nit }}</p>
                     </div>
                 </div>
 
-                <div class="border-b border-black my-2"></div>
+                <div class="border-b border-dashed border-black my-2"></div>
 
                 <!-- Items -->
                 <div class="mb-4">
                      <!-- Simplified Header -->
-                     <div class="flex justify-between text-[9px] font-bold mb-2 uppercase text-gray-800">
+                     <div class="flex justify-between text-[10px] font-normal mb-2 uppercase">
                         <span>Descripción</span>
                         <span>Total</span>
                     </div>
 
-                    <div v-for="item in itemsList" :key="item.id" class="mb-3 border-b border-gray-200 last:border-0 pb-2">
+                    <div v-for="item in itemsList" :key="item.id" class="mb-3 border-b border-dashed border-gray-200 last:border-0 pb-2">
                         <!-- Top Row: Product Name -->
-                        <div class="font-bold text-[11px] leading-tight mb-0.5">
+                        <div class="font-normal text-xs leading-tight mb-0.5">
                             {{ item.product_name }}
                         </div>
                         
                         <!-- Variant Info -->
-                        <div v-if="item.variant_options" class="text-[9px] text-gray-500 italic mb-1">
+                        <div v-if="item.variant_options" class="text-[10px] italic mb-1">
                             {{ Object.values(item.variant_options).join(' / ') }}
                         </div>
 
                         <!-- Price / Calculation Row -->
-                        <div class="flex justify-between items-start text-[10px] mt-1">
+                        <div class="flex justify-between items-start text-[11px] mt-1">
                              <!-- Left Col: Quantity x Price -->
                             <div class="flex flex-col">
                                 <!-- Standard calculation line -->
-                                <span class="text-gray-800">{{ item.quantity }} x {{ formatCurrency(item.unit_price) }}</span>
+                                <span>{{ item.quantity }} x {{ formatCurrency(item.unit_price) }}</span>
                                 
                                 <!-- Extended Discount Info -->
                                 <div v-if="item.discount_percent > 0 || (item.original_price && item.original_price > item.unit_price)" 
                                      class="flex flex-col mt-0.5"
                                 >
                                     <!-- Original Price (Strikethrough) -->
-                                    <span style="text-decoration: line-through; color: #9ca3af;" class="text-[9px]">
+                                    <span style="text-decoration: line-through;" class="text-[10px]">
                                         Precio Habitual: {{ formatCurrency(item.original_price || (item.unit_price * 100 / (100 - item.discount_percent))) }}
                                     </span>
                                     
                                     <!-- Discount Tag -->
-                                    <span class="text-[9px] font-bold text-gray-800">
+                                    <span class="text-[10px] font-normal">
                                         Desc: {{ item.discount_percent || Math.round((1 - item.unit_price/item.original_price)*100) }}%
                                     </span>
                                 </div>
                             </div>
                             
                             <!-- Right Col: Line Total -->
-                            <div class="font-bold text-[11px] mt-0.5">
+                            <div class="font-normal text-xs mt-0.5">
                                 {{ formatCurrency(item.subtotal) }}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="border-t border-black my-2 dashed"></div>
+                <div class="border-t border-dashed border-black my-2"></div>
 
                 <!-- Totals -->
-                <div class="text-right text-[11px] space-y-1">
-                     <div v-if="sale.discount > 0" class="flex justify-between text-gray-600">
+                <div class="text-right text-xs space-y-1">
+                     <div v-if="sale.discount > 0" class="flex justify-between">
                         <span>Subtotal</span>
                         <span>{{ formatCurrency(sale.subtotal) }}</span>
                     </div>
-                     <div v-if="sale.discount > 0" class="flex justify-between text-gray-600">
+                     <div v-if="sale.discount > 0" class="flex justify-between">
                         <span>Descuento</span>
                         <span>-{{ formatCurrency(sale.discount) }}</span>
                     </div>
-                     <div v-if="parseFloat(sale.delivery_cost) > 0" class="flex justify-between text-gray-600">
+                     <div v-if="parseFloat(sale.delivery_cost) > 0" class="flex justify-between">
                         <span>Costo de envío</span>
                         <span>{{ formatCurrency(sale.delivery_cost) }}</span>
                     </div>
-                     <div class="flex justify-between text-base font-black pt-1">
+                     <div class="flex justify-between text-base font-normal pt-1 border-t border-dashed mt-1">
                         <span>TOTAL</span>
                         <span>{{ formatCurrency(sale.total) }}</span>
                     </div>
                 </div>
 
                 <!-- Footer -->
-                <div class="text-center mt-6 text-[10px] space-y-1 mb-4">
-                    <p class="font-medium">¡Gracias por su compra!</p>
-                     <div v-if="sale.notes" class="mt-2 pt-2 border-t border-dotted border-gray-300 text-left">
-                        <p class="font-bold text-[9px] text-gray-500">Notas:</p>
+                <div class="text-center mt-6 text-[11px] space-y-1 mb-4">
+                    <p class="font-normal">¡Gracias por su compra!</p>
+                     <div v-if="sale.notes" class="mt-2 pt-2 border-t border-dashed border-gray-300 text-left">
+                        <p class="font-normal text-[10px]">Notas:</p>
                         <p class="italic">{{ sale.notes }}</p>
                     </div>
                 </div>
@@ -555,6 +555,18 @@ onMounted(() => {
 </template>
 
 <style>
+/* Optimización para impresora térmica: forzar negro y quitar suavizado */
+#invoice-content-show,
+#invoice-content-show * {
+    color: black !important;
+    -webkit-font-smoothing: none !important;
+    -moz-osx-font-smoothing: auto !important;
+    text-rendering: optimizeSpeed !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-weight: normal !important;
+    letter-spacing: 0.5px !important;
+}
+
 @media print {
     /* Ocultar todo el contenido normal */
     body * {
