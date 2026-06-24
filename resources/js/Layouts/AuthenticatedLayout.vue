@@ -115,6 +115,7 @@ const confirmUpgrade = () => {
                                 <button v-else type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500">Inventario</button>
                                 
                                 <NavLink v-if="isNegociante" :href="route('admin.catalog-customization.index')" :active="route().current('admin.catalog-customization.*')">Personalizar catálogo</NavLink>
+                                <NavLink v-if="isNegociante" :href="route('admin.pdf-catalog-builder.index')" :active="route().current('admin.pdf-catalog-builder.*')">Generador PDF</NavLink>
                                 
                                 <button v-if="!isNegociante" type="button" @click="openUpgrade" class="inline-flex items-center gap-2 text-green-700 hover:text-green-800">
                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -253,6 +254,7 @@ const confirmUpgrade = () => {
                         <button v-else type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Inventario</button>
                         
                         <ResponsiveNavLink v-if="isNegociante" :href="route('admin.catalog-customization.index')" :active="route().current('admin.catalog-customization.*')">Personalizar catálogo</ResponsiveNavLink>
+                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.pdf-catalog-builder.index')" :active="route().current('admin.pdf-catalog-builder.*')">Generador PDF</ResponsiveNavLink>
                         
                         <button v-if="!isNegociante" type="button" class="w-full text-left px-3 py-2 text-green-700 hover:text-green-800" @click="openUpgrade">Mejorar plan</button>
                         <ResponsiveNavLink v-if="$page.props.auth?.isSuperAdmin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">

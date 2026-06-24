@@ -21,6 +21,7 @@ use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\CatalogCustomizationController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\PdfCatalogBuilderController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Admin\PhysicalSaleController;
@@ -168,6 +169,7 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
             Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
             Route::get('catalog-customization', [CatalogCustomizationController::class, 'index'])->name('catalog-customization.index');
             Route::put('catalog-customization', [CatalogCustomizationController::class, 'update'])->name('catalog-customization.update');
+            Route::get('pdf-catalog-builder', [PdfCatalogBuilderController::class, 'index'])->name('pdf-catalog-builder.index');
             
             // Galería de imágenes
             Route::resource('gallery-images', \App\Http\Controllers\Admin\GalleryImageController::class)->names([
