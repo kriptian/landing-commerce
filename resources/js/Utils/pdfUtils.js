@@ -112,6 +112,21 @@ export const downloadPagedPDF = async (element, filename = 'document.pdf', optio
         }
 
         doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+
+        const pageRect = page.getBoundingClientRect();
+        const links = Array.from(page.querySelectorAll('[data-pdf-link]'));
+        links.forEach((link) => {
+            const url = link.getAttribute('data-pdf-link');
+            if (!url) return;
+
+            const rect = link.getBoundingClientRect();
+            const x = ((rect.left - pageRect.left) / pageRect.width) * pageWidth;
+            const y = ((rect.top - pageRect.top) / pageRect.height) * pageHeight;
+            const width = (rect.width / pageRect.width) * pageWidth;
+            const height = (rect.height / pageRect.height) * pageHeight;
+
+            doc.link(x, y, width, height, { url });
+        });
     }
 
     doc.save(filename);

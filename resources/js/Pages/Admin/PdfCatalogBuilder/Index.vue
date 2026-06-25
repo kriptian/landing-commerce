@@ -63,6 +63,20 @@ const settings = ref({
     businessInstagramText: '',
     businessFacebookText: '',
     businessTiktokText: '',
+    businessPhoneLinkEnabled: false,
+    businessEmailLinkEnabled: false,
+    businessAddressLinkEnabled: false,
+    businessWebsiteLinkEnabled: false,
+    businessInstagramLinkEnabled: false,
+    businessFacebookLinkEnabled: false,
+    businessTiktokLinkEnabled: false,
+    businessPhoneUrl: '',
+    businessEmailUrl: '',
+    businessAddressUrl: '',
+    businessWebsiteUrl: '',
+    businessInstagramUrl: '',
+    businessFacebookUrl: '',
+    businessTiktokUrl: '',
     logoApplyTo: 'none',
     logoPosition: 'top-right',
     logoSize: 'medium',
@@ -137,13 +151,13 @@ const positionOptions = [
 ];
 
 const businessInfoOptions = [
-    { key: 'showBusinessPhone', textKey: 'businessPhoneText', label: 'WhatsApp', type: 'whatsapp', placeholder: '302 406 1771' },
-    { key: 'showBusinessEmail', textKey: 'businessEmailText', label: 'Email', type: 'email', placeholder: 'ventas@mitienda.com' },
-    { key: 'showBusinessAddress', textKey: 'businessAddressText', label: 'Dirección', type: 'address', placeholder: 'Calle 123 # 45-67' },
-    { key: 'showBusinessWebsite', textKey: 'businessWebsiteText', label: 'Web', type: 'web', placeholder: 'mitienda.com' },
-    { key: 'showBusinessInstagram', textKey: 'businessInstagramText', label: 'Instagram', type: 'instagram', placeholder: '@mi.tienda' },
-    { key: 'showBusinessFacebook', textKey: 'businessFacebookText', label: 'Facebook', type: 'facebook', placeholder: 'Mi Tienda' },
-    { key: 'showBusinessTiktok', textKey: 'businessTiktokText', label: 'TikTok', type: 'tiktok', placeholder: '@mi.tienda' },
+    { key: 'showBusinessPhone', textKey: 'businessPhoneText', linkKey: 'businessPhoneLinkEnabled', urlKey: 'businessPhoneUrl', label: 'WhatsApp', type: 'whatsapp', placeholder: '302 406 1771', urlPlaceholder: 'https://wa.me/573024061771' },
+    { key: 'showBusinessEmail', textKey: 'businessEmailText', linkKey: 'businessEmailLinkEnabled', urlKey: 'businessEmailUrl', label: 'Email', type: 'email', placeholder: 'ventas@mitienda.com', urlPlaceholder: 'mailto:ventas@mitienda.com' },
+    { key: 'showBusinessAddress', textKey: 'businessAddressText', linkKey: 'businessAddressLinkEnabled', urlKey: 'businessAddressUrl', label: 'Dirección', type: 'address', placeholder: 'Calle 123 # 45-67', urlPlaceholder: 'https://maps.google.com/?q=...' },
+    { key: 'showBusinessWebsite', textKey: 'businessWebsiteText', linkKey: 'businessWebsiteLinkEnabled', urlKey: 'businessWebsiteUrl', label: 'Web', type: 'web', placeholder: 'mitienda.com', urlPlaceholder: 'https://mitienda.com' },
+    { key: 'showBusinessInstagram', textKey: 'businessInstagramText', linkKey: 'businessInstagramLinkEnabled', urlKey: 'businessInstagramUrl', label: 'Instagram', type: 'instagram', placeholder: '@mi.tienda', urlPlaceholder: 'https://instagram.com/mi.tienda' },
+    { key: 'showBusinessFacebook', textKey: 'businessFacebookText', linkKey: 'businessFacebookLinkEnabled', urlKey: 'businessFacebookUrl', label: 'Facebook', type: 'facebook', placeholder: 'Mi Tienda', urlPlaceholder: 'https://facebook.com/mitienda' },
+    { key: 'showBusinessTiktok', textKey: 'businessTiktokText', linkKey: 'businessTiktokLinkEnabled', urlKey: 'businessTiktokUrl', label: 'TikTok', type: 'tiktok', placeholder: '@mi.tienda', urlPlaceholder: 'https://tiktok.com/@mi.tienda' },
 ];
 
 const updateViewportWidth = () => {
@@ -225,6 +239,7 @@ const businessContactItems = computed(() => {
             label: option.label,
             type: option.type,
             text: String(settings.value[option.textKey]).trim(),
+            url: settings.value[option.linkKey] ? String(settings.value[option.urlKey] || '').trim() : '',
         }));
 });
 
@@ -686,6 +701,11 @@ const generateCatalog = async () => {
                                                 <input v-model="settings[option.key]" type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                             </label>
                                             <input v-model="settings[option.textKey]" type="text" class="mt-2 w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" :placeholder="option.placeholder" />
+                                            <label class="mt-2 flex items-center gap-2 text-xs font-semibold text-gray-600">
+                                                <input v-model="settings[option.linkKey]" type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                                Agregar hipervínculo
+                                            </label>
+                                            <input v-if="settings[option.linkKey]" v-model="settings[option.urlKey]" type="url" class="mt-2 w-full rounded-lg border-gray-300 text-xs shadow-sm focus:border-blue-500 focus:ring-blue-500" :placeholder="option.urlPlaceholder" />
                                         </div>
                                     </div>
                                 </div>
@@ -851,9 +871,9 @@ const generateCatalog = async () => {
                                     <img v-if="settings.showCoverLogo && store.logo_url" :src="store.logo_url" :alt="store.name" class="mx-auto mb-4 h-28 w-28 rounded-3xl object-contain" />
                                     <h3 class="text-center text-2xl font-black" :style="{ color: settings.textColor }">{{ store.name }}</h3>
                                     <div class="space-y-2">
-                                        <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="flex min-h-[52px] items-center gap-3 rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">
+                                        <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="flex min-h-[60px] items-center gap-3 rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800" :data-pdf-link="item.url || null">
                                             <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full p-1.5 text-white [&>svg]:h-full [&>svg]:w-full" :style="{ backgroundColor: settings.accentColor }" v-html="contactIconSvg(item.type)"></span>
-                                            <span class="min-w-0 flex-1 break-words text-center leading-tight">{{ item.text }}</span>
+                                            <span class="min-w-0 flex-1 break-all text-center leading-tight">{{ item.text }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -862,11 +882,11 @@ const generateCatalog = async () => {
                                     <img v-if="settings.showCoverLogo && store.logo_url" :src="store.logo_url" :alt="store.name" class="mx-auto mb-5 h-32 w-32 rounded-full object-contain bg-white p-2" />
                                     <h3 class="text-3xl font-black" :style="{ color: settings.textColor }">{{ store.name }}</h3>
                                     <div class="mt-6 grid grid-cols-2 gap-3 text-left">
-                                        <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                                        <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="rounded-2xl border border-gray-200 bg-white px-4 py-3" :data-pdf-link="item.url || null">
                                             <p class="text-[10px] font-black uppercase tracking-widest" :style="{ color: settings.accentColor }">{{ item.label }}</p>
                                             <div class="mt-1 flex items-center gap-2">
                                                 <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full p-1 text-white [&>svg]:h-full [&>svg]:w-full" :style="{ backgroundColor: settings.accentColor }" v-html="contactIconSvg(item.type)"></span>
-                                                <p class="min-w-0 flex-1 break-words text-center text-sm font-semibold leading-tight text-gray-800">{{ item.text }}</p>
+                                                <p class="min-w-0 flex-1 break-all text-center text-sm font-semibold leading-tight text-gray-800">{{ item.text }}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -877,9 +897,9 @@ const generateCatalog = async () => {
                                     <div class="min-w-0 flex-1">
                                         <h3 class="text-3xl font-black" :style="{ color: settings.textColor }">{{ store.name }}</h3>
                                         <div class="mt-4 grid grid-cols-2 gap-x-5 gap-y-2">
-                                            <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="min-w-0 text-sm">
+                                            <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="min-w-0 text-sm" :data-pdf-link="item.url || null">
                                                 <span class="inline-flex h-6 w-6 align-middle items-center justify-center rounded-full p-1 text-white [&>svg]:h-full [&>svg]:w-full" :style="{ backgroundColor: settings.accentColor }" v-html="contactIconSvg(item.type)"></span>
-                                                <span class="ml-1 break-words align-middle font-semibold leading-tight text-gray-800">{{ item.text }}</span>
+                                                <span class="ml-1 break-all align-middle font-semibold leading-tight text-gray-800">{{ item.text }}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -904,8 +924,8 @@ const generateCatalog = async () => {
                                     <div class="relative overflow-hidden bg-white" :class="productImageClass">
                                         <img :src="item.imageUrl" :alt="item.name || 'Producto del catálogo'" class="h-full w-full object-contain" />
                                         <img v-if="showImageLogo" :src="store.logo_url" :alt="store.name" class="pointer-events-none absolute z-10 object-contain" :class="[imageLogoPositionClass, settings.logoPosition === 'center' ? 'h-32 w-32' : imageLogoSizeClass]" :style="logoOpacityStyle" />
-                                        <div v-if="hasPriceOverlay(item)" class="absolute flex min-h-[48px] min-w-[120px] items-center justify-center rounded-2xl px-4 py-2 text-center text-xl font-black leading-none shadow-lg" :class="overlayPositionClass(settings.pricePosition)" :style="{ backgroundColor: settings.priceBgColor, color: settings.priceColor }">
-                                            {{ formatPrice(item.price) }}
+                                        <div v-if="hasPriceOverlay(item)" class="absolute min-w-[132px] rounded-2xl px-5 text-center text-xl font-black shadow-lg" :class="overlayPositionClass(settings.pricePosition)" :style="{ alignItems: 'center', backgroundColor: settings.priceBgColor, color: settings.priceColor, display: 'flex', height: '54px', justifyContent: 'center', lineHeight: '1' }">
+                                            <span class="block leading-none">{{ formatPrice(item.price) }}</span>
                                         </div>
                                         <div v-if="hasTextOverlay(item)" class="absolute max-w-[78%] rounded-2xl bg-black/50 p-4 text-white backdrop-blur-sm" :class="overlayPositionClass(settings.textPosition)">
                                             <h3 v-if="item.name" class="text-2xl font-bold leading-tight">{{ item.name }}</h3>
