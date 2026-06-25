@@ -35,7 +35,7 @@ class StoreController extends Controller
             'owner_email' => 'required|email|max:255|unique:users,email',
             'owner_password' => 'required|string|min:8|confirmed',
             'max_users' => 'required|integer|min:1',
-            'plan' => 'required|in:emprendedor,negociante',
+            'plan' => 'required|in:emprendedor,negociante,creador_pdf',
             'plan_cycle' => 'nullable|in:mensual,anual',
         ]);
 
@@ -104,7 +104,7 @@ class StoreController extends Controller
             'owner_name' => 'required|string|max:255',
             'owner_email' => 'required|email|max:255|unique:users,email,' . $store->user_id,
             'owner_password' => 'nullable|string|min:8|confirmed',
-            'plan' => 'required|in:emprendedor,negociante',
+            'plan' => 'required|in:emprendedor,negociante,creador_pdf',
             'plan_cycle' => 'nullable|in:mensual,anual',
         ]);
 

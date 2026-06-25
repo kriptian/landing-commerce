@@ -10,7 +10,7 @@ class PdfCatalogBuilderController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('plan:negociante');
+        $this->middleware('plan:negociante,creador_pdf');
     }
 
     public function index(Request $request)

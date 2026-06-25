@@ -1,9 +1,10 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AlertModal from '@/Components/AlertModal.vue';
+import Modal from '@/Components/Modal.vue';
 import { downloadPDF } from '@/Utils/pdfUtils';
 import { Head } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
     products: {
@@ -18,11 +19,16 @@ const props = defineProps({
 
 const catalogRef = ref(null);
 const search = ref('');
+const activeTab = ref('edit');
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200);
 const isGenerating = ref(false);
 const showNotice = ref(false);
 const noticeMessage = ref('');
 const coverPreview = ref('');
 const catalogItems = ref([]);
+const draggedIndex = ref(null);
+const dragOverIndex = ref(null);
+const previewItem = ref(null);
 
 const settings = ref({
     fileName: 'catalogo-productos',
@@ -35,6 +41,7 @@ const settings = ref({
     priceBgColor: '#111827',
     textPosition: 'bottom-left',
     pricePosition: 'top-right',
+    itemsPerPage: 4,
 });
 
 const stylePresets = {
@@ -63,6 +70,28 @@ const stylePresets = {
 
 const currentStyle = computed(() => stylePresets[settings.value.style]);
 
+const itemsPerPageOptions = [1, 2, 4, 6];
+
+const positionOptions = [
+    { value: 'bottom-left', label: 'Abajo izq.' },
+    { value: 'bottom-right', label: 'Abajo der.' },
+    { value: 'top-left', label: 'Arriba izq.' },
+    { value: 'top-right', label: 'Arriba der.' },
+];
+
+const updateViewportWidth = () => {
+    viewportWidth.value = window.innerWidth;
+};
+
+onMounted(() => {
+    updateViewportWidth();
+    window.addEventListener('resize', updateViewportWidth, { passive: true });
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', updateViewportWidth);
+});
+
 const filteredProducts = computed(() => {
     const term = search.value.trim().toLowerCase();
     if (!term) return props.products;
@@ -76,11 +105,59 @@ const filteredProducts = computed(() => {
 
 const productPages = computed(() => {
     const pages = [];
-    for (let i = 0; i < catalogItems.value.length; i += 4) {
-        pages.push(catalogItems.value.slice(i, i + 4));
+    const itemsPerPage = Number(settings.value.itemsPerPage) || 4;
+    for (let i = 0; i < catalogItems.value.length; i += itemsPerPage) {
+        pages.push(catalogItems.value.slice(i, i + itemsPerPage));
     }
     return pages;
 });
+
+const productGridClass = computed(() => {
+    const layouts = {
+        1: 'grid-cols-1',
+        2: 'grid-cols-1 gap-8',
+        4: 'grid-cols-2 gap-6',
+        6: 'grid-cols-3 gap-5',
+    };
+
+    return layouts[Number(settings.value.itemsPerPage)] || layouts[4];
+});
+
+const productImageClass = computed(() => {
+    const layouts = {
+        1: 'h-[850px]',
+        2: 'h-[415px]',
+        4: 'h-[390px]',
+        6: 'h-[270px]',
+    };
+
+    return layouts[Number(settings.value.itemsPerPage)] || layouts[4];
+});
+
+const previewScale = computed(() => {
+    if (viewportWidth.value >= 1024) return 1;
+
+    const availableWidth = Math.max(280, viewportWidth.value - 32);
+    return Math.min(1, Math.max(0.36, availableWidth / 794));
+});
+
+const previewFrameStyle = computed(() => ({
+    width: `${794 * previewScale.value}px`,
+    height: `${1123 * (productPages.value.length + 1) * previewScale.value}px`,
+}));
+
+const previewCatalogStyle = computed(() => ({
+    transform: `scale(${previewScale.value})`,
+    transformOrigin: 'top left',
+}));
+
+const hasTextOverlay = (item) => {
+    return Boolean(String(item.name || '').trim() || String(item.description || '').trim());
+};
+
+const hasPriceOverlay = (item) => {
+    return item.price !== null && item.price !== undefined && String(item.price).trim() !== '' && Number(item.price) > 0;
+};
 
 const formatPrice = (value) => {
     const number = Number(value || 0);
@@ -127,6 +204,44 @@ const moveItem = (index, direction) => {
     catalogItems.value.splice(nextIndex, 0, item);
 };
 
+const moveItemTo = (fromIndex, toIndex) => {
+    if (fromIndex === null || toIndex === null || fromIndex === toIndex) return;
+    if (fromIndex < 0 || toIndex < 0) return;
+    if (fromIndex >= catalogItems.value.length || toIndex >= catalogItems.value.length) return;
+
+    const [item] = catalogItems.value.splice(fromIndex, 1);
+    catalogItems.value.splice(toIndex, 0, item);
+};
+
+const moveItemToPosition = (fromIndex, event) => {
+    const requestedPosition = Number(event.target.value);
+    const toIndex = Math.max(0, Math.min(catalogItems.value.length - 1, requestedPosition - 1));
+    moveItemTo(fromIndex, toIndex);
+};
+
+const startDrag = (index) => {
+    draggedIndex.value = index;
+};
+
+const dropItem = (index) => {
+    moveItemTo(draggedIndex.value, index);
+    draggedIndex.value = null;
+    dragOverIndex.value = null;
+};
+
+const endDrag = () => {
+    draggedIndex.value = null;
+    dragOverIndex.value = null;
+};
+
+const openImagePreview = (item) => {
+    previewItem.value = item;
+};
+
+const closeImagePreview = () => {
+    previewItem.value = null;
+};
+
 const handleTemporaryPhotos = (event) => {
     const files = Array.from(event.target.files || []);
 
@@ -135,8 +250,8 @@ const handleTemporaryPhotos = (event) => {
             id: `temporary-${Date.now()}-${Math.random().toString(16).slice(2)}`,
             source: 'temporary',
             productId: null,
-            name: file.name.replace(/\.[^.]+$/, ''),
-            price: 0,
+            name: '',
+            price: '',
             description: '',
             imageUrl: URL.createObjectURL(file),
         });
@@ -200,7 +315,20 @@ const generateCatalog = async () => {
 
     isGenerating.value = true;
     try {
-        await downloadPDF(catalogRef.value, normalizeFileName(settings.value.fileName));
+        activeTab.value = 'preview';
+        await nextTick();
+
+        const originalTransform = catalogRef.value.style.transform;
+        const originalTransformOrigin = catalogRef.value.style.transformOrigin;
+
+        try {
+            catalogRef.value.style.transform = 'none';
+            catalogRef.value.style.transformOrigin = 'top left';
+            await downloadPDF(catalogRef.value, normalizeFileName(settings.value.fileName));
+        } finally {
+            catalogRef.value.style.transform = originalTransform;
+            catalogRef.value.style.transformOrigin = originalTransformOrigin;
+        }
     } finally {
         isGenerating.value = false;
     }
@@ -212,14 +340,37 @@ const generateCatalog = async () => {
 
     <AuthenticatedLayout>
         <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Generador de catálogo PDF</h2>
+            <h2 class="font-semibold text-lg sm:text-xl text-gray-800 leading-tight">Generador de catálogo PDF</h2>
         </template>
 
-        <div class="py-8">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="grid gap-6 xl:grid-cols-[420px,1fr]">
-                    <section class="space-y-6">
-                        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+        <div class="py-4 sm:py-8">
+            <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+                <div class="sticky top-2 z-30 mb-4 sm:mb-6 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="grid grid-cols-2 rounded-xl bg-gray-100 p-1">
+                            <button type="button" class="flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition" :class="activeTab === 'edit' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-600 hover:text-gray-900'" @click="activeTab = 'edit'">
+                                Configurar
+                            </button>
+                            <button type="button" class="flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition" :class="activeTab === 'preview' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-600 hover:text-gray-900'" @click="activeTab = 'preview'">
+                                Vista previa
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                            <span class="col-span-2 rounded-lg bg-gray-50 px-3 py-2 text-center text-xs font-medium text-gray-600 sm:col-span-1 sm:bg-transparent sm:p-0 sm:text-left sm:text-sm">{{ catalogItems.length }} fotos seleccionadas</span>
+                            <button type="button" class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 sm:px-4" @click="activeTab = 'preview'">
+                                Ver vista previa
+                            </button>
+                            <button type="button" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:px-5" :disabled="isGenerating" @click="generateCatalog">
+                                {{ isGenerating ? 'Generando...' : 'Descargar PDF' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-show="activeTab === 'edit'" class="grid gap-6 xl:grid-cols-[420px,1fr]">
+                    <section class="space-y-4 sm:space-y-6">
+                        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <h3 class="text-lg font-semibold text-gray-900">Configuración</h3>
                             <p class="mt-1 text-sm text-gray-500">Define portada, archivo y estilo visual.</p>
 
@@ -246,7 +397,7 @@ const generateCatalog = async () => {
                             </div>
                         </div>
 
-                        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+                        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <h3 class="text-lg font-semibold text-gray-900">Estilo</h3>
                             <div class="mt-4 grid gap-3">
                                 <button v-for="(preset, key) in stylePresets" :key="key" type="button" class="rounded-xl border p-4 text-left transition hover:border-blue-300" :class="settings.style === key ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'" @click="applyPreset(key)">
@@ -255,7 +406,7 @@ const generateCatalog = async () => {
                                 </button>
                             </div>
 
-                            <div class="mt-5 grid grid-cols-2 gap-3">
+                            <div class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <label class="block text-sm font-medium text-gray-700">
                                     Texto
                                     <input v-model="settings.textColor" type="color" class="mt-1 h-10 w-full rounded border border-gray-200" />
@@ -274,33 +425,40 @@ const generateCatalog = async () => {
                                 </label>
                             </div>
 
-                            <div class="mt-4 grid grid-cols-2 gap-3">
-                                <label class="block text-sm font-medium text-gray-700">
-                                    Posición texto
-                                    <select v-model="settings.textPosition" class="mt-1 w-full rounded-lg border-gray-300 text-sm">
-                                        <option value="bottom-left">Abajo izquierda</option>
-                                        <option value="bottom-right">Abajo derecha</option>
-                                        <option value="top-left">Arriba izquierda</option>
-                                        <option value="top-right">Arriba derecha</option>
-                                    </select>
-                                </label>
-                                <label class="block text-sm font-medium text-gray-700">
-                                    Posición precio
-                                    <select v-model="settings.pricePosition" class="mt-1 w-full rounded-lg border-gray-300 text-sm">
-                                        <option value="top-right">Arriba derecha</option>
-                                        <option value="top-left">Arriba izquierda</option>
-                                        <option value="bottom-right">Abajo derecha</option>
-                                        <option value="bottom-left">Abajo izquierda</option>
-                                    </select>
-                                </label>
+                            <div class="mt-4 space-y-4">
+                                <div>
+                                    <span class="block text-sm font-medium text-gray-700">Posición texto</span>
+                                    <div class="mt-2 grid grid-cols-2 gap-2">
+                                        <button v-for="option in positionOptions" :key="`text-${option.value}`" type="button" class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition" :class="settings.textPosition === option.value ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300'" @click="settings.textPosition = option.value">
+                                            {{ option.label }}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span class="block text-sm font-medium text-gray-700">Posición precio</span>
+                                    <div class="mt-2 grid grid-cols-2 gap-2">
+                                        <button v-for="option in positionOptions" :key="`price-${option.value}`" type="button" class="rounded-xl border px-3 py-2.5 text-xs font-semibold transition" :class="settings.pricePosition === option.value ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300'" @click="settings.pricePosition = option.value">
+                                            {{ option.label }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <span class="block text-sm font-medium text-gray-700">Fotos por página</span>
+                                <div class="mt-2 grid grid-cols-2 gap-2">
+                                    <button v-for="option in itemsPerPageOptions" :key="option" type="button" class="rounded-xl border px-3 py-3 text-sm font-semibold transition" :class="settings.itemsPerPage === option ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300'" @click="settings.itemsPerPage = option">
+                                        {{ option }} {{ option === 1 ? 'foto' : 'fotos' }}
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+                        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <h3 class="text-lg font-semibold text-gray-900">Productos existentes</h3>
                             <input v-model="search" type="search" class="mt-4 w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Buscar por nombre o categoría" />
 
-                            <div class="mt-4 max-h-72 space-y-2 overflow-y-auto pr-1">
+                            <div class="mt-4 max-h-80 space-y-2 overflow-y-auto pr-1 sm:max-h-72">
                                 <button v-for="product in filteredProducts" :key="product.id" type="button" class="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition hover:border-blue-300" :class="isSelected(product) ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white'" @click="addExistingProduct(product)">
                                     <img :src="product.image_url" :alt="product.name" class="h-12 w-12 rounded-lg object-cover bg-gray-100" />
                                     <span class="min-w-0 flex-1">
@@ -312,32 +470,50 @@ const generateCatalog = async () => {
                             </div>
                         </div>
 
-                        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+                        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <h3 class="text-lg font-semibold text-gray-900">Fotos nuevas temporales</h3>
                             <p class="mt-1 text-sm text-gray-500">Estas fotos solo se usan para este PDF. No se guardan como productos.</p>
                             <input type="file" accept="image/*" multiple class="mt-4 block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-gray-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-gray-700" @change="handleTemporaryPhotos" />
                         </div>
                     </section>
 
-                    <section class="space-y-6">
-                        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+                    <section class="space-y-4 sm:space-y-6">
+                        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <h3 class="text-lg font-semibold text-gray-900">Productos del PDF</h3>
                                     <p class="text-sm text-gray-500">Edita textos, precios y orden antes de descargar.</p>
                                 </div>
-                                <button type="button" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60" :disabled="isGenerating" @click="generateCatalog">
-                                    {{ isGenerating ? 'Generando...' : 'Descargar PDF' }}
-                                </button>
                             </div>
 
                             <div v-if="!catalogItems.length" class="mt-5 rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
                                 Agrega productos existentes o sube fotos nuevas para iniciar el catálogo.
                             </div>
 
-                            <div v-else class="mt-5 space-y-3">
-                                <article v-for="(item, index) in catalogItems" :key="item.id" class="grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 md:grid-cols-[88px,1fr,auto]">
-                                    <img :src="item.imageUrl" :alt="item.name" class="h-24 w-24 rounded-lg object-cover bg-white" />
+                            <div v-else class="mt-5 space-y-3 sm:max-h-[calc(100vh-220px)] sm:overflow-y-auto sm:pr-2">
+                                <article
+                                    v-for="(item, index) in catalogItems"
+                                    :key="item.id"
+                                    class="grid grid-cols-[72px,1fr] gap-3 rounded-xl border bg-gray-50 p-3 transition md:grid-cols-[88px,1fr,auto]"
+                                    :class="dragOverIndex === index ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'"
+                                    @dragenter.prevent="dragOverIndex = index"
+                                    @dragover.prevent="dragOverIndex = index"
+                                    @drop.prevent="dropItem(index)"
+                                    @dragend="endDrag"
+                                >
+                                    <div class="space-y-2">
+                                        <button type="button" class="block rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" @click="openImagePreview(item)">
+                                            <img :src="item.imageUrl" :alt="item.name || 'Imagen del producto'" class="h-[72px] w-[72px] rounded-lg object-cover bg-white sm:h-24 sm:w-24" />
+                                        </button>
+                                        <div draggable="true" class="flex items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-white px-2 py-1 text-[11px] font-semibold text-gray-500 cursor-grab active:cursor-grabbing" title="Arrastra para reordenar" @dragstart.stop="startDrag(index)" @dragend="endDrag">
+                                            <span aria-hidden="true">↕</span>
+                                            <span>Mover</span>
+                                        </div>
+                                        <label class="block text-center text-[11px] font-semibold text-gray-500">
+                                            Pos.
+                                            <input type="number" min="1" :max="catalogItems.length" :value="index + 1" class="mt-1 w-full rounded-lg border-gray-300 px-1 py-1 text-center text-xs" @change="moveItemToPosition(index, $event)" />
+                                        </label>
+                                    </div>
                                     <div class="grid gap-3 md:grid-cols-2">
                                         <label class="block text-xs font-medium text-gray-600">
                                             Nombre
@@ -352,65 +528,96 @@ const generateCatalog = async () => {
                                             <textarea v-model="item.description" rows="2" class="mt-1 w-full rounded-lg border-gray-300 text-sm"></textarea>
                                         </label>
                                     </div>
-                                    <div class="flex items-center justify-end gap-2 md:flex-col">
-                                        <button type="button" class="rounded-lg border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 disabled:opacity-40" :disabled="index === 0" @click="moveItem(index, -1)">Subir</button>
-                                        <button type="button" class="rounded-lg border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-700 disabled:opacity-40" :disabled="index === catalogItems.length - 1" @click="moveItem(index, 1)">Bajar</button>
-                                        <button type="button" class="rounded-lg bg-red-50 px-3 py-1 text-xs font-semibold text-red-700" @click="removeItem(index)">Quitar</button>
+                                    <div class="col-span-2 grid grid-cols-3 gap-2 md:col-span-1 md:flex md:flex-col md:items-stretch md:justify-center">
+                                        <button type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 disabled:opacity-40 md:py-1" :disabled="index === 0" @click="moveItem(index, -1)">Subir</button>
+                                        <button type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 disabled:opacity-40 md:py-1" :disabled="index === catalogItems.length - 1" @click="moveItem(index, 1)">Bajar</button>
+                                        <button type="button" class="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 md:py-1" @click="removeItem(index)">Quitar</button>
                                     </div>
                                 </article>
                             </div>
                         </div>
 
-                        <div class="rounded-2xl bg-slate-100 p-4 shadow-inner">
-                            <div class="mb-3 flex items-center justify-between">
-                                <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-600">Vista previa</h3>
-                                <span class="text-xs text-gray-500">{{ catalogItems.length }} productos</span>
-                            </div>
-
-                            <div ref="catalogRef" class="mx-auto w-[794px] max-w-full origin-top overflow-hidden bg-white text-gray-900 shadow-xl">
-                                <section class="relative flex h-[1123px] flex-col justify-between overflow-hidden p-14" :class="currentStyle.pageClass">
-                                    <img v-if="coverPreview" :src="coverPreview" alt="Portada" class="absolute inset-0 h-full w-full object-cover opacity-35" />
-                                    <div class="relative z-10 flex items-center gap-3">
-                                        <img v-if="store.logo_url" :src="store.logo_url" :alt="store.name" class="h-14 w-14 rounded-full bg-white object-cover p-1" />
-                                        <span class="text-sm font-semibold uppercase tracking-[0.35em]" :style="{ color: settings.accentColor }">{{ store.name }}</span>
-                                    </div>
-                                    <div class="relative z-10 max-w-2xl">
-                                        <h1 class="text-6xl leading-tight" :class="currentStyle.titleClass" :style="{ color: settings.textColor }">{{ settings.title }}</h1>
-                                        <p class="mt-6 max-w-xl text-2xl leading-relaxed" :style="{ color: settings.textColor }">{{ settings.subtitle }}</p>
-                                    </div>
-                                    <div class="relative z-10 h-2 w-40 rounded-full" :style="{ backgroundColor: settings.accentColor }"></div>
-                                </section>
-
-                                <section v-for="(page, pageIndex) in productPages" :key="pageIndex" class="min-h-[1123px] p-10" :class="currentStyle.pageClass">
-                                    <div class="mb-8 flex items-end justify-between border-b pb-4" :style="{ borderColor: settings.accentColor }">
-                                        <div>
-                                            <p class="text-xs font-semibold uppercase tracking-[0.25em]" :style="{ color: settings.accentColor }">{{ store.name }}</p>
-                                            <h2 class="mt-1 text-3xl font-semibold" :style="{ color: settings.textColor }">Productos</h2>
-                                        </div>
-                                        <span class="text-sm opacity-70">Página {{ pageIndex + 2 }}</span>
-                                    </div>
-
-                                    <div class="grid grid-cols-2 gap-6">
-                                        <article v-for="item in page" :key="item.id" class="overflow-hidden rounded-3xl" :class="currentStyle.cardClass">
-                                            <div class="relative h-[390px] overflow-hidden bg-gray-100">
-                                                <img :src="item.imageUrl" :alt="item.name" class="h-full w-full object-cover" />
-                                                <div class="absolute rounded-2xl px-4 py-2 text-xl font-black shadow-lg" :class="overlayPositionClass(settings.pricePosition)" :style="{ backgroundColor: settings.priceBgColor, color: settings.priceColor }">
-                                                    {{ formatPrice(item.price) }}
-                                                </div>
-                                                <div class="absolute max-w-[78%] rounded-2xl bg-black/50 p-4 text-white backdrop-blur-sm" :class="overlayPositionClass(settings.textPosition)">
-                                                    <h3 class="text-2xl font-bold leading-tight">{{ item.name }}</h3>
-                                                    <p v-if="item.description" class="mt-2 line-clamp-3 text-sm leading-relaxed opacity-90">{{ item.description }}</p>
-                                                </div>
-                                            </div>
-                                        </article>
-                                    </div>
-                                </section>
-                            </div>
-                        </div>
                     </section>
+                </div>
+
+                <div v-show="activeTab === 'preview'" class="rounded-2xl bg-slate-100 p-3 shadow-inner sm:p-4">
+                    <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-600">Vista previa</h3>
+                            <p class="text-xs text-gray-500">{{ catalogItems.length }} fotos, {{ settings.itemsPerPage }} por página</p>
+                            <p class="mt-1 text-xs text-gray-500 sm:hidden">La vista previa se ajusta al ancho de tu pantalla.</p>
+                        </div>
+                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50" @click="activeTab = 'edit'">
+                            Volver a configurar
+                        </button>
+                    </div>
+
+                    <div class="mx-auto overflow-hidden rounded-xl" :style="previewFrameStyle">
+                    <div ref="catalogRef" class="w-[794px] origin-top-left overflow-hidden bg-white text-gray-900 shadow-xl" :style="previewCatalogStyle">
+                        <section class="relative flex h-[1123px] flex-col justify-between overflow-hidden p-14" :class="currentStyle.pageClass">
+                            <img v-if="coverPreview" :src="coverPreview" alt="Portada" class="absolute inset-0 h-full w-full object-cover opacity-35" />
+                            <div class="relative z-10 flex items-center gap-3">
+                                <img v-if="store.logo_url" :src="store.logo_url" :alt="store.name" class="h-14 w-14 rounded-full bg-white object-cover p-1" />
+                                <span class="text-sm font-semibold uppercase tracking-[0.35em]" :style="{ color: settings.accentColor }">{{ store.name }}</span>
+                            </div>
+                            <div class="relative z-10 max-w-2xl">
+                                <h1 class="text-6xl leading-tight" :class="currentStyle.titleClass" :style="{ color: settings.textColor }">{{ settings.title }}</h1>
+                                <p class="mt-6 max-w-xl text-2xl leading-relaxed" :style="{ color: settings.textColor }">{{ settings.subtitle }}</p>
+                            </div>
+                            <div class="relative z-10 h-2 w-40 rounded-full" :style="{ backgroundColor: settings.accentColor }"></div>
+                        </section>
+
+                        <section v-for="(page, pageIndex) in productPages" :key="pageIndex" class="min-h-[1123px] p-10" :class="currentStyle.pageClass">
+                            <div class="mb-8 flex items-end justify-between border-b pb-4" :style="{ borderColor: settings.accentColor }">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.25em]" :style="{ color: settings.accentColor }">{{ store.name }}</p>
+                                    <h2 class="mt-1 text-3xl font-semibold" :style="{ color: settings.textColor }">Productos</h2>
+                                </div>
+                                <span class="text-sm opacity-70">Página {{ pageIndex + 2 }}</span>
+                            </div>
+
+                            <div class="grid" :class="productGridClass">
+                                <article v-for="item in page" :key="item.id" class="overflow-hidden rounded-3xl" :class="currentStyle.cardClass">
+                                    <div class="relative overflow-hidden bg-white" :class="productImageClass">
+                                        <img :src="item.imageUrl" :alt="item.name || 'Producto del catálogo'" class="h-full w-full object-contain" />
+                                        <div v-if="hasPriceOverlay(item)" class="absolute rounded-2xl px-4 py-2 text-xl font-black shadow-lg" :class="overlayPositionClass(settings.pricePosition)" :style="{ backgroundColor: settings.priceBgColor, color: settings.priceColor }">
+                                            {{ formatPrice(item.price) }}
+                                        </div>
+                                        <div v-if="hasTextOverlay(item)" class="absolute max-w-[78%] rounded-2xl bg-black/50 p-4 text-white backdrop-blur-sm" :class="overlayPositionClass(settings.textPosition)">
+                                            <h3 v-if="item.name" class="text-2xl font-bold leading-tight">{{ item.name }}</h3>
+                                            <p v-if="item.description" class="mt-2 line-clamp-3 text-sm leading-relaxed opacity-90">{{ item.description }}</p>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                        </section>
+                    </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <Modal :show="Boolean(previewItem)" max-width="4xl" @close="closeImagePreview">
+            <div class="bg-white p-4 sm:p-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Vista de imagen</h3>
+                        <p class="mt-1 text-sm text-gray-500">Revisa que esta sea la foto correcta antes de generar el PDF.</p>
+                    </div>
+                    <button type="button" class="rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-gray-600 hover:bg-gray-50" @click="closeImagePreview">
+                        Cerrar
+                    </button>
+                </div>
+
+                <div class="mt-5 rounded-2xl bg-gray-100 p-3">
+                    <img v-if="previewItem" :src="previewItem.imageUrl" :alt="previewItem.name || 'Imagen ampliada'" class="mx-auto max-h-[70vh] w-auto max-w-full rounded-xl object-contain" />
+                </div>
+
+                <p class="mt-4 text-xs text-gray-500">
+                    Nota: por ahora esta vista permite revisar la imagen. El recorte manual se puede agregar como una mejora posterior.
+                </p>
+            </div>
+        </Modal>
 
         <AlertModal :show="showNotice" type="warning" title="Catálogo incompleto" :message="noticeMessage" @close="showNotice = false" @primary="showNotice = false" />
     </AuthenticatedLayout>

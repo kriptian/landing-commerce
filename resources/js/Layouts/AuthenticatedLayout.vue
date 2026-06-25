@@ -13,6 +13,8 @@ const showingNavigationDropdown = ref(false);
 const store = usePage().props.auth.user.store;
 const plan = ref((store && store.plan) ? store.plan : 'emprendedor');
 const isNegociante = computed(() => plan.value === 'negociante' || (usePage().props.auth?.isSuperAdmin === true));
+const isPdfCreator = computed(() => plan.value === 'creador_pdf' && (usePage().props.auth?.isSuperAdmin !== true));
+const canUsePdfBuilder = computed(() => isNegociante.value || plan.value === 'creador_pdf');
 
 const showUpgradeStep1 = ref(false);
 const showUpgradeStep2 = ref(false);
@@ -41,6 +43,7 @@ const can = (perm) => {
   const p = usePage().props.auth?.permissions || [];
   const roles = usePage().props.auth?.roles || [];
   const isStoreAdmin = Array.isArray(roles) && roles.includes('Administrador');
+  if (isPdfCreator.value) return false;
   if (isStoreAdmin) return true; // Rol Administrador ve todo (excepto SuperStores que depende de is_admin)
   return Array.isArray(p) && p.includes(perm);
 };
@@ -100,7 +103,7 @@ const confirmUpgrade = () => {
                                         </span>
                                     </div>
                                 </NavLink>
-                                <button v-else type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500 cursor-pointer">
+                                <button v-else-if="!isPdfCreator" type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500 cursor-pointer">
                                     Órdenes
                                 </button>
 
@@ -109,15 +112,15 @@ const confirmUpgrade = () => {
                                 </NavLink>
 
                                 <NavLink v-if="isNegociante && can('ver reportes')" :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">Reportes</NavLink>
-                                <button v-else type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500">Reportes</button>
+                                <button v-else-if="!isPdfCreator" type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500">Reportes</button>
                                 
                                 <NavLink v-if="isNegociante && can('ver inventario')" :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">Inventario</NavLink>
-                                <button v-else type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500">Inventario</button>
+                                <button v-else-if="!isPdfCreator" type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500">Inventario</button>
                                 
                                 <NavLink v-if="isNegociante" :href="route('admin.catalog-customization.index')" :active="route().current('admin.catalog-customization.*')">Personalizar catálogo</NavLink>
-                                <NavLink v-if="isNegociante" :href="route('admin.pdf-catalog-builder.index')" :active="route().current('admin.pdf-catalog-builder.*')">Generador PDF</NavLink>
+                                <NavLink v-if="canUsePdfBuilder" :href="route('admin.pdf-catalog-builder.index')" :active="route().current('admin.pdf-catalog-builder.*')">Generador PDF</NavLink>
                                 
-                                <button v-if="!isNegociante" type="button" @click="openUpgrade" class="inline-flex items-center gap-2 text-green-700 hover:text-green-800">
+                                <button v-if="!isNegociante && !isPdfCreator" type="button" @click="openUpgrade" class="inline-flex items-center gap-2 text-green-700 hover:text-green-800">
                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                                     Mejorar plan
                                 </button>
@@ -224,6 +227,7 @@ const confirmUpgrade = () => {
                 >
                     <div class="space-y-1 pb-3 pt-2">
                         <ResponsiveNavLink
+                            v-if="!isPdfCreator"
                             :href="route('dashboard')"
                             :active="route().current('dashboard')"
                         >
@@ -243,20 +247,20 @@ const confirmUpgrade = () => {
                                 </span>
                             </div>
                         </ResponsiveNavLink>
-                        <button v-else type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Órdenes</button>
+                        <button v-else-if="!isPdfCreator" type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Órdenes</button>
 
                         <ResponsiveNavLink v-if="isNegociante" :href="route('admin.customers.index')" :active="route().current('admin.customers.*') || route().current('admin.coupons.*')">Clientes</ResponsiveNavLink>
 
                         <ResponsiveNavLink v-if="isNegociante" :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">Reportes</ResponsiveNavLink>
-                        <button v-else type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Reportes</button>
+                        <button v-else-if="!isPdfCreator" type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Reportes</button>
 
                         <ResponsiveNavLink v-if="isNegociante" :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">Inventario</ResponsiveNavLink>
-                        <button v-else type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Inventario</button>
+                        <button v-else-if="!isPdfCreator" type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Inventario</button>
                         
                         <ResponsiveNavLink v-if="isNegociante" :href="route('admin.catalog-customization.index')" :active="route().current('admin.catalog-customization.*')">Personalizar catálogo</ResponsiveNavLink>
-                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.pdf-catalog-builder.index')" :active="route().current('admin.pdf-catalog-builder.*')">Generador PDF</ResponsiveNavLink>
+                        <ResponsiveNavLink v-if="canUsePdfBuilder" :href="route('admin.pdf-catalog-builder.index')" :active="route().current('admin.pdf-catalog-builder.*')">Generador PDF</ResponsiveNavLink>
                         
-                        <button v-if="!isNegociante" type="button" class="w-full text-left px-3 py-2 text-green-700 hover:text-green-800" @click="openUpgrade">Mejorar plan</button>
+                        <button v-if="!isNegociante && !isPdfCreator" type="button" class="w-full text-left px-3 py-2 text-green-700 hover:text-green-800" @click="openUpgrade">Mejorar plan</button>
                         <ResponsiveNavLink v-if="$page.props.auth?.isSuperAdmin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">
                             SuperStores
                         </ResponsiveNavLink>

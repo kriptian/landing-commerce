@@ -8,7 +8,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RequirePlan
 {
-    public function handle(Request $request, Closure $next, string $plan): Response
+    public function handle(Request $request, Closure $next, string ...$plans): Response
     {
         $user = $request->user();
         $storePlan = $user?->store?->plan ?? 'emprendedor';
@@ -21,7 +21,14 @@ class RequirePlan
             return $next($request);
         }
 
-        if ($storePlan !== $plan) {
+        $allowedPlans = collect($plans)
+            ->flatMap(fn ($allowedPlan) => explode(',', $allowedPlan))
+            ->map(fn ($allowedPlan) => trim((string) $allowedPlan))
+            ->filter()
+            ->values()
+            ->all();
+
+        if (!in_array($storePlan, $allowedPlans, true)) {
             abort(403, 'Tu plan actual no permite acceder a esta sección.');
         }
 

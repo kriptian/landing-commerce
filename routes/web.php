@@ -82,6 +82,10 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
         $user = $request->user();
         $store = $user?->store; // Puede ser null
 
+        if (($store?->plan ?? 'emprendedor') === 'creador_pdf') {
+            return redirect()->route('admin.pdf-catalog-builder.index');
+        }
+
         $metrics = [
             'salesToday' => 0,
             'ordersToday' => 0,
@@ -114,10 +118,10 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
     })->name('dashboard');
 
     // Configuración de la tienda
-    Route::get('/store/setup', [StoreSetupController::class, 'create'])->name('store.setup');
-    Route::post('/store/setup', [StoreSetupController::class, 'store'])->name('store.save');
+    Route::get('/store/setup', [StoreSetupController::class, 'create'])->middleware('plan:emprendedor,negociante')->name('store.setup');
+    Route::post('/store/setup', [StoreSetupController::class, 'store'])->middleware('plan:emprendedor,negociante')->name('store.save');
     // Upgrade de plan (auto-servicio)
-    Route::post('/store/upgrade', [\App\Http\Controllers\StorePlanController::class, 'upgrade'])->name('store.upgrade');
+    Route::post('/store/upgrade', [\App\Http\Controllers\StorePlanController::class, 'upgrade'])->middleware('plan:emprendedor')->name('store.upgrade');
 
     // Perfil del Usuario
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -130,14 +134,20 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
     // Panel de Administración (acceso según permisos por tienda)
     Route::prefix('admin')->name('admin.')->group(function () {
         // ===== RUTAS BASE (todos los planes) =====
-        Route::resource('categories', CategoryController::class);
-        Route::post('categories/{parentCategory}/subcategories', [CategoryController::class, 'storeSubcategory'])->name('categories.storeSubcategory');
-        Route::get('categories/{category}/children', [CategoryController::class, 'children'])->name('categories.children');
-        Route::resource('products', AdminProductController::class);
-        Route::put('products-store/promo', [AdminProductController::class, 'updateStorePromo'])->name('products.store_promo');
+        Route::middleware('plan:emprendedor,negociante')->group(function () {
+            Route::resource('categories', CategoryController::class);
+            Route::post('categories/{parentCategory}/subcategories', [CategoryController::class, 'storeSubcategory'])->name('categories.storeSubcategory');
+            Route::get('categories/{category}/children', [CategoryController::class, 'children'])->name('categories.children');
+            Route::resource('products', AdminProductController::class);
+            Route::put('products-store/promo', [AdminProductController::class, 'updateStorePromo'])->name('products.store_promo');
+        });
+
+        Route::get('pdf-catalog-builder', [PdfCatalogBuilderController::class, 'index'])
+            ->middleware('plan:negociante,creador_pdf')
+            ->name('pdf-catalog-builder.index');
         
         // Ventas físicas - Sin middleware 'verified' para permitir usuarios physical-sales sin email verificado
-        Route::middleware('allow.physical-sales.without-verification')->group(function () {
+        Route::middleware(['plan:emprendedor,negociante', 'allow.physical-sales.without-verification'])->group(function () {
             Route::get('physical-sales', [PhysicalSaleController::class, 'index'])->name('physical-sales.index');
             Route::get('physical-sales/search-products', [PhysicalSaleController::class, 'searchProducts'])->name('physical-sales.search-products');
             Route::get('physical-sales/get-product-by-barcode', [PhysicalSaleController::class, 'getProductByBarcode'])->name('physical-sales.get-product-by-barcode');
@@ -169,7 +179,6 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
             Route::get('inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
             Route::get('catalog-customization', [CatalogCustomizationController::class, 'index'])->name('catalog-customization.index');
             Route::put('catalog-customization', [CatalogCustomizationController::class, 'update'])->name('catalog-customization.update');
-            Route::get('pdf-catalog-builder', [PdfCatalogBuilderController::class, 'index'])->name('pdf-catalog-builder.index');
             
             // Galería de imágenes
             Route::resource('gallery-images', \App\Http\Controllers\Admin\GalleryImageController::class)->names([

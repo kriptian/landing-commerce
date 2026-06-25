@@ -41,6 +41,15 @@ const submit = () => {
 };
 
 const planDescription = computed(() => {
+    if (form.plan === 'creador_pdf') {
+        return [
+            'Generador de catálogos PDF temporales.',
+            'Sube fotos propias o selecciona productos existentes.',
+            'Personaliza portada, estilos, colores y cantidad de fotos por página.',
+            'Descarga el catálogo en PDF con el nombre que elijas.',
+        ];
+    }
+
     if (form.plan === 'negociante') {
         return [
             'Todo lo del plan Emprendedor, MÁS:',
@@ -60,6 +69,12 @@ const planDescription = computed(() => {
         'Checkout a WhatsApp: pedidos directos a tu celular.',
         '0% de comisión por venta.',
     ];
+});
+
+const planLabel = computed(() => {
+    if (form.plan === 'negociante') return 'Negociante';
+    if (form.plan === 'creador_pdf') return 'Creador PDF';
+    return 'Emprendedor';
 });
 
 const showSuccess = ref(false);
@@ -210,6 +225,7 @@ const showEmailExists = ref(false);
                             <label class="block text-sm font-medium text-gray-700">Plan</label>
                             <select v-model="form.plan" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500">
                                 <option value="emprendedor">Emprendedor</option>
+                                <option value="creador_pdf">Creador PDF</option>
                                 <option value="negociante">Negociante (recomendado)</option>
                             </select>
                         </div>
@@ -219,7 +235,7 @@ const showEmailExists = ref(false);
                         </button>
                         <transition name="slide-up" mode="out-in">
                             <div :key="form.plan" class="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-sm text-blue-900">
-                                <p class="font-semibold mb-1">Incluye en tu plan {{ form.plan === 'negociante' ? 'Negociante' : 'Emprendedor' }}:</p>
+                                <p class="font-semibold mb-1">Incluye en tu plan {{ planLabel }}:</p>
                                 <ul class="list-disc ms-5 space-y-1">
                                     <li v-for="(item, i) in planDescription" :key="i">{{ item }}</li>
                                 </ul>

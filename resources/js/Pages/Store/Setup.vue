@@ -77,6 +77,7 @@ const submit = () => {
                     <label class="block font-medium text-sm text-gray-700">Plan</label>
                     <select v-model="form.plan" class="block mt-1 w-full rounded-md shadow-sm border-gray-300">
                         <option value="emprendedor">Emprendedor</option>
+                        <option value="creador_pdf">Creador PDF</option>
                         <option value="negociante">Negociante (recomendado)</option>
                     </select>
                 </div>
@@ -93,6 +94,7 @@ const submit = () => {
                     <p class="font-semibold mb-1">Resumen del plan seleccionado</p>
                     <ul class="list-disc ml-5 text-gray-700">
                         <li v-if="form.plan==='emprendedor'">Catálogo, productos ilimitados, variantes, categorías, checkout a WhatsApp, 0% comisión.</li>
+                        <li v-else-if="form.plan==='creador_pdf'">Generador de catálogos PDF temporales con fotos propias o productos seleccionados.</li>
                         <li v-else>Incluye todo lo del Emprendedor + órdenes avanzadas, inventario, usuarios/roles, reportes y exportar a Excel.</li>
                     </ul>
                 </div>

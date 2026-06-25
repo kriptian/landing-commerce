@@ -48,7 +48,7 @@ class RegisteredUserController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             // Campos opcionales para la auto-configuración
             'phone' => ['nullable', 'string', 'max:20'],
-            'plan' => ['nullable', 'in:emprendedor,negociante'],
+            'plan' => ['nullable', 'in:emprendedor,negociante,creador_pdf'],
             'plan_cycle' => ['nullable', 'in:mensual,anual'],
             'max_users' => ['nullable', 'integer', 'min:1'],
         ]);

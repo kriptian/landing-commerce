@@ -34,7 +34,7 @@ class StoreSetupController extends Controller
             'facebook_url' => 'nullable|url|max:255',
             'instagram_url' => 'nullable|url|max:255',
             'tiktok_url' => 'nullable|url|max:255',
-            'plan' => 'required|in:emprendedor,negociante',
+            'plan' => 'required|in:emprendedor,negociante,creador_pdf',
             'plan_cycle' => 'nullable|in:mensual,anual',
         ]);
 

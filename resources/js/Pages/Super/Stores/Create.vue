@@ -75,6 +75,7 @@ const submit = () => {
                                     <InputLabel value="Plan" />
                                     <select v-model="form.plan" class="mt-1 w-full rounded-md border-gray-300">
                                         <option value="emprendedor">Emprendedor</option>
+                                        <option value="creador_pdf">Creador PDF</option>
                                         <option value="negociante">Negociante (recomendado)</option>
                                     </select>
                                     <InputError :message="form.errors.plan" class="mt-2" />
