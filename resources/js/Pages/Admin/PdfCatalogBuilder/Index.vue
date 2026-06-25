@@ -2,7 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
-import { downloadPDF } from '@/Utils/pdfUtils';
+import { downloadPagedPDF } from '@/Utils/pdfUtils';
 import { Head } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -24,6 +24,7 @@ const activeTab = ref('edit');
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200);
 const isGenerating = ref(false);
 const showNotice = ref(false);
+const noticeTitle = ref('Catálogo incompleto');
 const noticeMessage = ref('');
 const coverPreview = ref('');
 const catalogItems = ref([]);
@@ -453,6 +454,7 @@ const overlayPositionClass = (position) => {
 
 const generateCatalog = async () => {
     if (!catalogItems.value.length) {
+        noticeTitle.value = 'Catálogo incompleto';
         noticeMessage.value = 'Agrega al menos un producto o una foto para generar el catálogo.';
         showNotice.value = true;
         return;
@@ -480,7 +482,12 @@ const generateCatalog = async () => {
                 previewFrameRef.value.style.overflow = 'visible';
             }
             await nextTick();
-            await downloadPDF(catalogRef.value, normalizeFileName(settings.value.fileName));
+            await downloadPagedPDF(catalogRef.value, normalizeFileName(settings.value.fileName));
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            noticeTitle.value = 'No se pudo generar el PDF';
+            noticeMessage.value = 'No se pudo generar el PDF. Revisa que las imágenes hayan cargado correctamente e intenta de nuevo.';
+            showNotice.value = true;
         } finally {
             catalogRef.value.style.transform = originalTransform;
             catalogRef.value.style.transformOrigin = originalTransformOrigin;
@@ -809,7 +816,7 @@ const generateCatalog = async () => {
 
                     <div ref="previewFrameRef" class="mx-auto overflow-hidden rounded-xl" :style="previewFrameStyle">
                     <div ref="catalogRef" class="w-[794px] origin-top-left overflow-hidden bg-white text-gray-900 shadow-xl" :style="previewCatalogStyle">
-                        <section class="relative flex h-[1123px] flex-col justify-between overflow-hidden p-14" :class="currentStyle.pageClass">
+                        <section data-pdf-page class="relative flex h-[1123px] flex-col justify-between overflow-hidden p-14" :class="currentStyle.pageClass">
                             <img v-if="coverPreview" :src="coverPreview" alt="Portada" class="absolute inset-0 h-full w-full object-cover opacity-35" />
                             <div class="relative z-10 flex items-center gap-3">
                                 <img v-if="store.logo_url" :src="store.logo_url" :alt="store.name" class="h-14 w-14 rounded-full bg-white object-cover p-1" />
@@ -863,7 +870,7 @@ const generateCatalog = async () => {
                             <div class="relative z-10 h-2 w-40 rounded-full" :style="{ backgroundColor: settings.accentColor }"></div>
                         </section>
 
-                        <section v-for="(page, pageIndex) in productPages" :key="pageIndex" class="relative min-h-[1123px] overflow-hidden p-10" :class="currentStyle.pageClass">
+                        <section v-for="(page, pageIndex) in productPages" :key="pageIndex" data-pdf-page class="relative h-[1123px] overflow-hidden p-10" :class="currentStyle.pageClass">
                             <img v-if="showPageLogo" :src="store.logo_url" :alt="store.name" class="pointer-events-none absolute z-10 object-contain" :class="[pageLogoPositionClass, settings.logoPosition === 'center' ? 'h-96 w-96' : pageLogoSizeClass]" :style="logoOpacityStyle" />
                             <div class="mb-8 flex items-end justify-between border-b pb-4" :style="{ borderColor: settings.accentColor }">
                                 <div>
@@ -917,6 +924,6 @@ const generateCatalog = async () => {
             </div>
         </Modal>
 
-        <AlertModal :show="showNotice" type="warning" title="Catálogo incompleto" :message="noticeMessage" @close="showNotice = false" @primary="showNotice = false" />
+        <AlertModal :show="showNotice" type="warning" :title="noticeTitle" :message="noticeMessage" @close="showNotice = false" @primary="showNotice = false" />
     </AuthenticatedLayout>
 </template>

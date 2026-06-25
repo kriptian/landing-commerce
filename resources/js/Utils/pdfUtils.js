@@ -1,6 +1,40 @@
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
+const waitForImages = async (element) => {
+    const images = Array.from(element.querySelectorAll('img'));
+
+    await Promise.all(images.map((image) => {
+        if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+
+        return new Promise((resolve) => {
+            const timeout = setTimeout(resolve, 5000);
+            image.onload = () => {
+                clearTimeout(timeout);
+                resolve();
+            };
+            image.onerror = () => {
+                clearTimeout(timeout);
+                resolve();
+            };
+        });
+    }));
+};
+
+const captureElement = async (element) => {
+    await waitForImages(element);
+
+    return html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        backgroundColor: '#ffffff',
+        imageTimeout: 15000,
+        removeContainer: true,
+    });
+};
+
 /**
  * Generates a PDF from an HTML element
  * @param {HTMLElement} element - The DOM element to convert to PDF
@@ -24,12 +58,7 @@ export const generatePDF = async (element, filename = 'document.pdf') => {
         element.style.background = '#ffffff';
     }
 
-    const canvas = await html2canvas(element, {
-        scale: scale,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-    });
+    const canvas = await captureElement(element);
 
     // Restore original styles
     element.style.opacity = originalOpacity;
@@ -63,6 +92,28 @@ export const generatePDF = async (element, filename = 'document.pdf') => {
     // Return as File object for sharing
     const pdfBlob = doc.output('blob');
     return new File([pdfBlob], filename, { type: 'application/pdf' });
+};
+
+export const downloadPagedPDF = async (element, filename = 'document.pdf') => {
+    const pages = Array.from(element.querySelectorAll('[data-pdf-page]'));
+    const captureTargets = pages.length ? pages : [element];
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = 210;
+    const pageHeight = 297;
+
+    for (let index = 0; index < captureTargets.length; index += 1) {
+        const page = captureTargets[index];
+        const canvas = await captureElement(page);
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+        if (index > 0) {
+            doc.addPage();
+        }
+
+        doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+    }
+
+    doc.save(filename);
 };
 
 /**
