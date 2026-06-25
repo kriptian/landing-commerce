@@ -18,6 +18,7 @@ const props = defineProps({
 });
 
 const catalogRef = ref(null);
+const previewFrameRef = ref(null);
 const search = ref('');
 const activeTab = ref('edit');
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200);
@@ -53,6 +54,13 @@ const settings = ref({
     showBusinessInstagram: true,
     showBusinessFacebook: false,
     showBusinessTiktok: false,
+    businessPhoneText: '',
+    businessEmailText: '',
+    businessAddressText: '',
+    businessWebsiteText: '',
+    businessInstagramText: '',
+    businessFacebookText: '',
+    businessTiktokText: '',
     logoApplyTo: 'none',
     logoPosition: 'top-right',
     logoSize: 'medium',
@@ -127,13 +135,13 @@ const positionOptions = [
 ];
 
 const businessInfoOptions = [
-    { key: 'showBusinessPhone', label: 'WhatsApp', field: 'phone' },
-    { key: 'showBusinessEmail', label: 'Email', field: 'email' },
-    { key: 'showBusinessAddress', label: 'Dirección', field: 'address' },
-    { key: 'showBusinessWebsite', label: 'Web', field: 'custom_domain' },
-    { key: 'showBusinessInstagram', label: 'Instagram', field: 'instagram_url' },
-    { key: 'showBusinessFacebook', label: 'Facebook', field: 'facebook_url' },
-    { key: 'showBusinessTiktok', label: 'TikTok', field: 'tiktok_url' },
+    { key: 'showBusinessPhone', textKey: 'businessPhoneText', label: 'WhatsApp', type: 'whatsapp', placeholder: '302 406 1771' },
+    { key: 'showBusinessEmail', textKey: 'businessEmailText', label: 'Email', type: 'email', placeholder: 'ventas@mitienda.com' },
+    { key: 'showBusinessAddress', textKey: 'businessAddressText', label: 'Dirección', type: 'address', placeholder: 'Calle 123 # 45-67' },
+    { key: 'showBusinessWebsite', textKey: 'businessWebsiteText', label: 'Web', type: 'web', placeholder: 'mitienda.com' },
+    { key: 'showBusinessInstagram', textKey: 'businessInstagramText', label: 'Instagram', type: 'instagram', placeholder: '@mi.tienda' },
+    { key: 'showBusinessFacebook', textKey: 'businessFacebookText', label: 'Facebook', type: 'facebook', placeholder: 'Mi Tienda' },
+    { key: 'showBusinessTiktok', textKey: 'businessTiktokText', label: 'TikTok', type: 'tiktok', placeholder: '@mi.tienda' },
 ];
 
 const updateViewportWidth = () => {
@@ -208,61 +216,15 @@ const previewCatalogStyle = computed(() => ({
     transformOrigin: 'top left',
 }));
 
-const formatSocialHandle = (value) => {
-    if (!value) return '';
-    return String(value)
-        .replace(/^https?:\/\//, '')
-        .replace(/^www\./, '')
-        .replace(/\/$/, '');
-};
-
-const storeAddresses = computed(() => [
-    props.store?.address,
-    props.store?.address_two,
-    props.store?.address_three,
-    props.store?.address_four,
-].filter(Boolean));
-
 const businessContactItems = computed(() => {
-    const items = [];
-
-    if (settings.value.showBusinessPhone && props.store?.phone) {
-        items.push({ label: 'WhatsApp', type: 'whatsapp', text: props.store.phone });
-    }
-
-    if (settings.value.showBusinessEmail && props.store?.email) {
-        items.push({ label: 'Email', type: 'email', text: props.store.email });
-    }
-
-    if (settings.value.showBusinessAddress && storeAddresses.value.length) {
-        storeAddresses.value.forEach((address, index) => {
-            items.push({ label: index === 0 ? 'Dirección' : `Sede ${index + 1}`, type: 'address', text: address });
-        });
-    }
-
-    if (settings.value.showBusinessWebsite && props.store?.custom_domain) {
-        items.push({ label: 'Web', type: 'web', text: props.store.custom_domain });
-    }
-
-    if (settings.value.showBusinessInstagram && props.store?.instagram_url) {
-        items.push({ label: 'Instagram', type: 'instagram', text: formatSocialHandle(props.store.instagram_url) });
-    }
-
-    if (settings.value.showBusinessFacebook && props.store?.facebook_url) {
-        items.push({ label: 'Facebook', type: 'facebook', text: formatSocialHandle(props.store.facebook_url) });
-    }
-
-    if (settings.value.showBusinessTiktok && props.store?.tiktok_url) {
-        items.push({ label: 'TikTok', type: 'tiktok', text: formatSocialHandle(props.store.tiktok_url) });
-    }
-
-    return items;
+    return businessInfoOptions
+        .filter((option) => settings.value[option.key] && String(settings.value[option.textKey] || '').trim())
+        .map((option) => ({
+            label: option.label,
+            type: option.type,
+            text: String(settings.value[option.textKey]).trim(),
+        }));
 });
-
-const availableBusinessInfoOptions = computed(() => businessInfoOptions.filter((option) => {
-    if (option.field === 'address') return storeAddresses.value.length > 0;
-    return Boolean(props.store?.[option.field]);
-}));
 
 const pageLogoSizeClass = computed(() => {
     const sizes = {
@@ -505,14 +467,28 @@ const generateCatalog = async () => {
 
         const originalTransform = catalogRef.value.style.transform;
         const originalTransformOrigin = catalogRef.value.style.transformOrigin;
+        const originalFrameWidth = previewFrameRef.value?.style.width;
+        const originalFrameHeight = previewFrameRef.value?.style.height;
+        const originalFrameOverflow = previewFrameRef.value?.style.overflow;
 
         try {
             catalogRef.value.style.transform = 'none';
             catalogRef.value.style.transformOrigin = 'top left';
+            if (previewFrameRef.value) {
+                previewFrameRef.value.style.width = '794px';
+                previewFrameRef.value.style.height = 'auto';
+                previewFrameRef.value.style.overflow = 'visible';
+            }
+            await nextTick();
             await downloadPDF(catalogRef.value, normalizeFileName(settings.value.fileName));
         } finally {
             catalogRef.value.style.transform = originalTransform;
             catalogRef.value.style.transformOrigin = originalTransformOrigin;
+            if (previewFrameRef.value) {
+                previewFrameRef.value.style.width = originalFrameWidth || '';
+                previewFrameRef.value.style.height = originalFrameHeight || '';
+                previewFrameRef.value.style.overflow = originalFrameOverflow || '';
+            }
         }
     } finally {
         isGenerating.value = false;
@@ -675,14 +651,17 @@ const generateCatalog = async () => {
                                 </label>
 
                                 <div>
-                                    <span class="block text-sm font-medium text-gray-700">Datos visibles</span>
-                                    <div v-if="availableBusinessInfoOptions.length" class="mt-2 grid grid-cols-2 gap-2">
-                                        <label v-for="option in availableBusinessInfoOptions" :key="option.key" class="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700">
-                                            <input v-model="settings[option.key]" type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                            {{ option.label }}
-                                        </label>
+                                    <span class="block text-sm font-medium text-gray-700">Datos de contacto manuales</span>
+                                    <p class="mt-1 text-xs text-gray-500">Escribe exactamente cómo quieres que aparezca cada dato en la portada.</p>
+                                    <div class="mt-3 space-y-3">
+                                        <div v-for="option in businessInfoOptions" :key="option.key" class="rounded-xl border border-gray-200 bg-white p-3">
+                                            <label class="flex items-center justify-between gap-3">
+                                                <span class="text-sm font-semibold text-gray-800">{{ option.label }}</span>
+                                                <input v-model="settings[option.key]" type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                            </label>
+                                            <input v-model="settings[option.textKey]" type="text" class="mt-2 w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" :placeholder="option.placeholder" />
+                                        </div>
                                     </div>
-                                    <p v-else class="mt-2 rounded-xl bg-yellow-50 p-3 text-sm text-yellow-800">No hay datos de contacto cargados. Puedes agregarlos desde Perfil.</p>
                                 </div>
                             </div>
                         </div>
@@ -828,7 +807,7 @@ const generateCatalog = async () => {
                         </button>
                     </div>
 
-                    <div class="mx-auto overflow-hidden rounded-xl" :style="previewFrameStyle">
+                    <div ref="previewFrameRef" class="mx-auto overflow-hidden rounded-xl" :style="previewFrameStyle">
                     <div ref="catalogRef" class="w-[794px] origin-top-left overflow-hidden bg-white text-gray-900 shadow-xl" :style="previewCatalogStyle">
                         <section class="relative flex h-[1123px] flex-col justify-between overflow-hidden p-14" :class="currentStyle.pageClass">
                             <img v-if="coverPreview" :src="coverPreview" alt="Portada" class="absolute inset-0 h-full w-full object-cover opacity-35" />
