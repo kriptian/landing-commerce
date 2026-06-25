@@ -28,6 +28,7 @@ const noticeTitle = ref('Catálogo incompleto');
 const noticeMessage = ref('');
 const coverPreview = ref('');
 const catalogItems = ref([]);
+const maxCatalogItems = 200;
 const draggedIndex = ref(null);
 const dragOverIndex = ref(null);
 const previewItem = ref(null);
@@ -392,8 +393,25 @@ const closeImagePreview = () => {
 
 const handleTemporaryPhotos = (event) => {
     const files = Array.from(event.target.files || []);
+    const availableSlots = maxCatalogItems - catalogItems.value.length;
 
-    files.forEach((file) => {
+    if (availableSlots <= 0) {
+        noticeTitle.value = 'Límite de imágenes';
+        noticeMessage.value = `Puedes agregar hasta ${maxCatalogItems} imágenes por catálogo.`;
+        showNotice.value = true;
+        event.target.value = '';
+        return;
+    }
+
+    const acceptedFiles = files.slice(0, availableSlots);
+
+    if (files.length > acceptedFiles.length) {
+        noticeTitle.value = 'Algunas imágenes no se agregaron';
+        noticeMessage.value = `Se agregaron ${acceptedFiles.length} imágenes. El límite actual es de ${maxCatalogItems} imágenes por catálogo.`;
+        showNotice.value = true;
+    }
+
+    acceptedFiles.forEach((file) => {
         catalogItems.value.push({
             id: `temporary-${Date.now()}-${Math.random().toString(16).slice(2)}`,
             source: 'temporary',
@@ -482,7 +500,8 @@ const generateCatalog = async () => {
                 previewFrameRef.value.style.overflow = 'visible';
             }
             await nextTick();
-            await downloadPagedPDF(catalogRef.value, normalizeFileName(settings.value.fileName));
+            const captureScale = catalogItems.value.length > 120 ? 1.15 : catalogItems.value.length > 60 ? 1.4 : 2;
+            await downloadPagedPDF(catalogRef.value, normalizeFileName(settings.value.fileName), { scale: captureScale });
         } catch (error) {
             console.error('Error generating PDF:', error);
             noticeTitle.value = 'No se pudo generar el PDF';
@@ -832,9 +851,9 @@ const generateCatalog = async () => {
                                     <img v-if="settings.showCoverLogo && store.logo_url" :src="store.logo_url" :alt="store.name" class="mx-auto mb-4 h-28 w-28 rounded-3xl object-contain" />
                                     <h3 class="text-center text-2xl font-black" :style="{ color: settings.textColor }">{{ store.name }}</h3>
                                     <div class="space-y-2">
-                                        <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="flex items-center gap-3 rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">
+                                        <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="flex min-h-[52px] items-center gap-3 rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">
                                             <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full p-1.5 text-white [&>svg]:h-full [&>svg]:w-full" :style="{ backgroundColor: settings.accentColor }" v-html="contactIconSvg(item.type)"></span>
-                                            <span class="truncate">{{ item.text }}</span>
+                                            <span class="min-w-0 flex-1 break-words text-center leading-tight">{{ item.text }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -847,7 +866,7 @@ const generateCatalog = async () => {
                                             <p class="text-[10px] font-black uppercase tracking-widest" :style="{ color: settings.accentColor }">{{ item.label }}</p>
                                             <div class="mt-1 flex items-center gap-2">
                                                 <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full p-1 text-white [&>svg]:h-full [&>svg]:w-full" :style="{ backgroundColor: settings.accentColor }" v-html="contactIconSvg(item.type)"></span>
-                                                <p class="truncate text-sm font-semibold text-gray-800">{{ item.text }}</p>
+                                                <p class="min-w-0 flex-1 break-words text-center text-sm font-semibold leading-tight text-gray-800">{{ item.text }}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -860,7 +879,7 @@ const generateCatalog = async () => {
                                         <div class="mt-4 grid grid-cols-2 gap-x-5 gap-y-2">
                                             <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="min-w-0 text-sm">
                                                 <span class="inline-flex h-6 w-6 align-middle items-center justify-center rounded-full p-1 text-white [&>svg]:h-full [&>svg]:w-full" :style="{ backgroundColor: settings.accentColor }" v-html="contactIconSvg(item.type)"></span>
-                                                <span class="ml-1 font-semibold text-gray-800">{{ item.text }}</span>
+                                                <span class="ml-1 break-words align-middle font-semibold leading-tight text-gray-800">{{ item.text }}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -885,7 +904,7 @@ const generateCatalog = async () => {
                                     <div class="relative overflow-hidden bg-white" :class="productImageClass">
                                         <img :src="item.imageUrl" :alt="item.name || 'Producto del catálogo'" class="h-full w-full object-contain" />
                                         <img v-if="showImageLogo" :src="store.logo_url" :alt="store.name" class="pointer-events-none absolute z-10 object-contain" :class="[imageLogoPositionClass, settings.logoPosition === 'center' ? 'h-32 w-32' : imageLogoSizeClass]" :style="logoOpacityStyle" />
-                                        <div v-if="hasPriceOverlay(item)" class="absolute rounded-2xl px-4 py-2 text-xl font-black shadow-lg" :class="overlayPositionClass(settings.pricePosition)" :style="{ backgroundColor: settings.priceBgColor, color: settings.priceColor }">
+                                        <div v-if="hasPriceOverlay(item)" class="absolute flex min-h-[48px] min-w-[120px] items-center justify-center rounded-2xl px-4 py-2 text-center text-xl font-black leading-none shadow-lg" :class="overlayPositionClass(settings.pricePosition)" :style="{ backgroundColor: settings.priceBgColor, color: settings.priceColor }">
                                             {{ formatPrice(item.price) }}
                                         </div>
                                         <div v-if="hasTextOverlay(item)" class="absolute max-w-[78%] rounded-2xl bg-black/50 p-4 text-white backdrop-blur-sm" :class="overlayPositionClass(settings.textPosition)">

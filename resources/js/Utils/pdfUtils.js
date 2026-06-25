@@ -21,11 +21,11 @@ const waitForImages = async (element) => {
     }));
 };
 
-const captureElement = async (element) => {
+const captureElement = async (element, scale = 2) => {
     await waitForImages(element);
 
     return html2canvas(element, {
-        scale: 2,
+        scale,
         useCORS: true,
         allowTaint: false,
         logging: false,
@@ -94,16 +94,17 @@ export const generatePDF = async (element, filename = 'document.pdf') => {
     return new File([pdfBlob], filename, { type: 'application/pdf' });
 };
 
-export const downloadPagedPDF = async (element, filename = 'document.pdf') => {
+export const downloadPagedPDF = async (element, filename = 'document.pdf', options = {}) => {
     const pages = Array.from(element.querySelectorAll('[data-pdf-page]'));
     const captureTargets = pages.length ? pages : [element];
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = 210;
     const pageHeight = 297;
+    const scale = options.scale || 2;
 
     for (let index = 0; index < captureTargets.length; index += 1) {
         const page = captureTargets[index];
-        const canvas = await captureElement(page);
+        const canvas = await captureElement(page, scale);
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
         if (index > 0) {
