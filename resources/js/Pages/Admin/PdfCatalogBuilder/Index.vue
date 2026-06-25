@@ -32,6 +32,7 @@ const maxCatalogItems = 200;
 const draggedIndex = ref(null);
 const dragOverIndex = ref(null);
 const previewItem = ref(null);
+const contactIconSources = ref({});
 
 const settings = ref({
     fileName: 'catalogo-productos',
@@ -166,6 +167,7 @@ const updateViewportWidth = () => {
 
 onMounted(() => {
     updateViewportWidth();
+    ensureContactIconPngs();
     window.addEventListener('resize', updateViewportWidth, { passive: true });
 });
 
@@ -301,19 +303,48 @@ const showImageLogo = computed(() => Boolean(
     props.store?.logo_url && ['image', 'both'].includes(settings.value.logoApplyTo)
 ));
 
-const contactIconSvg = (type) => {
-    const icons = {
-        whatsapp: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.33 4.96L2 22l5.25-1.38a9.88 9.88 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.51 2 12.04 2Zm0 18.16h-.01a8.2 8.2 0 0 1-4.18-1.14l-.3-.18-3.12.82.83-3.04-.2-.31a8.18 8.18 0 1 1 6.98 3.85Zm4.49-6.13c-.25-.12-1.46-.72-1.68-.8-.23-.08-.39-.12-.56.12-.16.25-.64.8-.78.96-.14.17-.29.19-.54.06-.25-.12-1.04-.38-1.98-1.22-.73-.65-1.23-1.46-1.37-1.7-.14-.25-.02-.38.11-.5.11-.11.25-.29.37-.43.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.35-.76-1.85-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.23.25-.87.85-.87 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.24 3.74.59.25 1.05.4 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.46-.6 1.67-1.17.21-.58.21-1.07.14-1.17-.06-.1-.23-.16-.48-.29Z"/></svg>',
-        email: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
-        address: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/></svg>',
-        web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 0 20"/><path d="M12 2a15.3 15.3 0 0 0 0 20"/></svg>',
-        instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="3.5"/><circle cx="17.5" cy="6.5" r=".7" fill="currentColor" stroke="none"/></svg>',
-        facebook: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.2 8.1V6.7c0-.68.45-.84.77-.84h1.96V2.86L14.23 2.85c-3 0-3.68 2.25-3.68 3.69v1.57H8.63v3.15h1.92V21h3.65v-9.74h2.46l.32-3.15H14.2Z"/></svg>',
-        tiktok: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.6 5.82A5.2 5.2 0 0 1 13.8 2h-3.05v12.16a2.55 2.55 0 1 1-1.78-2.43V8.62a5.62 5.62 0 1 0 4.83 5.56V8.02a8.28 8.28 0 0 0 4.85 1.55V6.52c-.72 0-1.42-.25-2.05-.7Z"/></svg>',
-    };
-
-    return icons[type] || icons.web;
+const contactIconSvgs = {
+    whatsapp: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#fff"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.33 4.96L2 22l5.25-1.38a9.88 9.88 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.51 2 12.04 2Zm0 18.16h-.01a8.2 8.2 0 0 1-4.18-1.14l-.3-.18-3.12.82.83-3.04-.2-.31a8.18 8.18 0 1 1 6.98 3.85Zm4.49-6.13c-.25-.12-1.46-.72-1.68-.8-.23-.08-.39-.12-.56.12-.16.25-.64.8-.78.96-.14.17-.29.19-.54.06-.25-.12-1.04-.38-1.98-1.22-.73-.65-1.23-1.46-1.37-1.7-.14-.25-.02-.38.11-.5.11-.11.25-.29.37-.43.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.35-.76-1.85-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.23.25-.87.85-.87 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.24 3.74.59.25 1.05.4 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.46-.6 1.67-1.17.21-.58.21-1.07.14-1.17-.06-.1-.23-.16-.48-.29Z"/></svg>',
+    email: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
+    address: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/></svg>',
+    web: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 0 20"/><path d="M12 2a15.3 15.3 0 0 0 0 20"/></svg>',
+    instagram: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="3.5"/><circle cx="17.5" cy="6.5" r=".8" fill="#fff" stroke="none"/></svg>',
+    facebook: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#fff"><path d="M14.2 8.1V6.7c0-.68.45-.84.77-.84h1.96V2.86L14.23 2.85c-3 0-3.68 2.25-3.68 3.69v1.57H8.63v3.15h1.92V21h3.65v-9.74h2.46l.32-3.15H14.2Z"/></svg>',
+    tiktok: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#fff"><path d="M16.6 5.82A5.2 5.2 0 0 1 13.8 2h-3.05v12.16a2.55 2.55 0 1 1-1.78-2.43V8.62a5.62 5.62 0 1 0 4.83 5.56V8.02a8.28 8.28 0 0 0 4.85 1.55V6.52c-.72 0-1.42-.25-2.05-.7Z"/></svg>',
 };
+
+const svgDataUrl = (svg) => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+
+const svgToPngDataUrl = (svg) => new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 96;
+        canvas.height = 96;
+        const context = canvas.getContext('2d');
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/png'));
+    };
+    image.onerror = reject;
+    image.src = svgDataUrl(svg);
+});
+
+const ensureContactIconPngs = async () => {
+    if (Object.keys(contactIconSources.value).length) return;
+
+    const entries = await Promise.all(Object.entries(contactIconSvgs).map(async ([type, svg]) => {
+        try {
+            return [type, await svgToPngDataUrl(svg)];
+        } catch {
+            return [type, svgDataUrl(svg)];
+        }
+    }));
+
+    contactIconSources.value = Object.fromEntries(entries);
+};
+
+const contactIconSrc = (type) => contactIconSources.value[type] || svgDataUrl(contactIconSvgs[type] || contactIconSvgs.web);
 
 const hasTextOverlay = (item) => {
     return Boolean(String(item.name || '').trim() || String(item.description || '').trim());
@@ -497,6 +528,7 @@ const generateCatalog = async () => {
 
     isGenerating.value = true;
     try {
+        await ensureContactIconPngs();
         activeTab.value = 'preview';
         await nextTick();
 
@@ -515,7 +547,7 @@ const generateCatalog = async () => {
                 previewFrameRef.value.style.overflow = 'visible';
             }
             await nextTick();
-            const captureScale = catalogItems.value.length > 120 ? 1.15 : catalogItems.value.length > 60 ? 1.4 : 2;
+            const captureScale = 2;
             await downloadPagedPDF(catalogRef.value, normalizeFileName(settings.value.fileName), { scale: captureScale });
         } catch (error) {
             console.error('Error generating PDF:', error);
@@ -871,9 +903,11 @@ const generateCatalog = async () => {
                                     <img v-if="settings.showCoverLogo && store.logo_url" :src="store.logo_url" :alt="store.name" class="mx-auto mb-4 h-28 w-28 rounded-3xl object-contain" />
                                     <h3 class="text-center text-2xl font-black" :style="{ color: settings.textColor }">{{ store.name }}</h3>
                                     <div class="space-y-2">
-                                        <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="flex min-h-[60px] items-center gap-3 rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800" :data-pdf-link="item.url || null">
-                                            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full p-1.5 text-white [&>svg]:h-full [&>svg]:w-full" :style="{ backgroundColor: settings.accentColor }" v-html="contactIconSvg(item.type)"></span>
-                                            <span class="min-w-0 flex-1 break-all text-center leading-tight">{{ item.text }}</span>
+                                        <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="flex min-h-[60px] gap-3 rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800" :data-pdf-link="item.url || null" :style="{ alignItems: 'center' }">
+                                            <span class="flex h-8 w-8 shrink-0 rounded-full" :style="{ alignItems: 'center', backgroundColor: settings.accentColor, display: 'flex', justifyContent: 'center' }">
+                                                <img :src="contactIconSrc(item.type)" :alt="item.label" class="h-5 w-5 object-contain" />
+                                            </span>
+                                            <span class="block min-w-0 flex-1 break-all text-center leading-none">{{ item.text }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -884,9 +918,11 @@ const generateCatalog = async () => {
                                     <div class="mt-6 grid grid-cols-2 gap-3 text-left">
                                         <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="rounded-2xl border border-gray-200 bg-white px-4 py-3" :data-pdf-link="item.url || null">
                                             <p class="text-[10px] font-black uppercase tracking-widest" :style="{ color: settings.accentColor }">{{ item.label }}</p>
-                                            <div class="mt-1 flex items-center gap-2">
-                                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full p-1 text-white [&>svg]:h-full [&>svg]:w-full" :style="{ backgroundColor: settings.accentColor }" v-html="contactIconSvg(item.type)"></span>
-                                                <p class="min-w-0 flex-1 break-all text-center text-sm font-semibold leading-tight text-gray-800">{{ item.text }}</p>
+                                            <div class="mt-1 flex gap-2" :style="{ alignItems: 'center' }">
+                                                <span class="flex h-6 w-6 shrink-0 rounded-full" :style="{ alignItems: 'center', backgroundColor: settings.accentColor, display: 'flex', justifyContent: 'center' }">
+                                                    <img :src="contactIconSrc(item.type)" :alt="item.label" class="h-4 w-4 object-contain" />
+                                                </span>
+                                                <p class="min-w-0 flex-1 break-all text-center text-sm font-semibold leading-none text-gray-800">{{ item.text }}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -897,9 +933,11 @@ const generateCatalog = async () => {
                                     <div class="min-w-0 flex-1">
                                         <h3 class="text-3xl font-black" :style="{ color: settings.textColor }">{{ store.name }}</h3>
                                         <div class="mt-4 grid grid-cols-2 gap-x-5 gap-y-2">
-                                            <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="min-w-0 text-sm" :data-pdf-link="item.url || null">
-                                                <span class="inline-flex h-6 w-6 align-middle items-center justify-center rounded-full p-1 text-white [&>svg]:h-full [&>svg]:w-full" :style="{ backgroundColor: settings.accentColor }" v-html="contactIconSvg(item.type)"></span>
-                                                <span class="ml-1 break-all align-middle font-semibold leading-tight text-gray-800">{{ item.text }}</span>
+                                            <div v-for="item in businessContactItems" :key="`${item.label}-${item.text}`" class="flex min-h-[32px] min-w-0 gap-2 text-sm" :data-pdf-link="item.url || null" :style="{ alignItems: 'center' }">
+                                                <span class="flex h-6 w-6 shrink-0 rounded-full" :style="{ alignItems: 'center', backgroundColor: settings.accentColor, display: 'flex', justifyContent: 'center' }">
+                                                    <img :src="contactIconSrc(item.type)" :alt="item.label" class="h-4 w-4 object-contain" />
+                                                </span>
+                                                <span class="block min-w-0 break-all font-semibold leading-none text-gray-800">{{ item.text }}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -924,8 +962,8 @@ const generateCatalog = async () => {
                                     <div class="relative overflow-hidden bg-white" :class="productImageClass">
                                         <img :src="item.imageUrl" :alt="item.name || 'Producto del catálogo'" class="h-full w-full object-contain" />
                                         <img v-if="showImageLogo" :src="store.logo_url" :alt="store.name" class="pointer-events-none absolute z-10 object-contain" :class="[imageLogoPositionClass, settings.logoPosition === 'center' ? 'h-32 w-32' : imageLogoSizeClass]" :style="logoOpacityStyle" />
-                                        <div v-if="hasPriceOverlay(item)" class="absolute min-w-[132px] rounded-2xl px-5 text-center text-xl font-black shadow-lg" :class="overlayPositionClass(settings.pricePosition)" :style="{ alignItems: 'center', backgroundColor: settings.priceBgColor, color: settings.priceColor, display: 'flex', height: '54px', justifyContent: 'center', lineHeight: '1' }">
-                                            <span class="block leading-none">{{ formatPrice(item.price) }}</span>
+                                        <div v-if="hasPriceOverlay(item)" data-pdf-price-overlay class="absolute min-w-[132px] overflow-hidden rounded-2xl px-5 text-center text-xl font-black shadow-lg" :class="overlayPositionClass(settings.pricePosition)" :style="{ backgroundColor: settings.priceBgColor, boxSizing: 'border-box', color: settings.priceColor, height: '54px', lineHeight: '54px', textAlign: 'center', whiteSpace: 'nowrap' }">
+                                            {{ formatPrice(item.price) }}
                                         </div>
                                         <div v-if="hasTextOverlay(item)" class="absolute max-w-[78%] rounded-2xl bg-black/50 p-4 text-white backdrop-blur-sm" :class="overlayPositionClass(settings.textPosition)">
                                             <h3 v-if="item.name" class="text-2xl font-bold leading-tight">{{ item.name }}</h3>

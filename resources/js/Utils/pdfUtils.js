@@ -35,6 +35,78 @@ const captureElement = async (element, scale = 2) => {
     });
 };
 
+const parseCssColor = (value) => {
+    if (!value) return [0, 0, 0];
+
+    const hex = value.trim().match(/^#([a-f\d]{3}|[a-f\d]{6})$/i);
+    if (hex) {
+        const normalized = hex[1].length === 3
+            ? hex[1].split('').map((part) => `${part}${part}`).join('')
+            : hex[1];
+
+        return [
+            parseInt(normalized.slice(0, 2), 16),
+            parseInt(normalized.slice(2, 4), 16),
+            parseInt(normalized.slice(4, 6), 16),
+        ];
+    }
+
+    const rgb = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+
+    return [0, 0, 0];
+};
+
+const preparePdfTextOverlays = (page, selector) => {
+    return Array.from(page.querySelectorAll(selector)).map((node) => {
+        const style = window.getComputedStyle(node);
+        const overlay = {
+            node,
+            originalColor: node.style.color,
+            originalTextShadow: node.style.textShadow,
+            text: node.textContent.trim(),
+            color: style.color,
+            fontSize: Number.parseFloat(style.fontSize) || 20,
+            fontWeight: Number.parseInt(style.fontWeight, 10) || 700,
+        };
+
+        node.style.color = 'transparent';
+        node.style.textShadow = 'none';
+
+        return overlay;
+    });
+};
+
+const restorePdfTextOverlays = (overlays) => {
+    overlays.forEach((overlay) => {
+        overlay.node.style.color = overlay.originalColor;
+        overlay.node.style.textShadow = overlay.originalTextShadow;
+    });
+};
+
+const drawPdfTextOverlays = (doc, page, overlays, pageWidth, pageHeight) => {
+    const pageRect = page.getBoundingClientRect();
+
+    overlays.forEach((overlay) => {
+        if (!overlay.text) return;
+
+        const rect = overlay.node.getBoundingClientRect();
+        const x = ((rect.left - pageRect.left) / pageRect.width) * pageWidth;
+        const y = ((rect.top - pageRect.top) / pageRect.height) * pageHeight;
+        const width = (rect.width / pageRect.width) * pageWidth;
+        const height = (rect.height / pageRect.height) * pageHeight;
+        const [red, green, blue] = parseCssColor(overlay.color);
+
+        doc.setTextColor(red, green, blue);
+        doc.setFont('helvetica', overlay.fontWeight >= 700 ? 'bold' : 'normal');
+        doc.setFontSize(overlay.fontSize * 0.75);
+        doc.text(overlay.text, x + (width / 2), y + (height / 2), {
+            align: 'center',
+            baseline: 'middle',
+        });
+    });
+};
+
 /**
  * Generates a PDF from an HTML element
  * @param {HTMLElement} element - The DOM element to convert to PDF
@@ -104,7 +176,15 @@ export const downloadPagedPDF = async (element, filename = 'document.pdf', optio
 
     for (let index = 0; index < captureTargets.length; index += 1) {
         const page = captureTargets[index];
-        const canvas = await captureElement(page, scale);
+        const textOverlays = preparePdfTextOverlays(page, '[data-pdf-price-overlay]');
+        let canvas;
+
+        try {
+            canvas = await captureElement(page, scale);
+        } finally {
+            restorePdfTextOverlays(textOverlays);
+        }
+
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
         if (index > 0) {
@@ -112,6 +192,7 @@ export const downloadPagedPDF = async (element, filename = 'document.pdf', optio
         }
 
         doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+        drawPdfTextOverlays(doc, page, textOverlays, pageWidth, pageHeight);
 
         const pageRect = page.getBoundingClientRect();
         const links = Array.from(page.querySelectorAll('[data-pdf-link]'));
