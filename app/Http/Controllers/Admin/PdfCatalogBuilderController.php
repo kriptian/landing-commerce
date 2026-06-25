@@ -17,19 +17,23 @@ class PdfCatalogBuilderController extends Controller
     {
         $store = $request->user()->store;
 
-        $products = $store->products()
-            ->with(['category', 'images', 'variantOptions.children'])
-            ->where('is_active', true)
-            ->latest()
-            ->get()
-            ->map(fn ($product) => [
-                'id' => $product->id,
-                'name' => $product->name,
-                'price' => $product->price,
-                'description' => $product->short_description,
-                'image_url' => $product->main_image_url,
-                'category' => $product->category?->name,
-            ]);
+        $products = collect();
+
+        if ($store->plan !== 'creador_pdf') {
+            $products = $store->products()
+                ->with(['category', 'images', 'variantOptions.children'])
+                ->where('is_active', true)
+                ->latest()
+                ->get()
+                ->map(fn ($product) => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'price' => $product->price,
+                    'description' => $product->short_description,
+                    'image_url' => $product->main_image_url,
+                    'category' => $product->category?->name,
+                ]);
+        }
 
         return Inertia::render('Admin/PdfCatalogBuilder/Index', [
             'products' => $products,
@@ -37,6 +41,17 @@ class PdfCatalogBuilderController extends Controller
                 'id' => $store->id,
                 'name' => $store->name,
                 'logo_url' => $store->logo_url,
+                'plan' => $store->plan,
+                'email' => $request->user()->email,
+                'phone' => $store->phone,
+                'address' => $store->address,
+                'address_two' => $store->address_two,
+                'address_three' => $store->address_three,
+                'address_four' => $store->address_four,
+                'custom_domain' => $store->custom_domain,
+                'facebook_url' => $store->facebook_url,
+                'instagram_url' => $store->instagram_url,
+                'tiktok_url' => $store->tiktok_url,
             ],
         ]);
     }
