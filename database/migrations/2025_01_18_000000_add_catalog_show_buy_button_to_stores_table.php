@@ -11,8 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (! Schema::hasTable('stores')) {
+            return;
+        }
+
         Schema::table('stores', function (Blueprint $table) {
-            if (!Schema::hasColumn('stores', 'catalog_show_buy_button')) {
+            if (! Schema::hasColumn('stores', 'catalog_show_buy_button')) {
                 $table->boolean('catalog_show_buy_button')->default(false)->after('catalog_product_template');
             }
         });
@@ -23,6 +27,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (! Schema::hasTable('stores')) {
+            return;
+        }
+
         Schema::table('stores', function (Blueprint $table) {
             if (Schema::hasColumn('stores', 'catalog_show_buy_button')) {
                 $table->dropColumn('catalog_show_buy_button');
@@ -30,4 +38,3 @@ return new class extends Migration
         });
     }
 };
-

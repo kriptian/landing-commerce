@@ -3,10 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\CustomerNotification;
+use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
 class OrderController extends Controller
 {
@@ -16,8 +20,9 @@ class OrderController extends Controller
         // Solo quienes tengan "ver ordenes" pueden listar y ver detalles
         $this->middleware('can:ver ordenes')->only(['index', 'show']);
         // Solo quienes tengan "gestionar ordenes" pueden cambiar estado/confirmar
-        $this->middleware('can:gestionar ordenes')->only(['update', 'confirm']);
+        $this->middleware('can:gestionar ordenes')->only('update');
     }
+
     /**
      * Muestra una lista de todas las órdenes de la tienda.
      */
@@ -45,7 +50,7 @@ class OrderController extends Controller
             $q = trim($request->q);
             $query->where(function ($qq) use ($q) {
                 $qq->where('customer_name', 'like', "%{$q}%")
-                   ->orWhere('customer_phone', 'like', "%{$q}%");
+                    ->orWhere('customer_phone', 'like', "%{$q}%");
             });
         }
 
@@ -53,8 +58,8 @@ class OrderController extends Controller
         if ($request->filled('start') || $request->filled('end')) {
             $start = $request->filled('start') ? \Carbon\Carbon::parse($request->start)->startOfDay() : null;
             $end = $request->filled('end') ? \Carbon\Carbon::parse($request->end)->endOfDay() : null;
-            $query->when($start, fn($qq) => $qq->where('created_at', '>=', $start))
-                  ->when($end, fn($qq) => $qq->where('created_at', '<=', $end));
+            $query->when($start, fn ($qq) => $qq->where('created_at', '>=', $start))
+                ->when($end, fn ($qq) => $qq->where('created_at', '<=', $end));
         }
 
         // Ahora sí ejecutamos la consulta y paginamos.
@@ -64,9 +69,10 @@ class OrderController extends Controller
         return Inertia::render('Admin/Orders/Index', [
             'orders' => $orders,
             // Mandamos los filtros actuales a la vista para que sepa qué botón resaltar
-            'filters' => $request->only(['status','q','start','end']),
+            'filters' => $request->only(['status', 'q', 'start', 'end']),
         ]);
     }
+
     /**
      * Muestra el detalle de una orden específica.
      */
@@ -85,91 +91,74 @@ class OrderController extends Controller
             'store' => auth()->user()->store,
         ]);
     }
+
     /**
      * Actualiza el estado de una orden.
      */
-    public function update(Request $request, \App\Models\Order $order)
+    public function update(Request $request, Order $order)
     {
-        // Seguridad: otra vez, que la orden sea de la tienda del usuario
-        if ($order->store_id !== auth()->user()->store_id) {
-            abort(403);
-        }
-
-        // Validamos que el estado que nos mandan sea uno de los permitidos
-        $request->validate([
+        $storeId = $request->user()->store_id;
+        $newStatus = $request->validate([
             'status' => ['required', 'string', Rule::in(['recibido', 'en_preparacion', 'en_proceso', 'despachado', 'en_camino', 'entregado', 'cancelado'])],
-        ]);
-
-        // Estados
-        $previousStatus = $order->status;
-        $newStatus = $request->status;
-
-        // Transiciones que DESCUENTAN inventario: pasar a 'despachado' o 'entregado'
-        $shouldSubtract = !in_array($previousStatus, ['despachado', 'entregado']) && in_array($newStatus, ['despachado', 'entregado']);
-        // Transiciones que DEVUELVEN inventario: salir de 'despachado' o 'entregado'
-        $shouldReturn = in_array($previousStatus, ['despachado', 'entregado']) && !in_array($newStatus, ['despachado', 'entregado']);
+        ])['status'];
 
         try {
-            DB::transaction(function () use ($order, $previousStatus, $newStatus, $shouldSubtract, $shouldReturn) {
-                $order->load('items.variant', 'items.product');
+            DB::transaction(function () use ($order, $storeId, $newStatus) {
+                $lockedOrder = Order::query()
+                    ->whereKey($order->id)
+                    ->where('store_id', $storeId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $previousStatus = $lockedOrder->status;
+                $inventoryStatuses = ['despachado', 'entregado'];
+                $shouldSubtract = ! in_array($previousStatus, $inventoryStatuses, true)
+                    && in_array($newStatus, $inventoryStatuses, true);
+                $shouldReturn = in_array($previousStatus, $inventoryStatuses, true)
+                    && ! in_array($newStatus, $inventoryStatuses, true);
 
-                if ($shouldSubtract) {
-                    // Validamos y descontamos
-                    foreach ($order->items as $item) {
-                        $product = $item->product; // puede ser null si borrado
-                        // Si la tienda NO controla inventario en este producto, no hacemos nada
-                        if ($product && $product->track_inventory === false) {
+                if ($shouldSubtract || $shouldReturn) {
+                    $lockedOrder->load('items');
+
+                    foreach ($lockedOrder->items as $item) {
+                        $product = Product::query()
+                            ->whereKey($item->product_id)
+                            ->where('store_id', $storeId)
+                            ->lockForUpdate()
+                            ->first();
+
+                        if (! $product || ! $product->track_inventory) {
                             continue;
                         }
 
-                        if ($item->variant) {
-                            $variant = $item->variant;
-                            if ($variant->stock > 0) {
-                                if ($variant->stock < $item->quantity) {
-                                    throw new \Exception("No hay suficiente stock para la variante seleccionada.");
-                                }
-                                $variant->decrement('stock', $item->quantity);
-                            } else {
-                                // Variante sin stock propio: descontamos del inventario total del producto
-                                if ($product) {
-                                    if ($product->quantity < $item->quantity) {
-                                        throw new \Exception("No hay suficiente stock para el producto {$item->product_name}.");
-                                    }
-                                    $product->decrement('quantity', $item->quantity);
-                                }
+                        $stockModel = $product;
+                        $stockColumn = 'quantity';
+                        if ($item->product_variant_id) {
+                            $stockModel = ProductVariant::query()
+                                ->whereKey($item->product_variant_id)
+                                ->where('product_id', $product->id)
+                                ->lockForUpdate()
+                                ->first();
+                            $stockColumn = 'stock';
+
+                            if (! $stockModel) {
+                                throw new \RuntimeException('La variante del pedido ya no está disponible.');
                             }
-                        } elseif ($product) {
-                            if ($product->quantity < $item->quantity) {
-                                throw new \Exception("No hay suficiente stock para el producto {$item->product_name}.");
-                            }
-                            $product->decrement('quantity', $item->quantity);
                         }
-                    }
-                } elseif ($shouldReturn) {
-                    // Devolvemos inventario
-                    foreach ($order->items as $item) {
-                        $product = $item->product;
-                        if ($product && $product->track_inventory === false) {
-                            continue;
-                        }
-                        if ($item->variant) {
-                            // Si la variante maneja stock (>0), incrementamos ahí; si no, devolvemos al total del producto
-                            if ($item->variant->stock > 0) {
-                                $item->variant->increment('stock', $item->quantity);
-                            } elseif ($product) {
-                                $product->increment('quantity', $item->quantity);
+
+                        if ($shouldSubtract) {
+                            if ((int) $stockModel->{$stockColumn} < (int) $item->quantity) {
+                                throw new \RuntimeException("No hay suficiente stock para {$item->product_name}.");
                             }
-                        } elseif ($product) {
-                            $product->increment('quantity', $item->quantity);
+                            $stockModel->decrement($stockColumn, $item->quantity);
+                        } else {
+                            $stockModel->increment($stockColumn, $item->quantity);
                         }
                     }
                 }
 
-                // Finalmente actualizamos el estado
-                $order->update(['status' => $newStatus]);
+                $lockedOrder->update(['status' => $newStatus]);
 
-                // Crear notificación para el cliente si existe
-                if ($order->customer_id && $previousStatus !== $newStatus) {
+                if ($lockedOrder->customer_id && $previousStatus !== $newStatus) {
                     $statusMessages = [
                         'recibido' => 'Tu pedido ha sido recibido por la tienda',
                         'en_preparacion' => 'Tu pedido está en preparación',
@@ -180,83 +169,22 @@ class OrderController extends Controller
                         'cancelado' => 'Tu pedido ha sido cancelado',
                     ];
 
-                    $title = 'Actualización de pedido #' . $order->sequence_number;
+                    $title = 'Actualización de pedido #'.$lockedOrder->sequence_number;
                     $message = $statusMessages[$newStatus] ?? 'El estado de tu pedido ha cambiado';
 
-                    \App\Models\CustomerNotification::create([
-                        'customer_id' => $order->customer_id,
-                        'order_id' => $order->id,
+                    CustomerNotification::create([
+                        'customer_id' => $lockedOrder->customer_id,
+                        'order_id' => $lockedOrder->id,
                         'type' => 'order_status',
                         'title' => $title,
                         'message' => $message,
                     ]);
                 }
-            });
-        } catch (\Exception $e) {
+            }, 3);
+        } catch (\Throwable $e) {
             return back()->withErrors(['status' => $e->getMessage()]);
         }
 
         return back();
-    }
-    /**
-     * Confirma una orden y descuenta el inventario.
-     */
-    /**
-     * Confirma una orden y descuenta el inventario.
-     */
-    public function confirm(\App\Models\Order $order)
-    {
-        // Seguridad (sigue igual)
-        if ($order->store_id !== auth()->user()->store_id) {
-            abort(403);
-        }
-
-        // Regla de negocio: permitir confirmar y descontar inventario
-        // cuando la orden está en estado 'despachado' o 'entregado'.
-        if (!in_array($order->status, ['despachado', 'entregado'])) {
-            return back()->withErrors(['confirmation' => 'Solo podés confirmar y descontar inventario cuando la orden está DESPACHADA o ENTREGADA.']);
-        }
-
-        try {
-            // Usamos una transacción para que, si algo falla, no se descuente nada.
-            DB::transaction(function () use ($order) {
-                
-                $order->load('items.variant', 'items.product');
-
-                foreach ($order->items as $item) {
-                    if ($item->variant) {
-                        // Si el item es una variante, descontamos el stock de la variante
-                        $variant = $item->variant;
-                        if ($variant->stock < $item->quantity) {
-                            // Mensaje genérico (las claves de opciones pueden variar: color, talla, etc.)
-                            throw new \Exception("No hay suficiente stock para la variante seleccionada.");
-                        }
-                        $variant->decrement('stock', $item->quantity);
-
-                    } else if ($item->product) { // Chequeamos que el producto exista
-                        // Si es un producto simple, descontamos el stock del producto principal
-                        $product = $item->product;
-                        if ($product->quantity < $item->quantity) {
-                            throw new \Exception("No hay suficiente stock para el producto {$item->product_name}.");
-                        }
-                        $product->decrement('quantity', $item->quantity);
-                    }
-                }
-
-                // (Opcional) Podemos cambiar el estado a 'confirmado' o 'entregado'
-                // $order->status = 'entregado';
-                // $order->save();
-            });
-
-        } catch (\Exception $e) {
-            // ===== ESTE ES EL CAMBIO =====
-            // Si la transacción falla por CUALQUIER razón (como la falta de stock),
-            // atrapamos el error y volvemos con un mensaje claro.
-            return back()->withErrors(['confirmation' => $e->getMessage()]);
-        }
-
-
-        // Si todo sale bien, regresamos a la página anterior con un mensaje de éxito.
-        return back(); // La notificación de éxito ya la maneja el frontend en el 'onSuccess'
     }
 }

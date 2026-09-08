@@ -5,14 +5,18 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Role; // <-- Usamos nuestro modelo personalizado
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\PermissionRegistrar;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Spatie\Permission\PermissionRegistrar;
 
 class RoleController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('can:gestionar usuarios');
+    }
+
     // Esta función no la estamos usando en el menú, pero es bueno tenerla completa.
     public function index(Request $request)
     {
@@ -21,10 +25,10 @@ class RoleController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         return Inertia::render('Roles/Create', [
-            'permissions' => Permission::all()->pluck('name'),
+            'permissions' => $request->user()->getAllPermissions()->pluck('name'),
         ]);
     }
 
@@ -33,10 +37,14 @@ class RoleController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'permissions' => 'required|array',
+            'permissions.*' => [
+                'string',
+                Rule::in($request->user()->getAllPermissions()->pluck('name')->all()),
+            ],
         ]);
 
         $store = $request->user()->store;
-        
+
         $role = $store->roles()->create([
             'name' => $validated['name'],
             'guard_name' => config('auth.defaults.guard', 'web'),
@@ -53,31 +61,30 @@ class RoleController extends Controller
 
     public function edit(Role $role)
     {
-        // Medida de seguridad: Asegurarse de que el rol pertenezca a la tienda del usuario.
-        if ($role->store_id !== auth()->user()->store_id) {
-            abort(403);
-        }
+        $role = auth()->user()->store->roles()->findOrFail($role->id);
 
         return Inertia::render('Roles/Edit', [
             'role' => $role->load('permissions'),
-            'permissions' => Permission::all()->pluck('name'),
+            'permissions' => auth()->user()->getAllPermissions()->pluck('name'),
         ]);
     }
 
     public function update(Request $request, Role $role)
     {
-        if ($role->store_id !== auth()->user()->store_id) {
-            abort(403);
-        }
-        
+        $role = $request->user()->store->roles()->findOrFail($role->id);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255',
                 Rule::unique('roles')->where(function ($q) use ($role) {
                     return $q->where('store_id', auth()->user()->store_id)
-                             ->where('guard_name', $role->guard_name ?: config('auth.defaults.guard', 'web'));
-                })->ignore($role->id)
+                        ->where('guard_name', $role->guard_name ?: config('auth.defaults.guard', 'web'));
+                })->ignore($role->id),
             ],
             'permissions' => 'required|array',
+            'permissions.*' => [
+                'string',
+                Rule::in($request->user()->getAllPermissions()->pluck('name')->all()),
+            ],
         ]);
 
         $role->update([
@@ -94,24 +101,22 @@ class RoleController extends Controller
 
     public function destroy(Role $role, Request $request)
     {
-        if ($role->store_id !== auth()->user()->store_id) {
-            abort(403);
-        }
+        $role = $request->user()->store->roles()->findOrFail($role->id);
 
         // Prevenir eliminación del rol "physical-sales" (siempre debe existir)
         if ($role->name === 'physical-sales') {
             throw ValidationException::withMessages([
-                'delete' => 'No se puede eliminar el rol "physical-sales". Este rol es requerido por el sistema.'
+                'delete' => 'No se puede eliminar el rol "physical-sales". Este rol es requerido por el sistema.',
             ]);
         }
 
         // Única restricción: si hay usuarios con este rol, no permitimos eliminar
         if (method_exists($role, 'users') && $role->users()->exists()) {
             throw ValidationException::withMessages([
-                'delete' => 'No se puede eliminar un rol que está asignado a usuarios.'
+                'delete' => 'No se puede eliminar un rol que está asignado a usuarios.',
             ]);
         }
-        
+
         $role->delete();
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();

@@ -10,11 +10,11 @@ return new class extends Migration
     {
         Schema::create('gallery_images', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('store_id')->constrained()->onDelete('cascade');
+            $table->foreignId('store_id');
             $table->string('image_url');
             $table->string('title')->nullable();
             $table->text('description')->nullable();
-            $table->foreignId('product_id')->nullable()->constrained()->onDelete('set null');
+            $table->foreignId('product_id')->nullable();
             $table->boolean('show_buy_button')->default(true);
             $table->integer('order')->default(0);
             $table->boolean('is_active')->default(true);
@@ -27,4 +27,3 @@ return new class extends Migration
         Schema::dropIfExists('gallery_images');
     }
 };
-

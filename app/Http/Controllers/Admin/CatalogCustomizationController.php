@@ -4,13 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
+use Inertia\Inertia;
 
 class CatalogCustomizationController extends Controller
 {
     public function __construct()
     {
+        $this->middleware('can:gestionar galeria');
         $this->middleware('plan:negociante');
     }
 
@@ -98,7 +99,23 @@ class CatalogCustomizationController extends Controller
             'popup_active' => 'boolean',
             'popup_image' => 'nullable|image|max:2048',
             'popup_button_text' => 'nullable|string|max:50',
-            'popup_button_link' => 'nullable|string|max:255',
+            'popup_button_link' => [
+                'nullable',
+                'string',
+                'max:255',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $link = trim((string) $value);
+                    $isInternal = str_starts_with($link, '/') && ! str_starts_with($link, '//');
+                    $isRegisterAction = $link === '#register';
+                    $scheme = parse_url($link, PHP_URL_SCHEME);
+                    $isSafeUrl = in_array(strtolower((string) $scheme), ['http', 'https'], true)
+                        && filter_var($link, FILTER_VALIDATE_URL) !== false;
+
+                    if (preg_match('/[\\x00-\\x1F\\x7F\\\\]/', $link) || (! $isInternal && ! $isRegisterAction && ! $isSafeUrl)) {
+                        $fail('El enlace del botón debe ser una ruta interna o una URL http/https válida.');
+                    }
+                },
+            ],
             'popup_show_button' => 'boolean',
             'popup_frequency' => 'required|in:session,hourly',
             'whatsapp_floating_button_active' => 'boolean',
@@ -106,9 +123,9 @@ class CatalogCustomizationController extends Controller
         ]);
 
         $store = $request->user()->store;
-        
+
         \Illuminate\Support\Facades\Log::info('CatalogCustomization update payload:', $validated);
-        
+
         // Manejo de la imagen del popup
         if ($request->hasFile('popup_image')) {
             // Eliminar la imagen anterior si existe
@@ -116,9 +133,9 @@ class CatalogCustomizationController extends Controller
                 // Opcional: eliminar el archivo físico
                 // unlink(public_path($store->popup_image_path));
             }
-            
+
             $path = $request->file('popup_image')->store('popups', 'public');
-            $validated['popup_image_path'] = '/storage/' . $path;
+            $validated['popup_image_path'] = '/storage/'.$path;
         }
 
         unset($validated['popup_image']); // No intentamos guardar el archivo en la BD
@@ -148,4 +165,3 @@ class CatalogCustomizationController extends Controller
             ->with('success', 'Personalización del catálogo actualizada correctamente.');
     }
 }
-

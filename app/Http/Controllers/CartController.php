@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller; // <-- ¡ESTA ES LA LÍNEA QUE FALTABA!
+// <-- ¡ESTA ES LA LÍNEA QUE FALTABA!
 use App\Models\Cart;
 use App\Models\Product;
 use App\Models\ProductVariant;
@@ -20,12 +20,12 @@ class CartController extends Controller
     {
         // Forzar recarga de store desde DB para obtener promociones actualizadas
         $store = $store->fresh();
-        
-        if (Auth::check()) {
-            $cartItems = $request->user()->cart()
-                            ->whereRelation('product', 'store_id', $store->id)
-                            ->get();
-            
+
+        if (Auth::guard('web')->check()) {
+            $cartItems = $request->user('web')->cart()
+                ->whereRelation('product', 'store_id', $store->id)
+                ->get();
+
             // Recargar productos y variantes directamente desde DB para obtener precios actualizados
             // IMPORTANTE: Forzamos que se seleccionen TODOS los campos de precio explícitamente
             foreach ($cartItems as $item) {
@@ -35,17 +35,13 @@ class CartController extends Controller
                     $freshProduct = Product::query()
                         ->where('id', $item->product_id)
                         ->select([
-                            'id', 'name', 'price', 'retail_price', 'wholesale_price', 'purchase_price',
+                            'id', 'name', 'price', 'retail_price', 'wholesale_price',
                             'promo_active', 'promo_discount_percent', 'track_inventory', 'quantity',
                             'alert', 'category_id', 'store_id', 'short_description', 'long_description',
-                            'specifications', 'is_featured', 'is_active', 'variant_attributes'
+                            'specifications', 'is_featured', 'is_active', 'variant_attributes',
                         ])
                         ->with('images')
                         ->first();
-                    // Forzar recarga de atributos desde DB
-                    if ($freshProduct) {
-                        $freshProduct->refresh();
-                    }
                     $item->setRelation('product', $freshProduct);
                 } else {
                     $item->setRelation('product', null);
@@ -53,21 +49,28 @@ class CartController extends Controller
                 if ($item->product_variant_id) {
                     // Forzar consulta directa desde DB sin usar identity map
                     $freshVariant = ProductVariant::query()
+                        ->where('product_id', $item->product_id)
                         ->where('id', $item->product_variant_id)
                         ->select([
-                            'id', 'product_id', 'options', 'price', 'retail_price', 
-                            'wholesale_price', 'purchase_price', 'stock', 'alert', 'sku'
+                            'id', 'product_id', 'options', 'price', 'retail_price',
+                            'wholesale_price', 'stock', 'alert', 'sku',
                         ])
                         ->first();
-                    // Forzar recarga de atributos desde DB
-                    if ($freshVariant) {
-                        $freshVariant->refresh();
-                    }
                     $item->setRelation('variant', $freshVariant);
                 } else {
                     $item->setRelation('variant', null);
                 }
             }
+
+            $cartItems = $cartItems->filter(function ($item) {
+                if (! $item->product || ! $item->product->is_active || (int) $item->quantity < 1) {
+                    return false;
+                }
+
+                return $item->product_variant_id
+                    ? $item->variant !== null && ! empty($item->variant->options)
+                    : ! $this->hasRealVariants($item->product);
+            })->values();
 
             return Inertia::render('Public/CartPage', [
                 'cartItems' => $cartItems,
@@ -90,20 +93,20 @@ class CartController extends Controller
                     'catalog_purchase_button_color' => $store->catalog_purchase_button_color ?? '#2563EB',
                     'catalog_cart_bubble_color' => $store->catalog_cart_bubble_color ?? '#2563EB',
                     'catalog_social_button_color' => $store->catalog_social_button_color ?? '#2563EB',
-                'catalog_logo_position' => $store->catalog_logo_position ?? 'center',
-                'catalog_menu_type' => $store->catalog_menu_type ?? 'hamburger',
-                'catalog_product_template' => $store->catalog_product_template ?? 'default',
-                'catalog_show_buy_button' => $store->catalog_show_buy_button ?? false,
-                'catalog_header_style' => $store->catalog_header_style ?? 'default',
-                'catalog_header_bg_color' => $store->catalog_header_bg_color ?? '#FFFFFF',
-                'catalog_header_text_color' => $store->catalog_header_text_color ?? '#1F2937',
-                'catalog_button_bg_color' => $store->catalog_button_bg_color ?? '#2563EB',
-                'catalog_button_text_color' => $store->catalog_button_text_color ?? '#FFFFFF',
-                'catalog_body_bg_color' => $store->catalog_body_bg_color ?? '#FFFFFF',
-                'catalog_body_text_color' => $store->catalog_body_text_color ?? '#1F2937',
-                'catalog_input_bg_color' => $store->catalog_input_bg_color ?? '#FFFFFF',
-                'catalog_input_text_color' => $store->catalog_input_text_color ?? '#1F2937',
-            ],
+                    'catalog_logo_position' => $store->catalog_logo_position ?? 'center',
+                    'catalog_menu_type' => $store->catalog_menu_type ?? 'hamburger',
+                    'catalog_product_template' => $store->catalog_product_template ?? 'default',
+                    'catalog_show_buy_button' => $store->catalog_show_buy_button ?? false,
+                    'catalog_header_style' => $store->catalog_header_style ?? 'default',
+                    'catalog_header_bg_color' => $store->catalog_header_bg_color ?? '#FFFFFF',
+                    'catalog_header_text_color' => $store->catalog_header_text_color ?? '#1F2937',
+                    'catalog_button_bg_color' => $store->catalog_button_bg_color ?? '#2563EB',
+                    'catalog_button_text_color' => $store->catalog_button_text_color ?? '#FFFFFF',
+                    'catalog_body_bg_color' => $store->catalog_body_bg_color ?? '#FFFFFF',
+                    'catalog_body_text_color' => $store->catalog_body_text_color ?? '#1F2937',
+                    'catalog_input_bg_color' => $store->catalog_input_bg_color ?? '#FFFFFF',
+                    'catalog_input_text_color' => $store->catalog_input_text_color ?? '#1F2937',
+                ],
             ]);
         }
 
@@ -119,32 +122,37 @@ class CartController extends Controller
             $product = Product::query()
                 ->where('id', $row['product_id'])
                 ->select([
-                    'id', 'name', 'price', 'retail_price', 'wholesale_price', 'purchase_price',
+                    'id', 'name', 'price', 'retail_price', 'wholesale_price',
                     'promo_active', 'promo_discount_percent', 'track_inventory', 'quantity',
                     'alert', 'category_id', 'store_id', 'short_description', 'long_description',
-                    'specifications', 'is_featured', 'is_active', 'variant_attributes'
+                    'specifications', 'is_featured', 'is_active', 'variant_attributes',
                 ])
                 ->with('images')
                 ->first();
-            if (! $product || (int) $product->store_id !== (int) $store->id) {
+            if (! $product || ! $product->is_active || (int) $product->store_id !== (int) $store->id) {
                 continue;
             }
-            // Forzar recarga desde DB
-            $product->refresh();
             $variant = null;
-            if (!empty($row['product_variant_id'])) {
+            if (! empty($row['product_variant_id'])) {
                 // Forzar consulta directa desde DB sin usar identity map
                 $variant = ProductVariant::query()
+                    ->where('product_id', $product->id)
                     ->where('id', $row['product_variant_id'])
                     ->select([
-                        'id', 'product_id', 'options', 'price', 'retail_price', 
-                        'wholesale_price', 'purchase_price', 'stock', 'alert', 'sku'
+                        'id', 'product_id', 'options', 'price', 'retail_price',
+                        'wholesale_price', 'stock', 'alert', 'sku',
                     ])
                     ->first();
-                // Forzar recarga desde DB
-                if ($variant) {
-                    $variant->refresh();
+                if (! $variant) {
+                    continue;
                 }
+            }
+            if ($variant && empty($variant->options)) {
+                $variant = null;
+            }
+            if ((empty($row['product_variant_id']) && $this->hasRealVariants($product))
+                || (int) ($row['quantity'] ?? 0) < 1) {
+                continue;
             }
             $items[] = [
                 'id' => null,
@@ -156,6 +164,7 @@ class CartController extends Controller
         }
 
         $freshStore = $store->fresh();
+
         return Inertia::render('Public/CartPage', [
             'cartItems' => $items,
             'store' => [
@@ -192,12 +201,32 @@ class CartController extends Controller
         // 1. Nueva Validación (ahora acepta el ID de la variante)
         $request->validate([
             'product_id' => 'required|exists:products,id',
-            'product_variant_id' => 'nullable|exists:product_variants,id', // <-- Nuevo campo
+            'product_variant_id' => 'nullable|integer',
             'quantity' => 'required|integer|min:1',
         ]);
 
-        $product = Product::findOrFail($request->product_id);
-        $variant = $request->product_variant_id ? ProductVariant::find($request->product_variant_id) : null;
+        $product = Product::query()
+            ->whereKey($request->product_id)
+            ->where('is_active', true)
+            ->first();
+        if (! $product) {
+            return back()->withErrors(['product_id' => 'Este producto ya no está disponible.']);
+        }
+
+        $variant = $request->product_variant_id
+            ? $product->variants()->whereKey($request->product_variant_id)->first()
+            : null;
+        if ($variant && empty($variant->options)) {
+            $variant = null;
+        }
+
+        if ($request->filled('product_variant_id') && ! $variant) {
+            return back()->withErrors(['product_variant_id' => 'La variante seleccionada no pertenece a este producto.']);
+        }
+
+        if (! $variant && $this->hasRealVariants($product)) {
+            return back()->withErrors(['product_variant_id' => 'Debes seleccionar una variante de este producto.']);
+        }
 
         // 2. Revisar el stock disponible. Si el producto controla inventario por total (sin stock por variante),
         //    permitimos caer al inventario total cuando la variante no tiene stock definido (>0).
@@ -205,9 +234,8 @@ class CartController extends Controller
         if ($product->track_inventory === false) {
             // Inventario desactivado: permitir libremente (con o sin variante)
             $stockDisponible = PHP_INT_MAX;
-        } else if ($variant) {
-            $stockVariante = (int) ($variant->stock ?? 0);
-            $stockDisponible = $stockVariante > 0 ? $stockVariante : (int) ($product->quantity ?? 0);
+        } elseif ($variant) {
+            $stockDisponible = (int) ($variant->stock ?? 0);
         } else {
             $stockDisponible = $product->quantity;
         }
@@ -217,9 +245,9 @@ class CartController extends Controller
         }
 
         // 3. Lógica de guardado (usuarios autenticados vs invitados)
-        if (Auth::check()) {
+        if (Auth::guard('web')->check()) {
             // Usuario autenticado: persistimos en DB
-            $cartQuery = Auth::user()->cart()->where('product_id', $request->product_id);
+            $cartQuery = Auth::guard('web')->user()->cart()->where('product_id', $request->product_id);
             if ($variant) {
                 $cartQuery->where('product_variant_id', $variant->id);
             } else {
@@ -227,10 +255,10 @@ class CartController extends Controller
             }
             $cartItem = $cartQuery->first();
             if ($cartItem) {
-                $cartItem->quantity = $request->quantity; 
+                $cartItem->quantity = $request->quantity;
                 $cartItem->save();
             } else {
-                Auth::user()->cart()->create([
+                Auth::guard('web')->user()->cart()->create([
                     'product_id' => $request->product_id,
                     'product_variant_id' => $variant ? $variant->id : null,
                     'quantity' => $request->quantity,
@@ -256,6 +284,7 @@ class CartController extends Controller
         if ($storeSlug) {
             return redirect()->route('cart.index', ['store' => $storeSlug]);
         }
+
         return redirect()->back();
     }
 
@@ -265,9 +294,10 @@ class CartController extends Controller
     public function destroy(Cart $cart)
     {
         if ($cart->user_id !== auth()->id()) {
-            abort(403); 
+            abort(403);
         }
         $cart->delete();
+
         return back();
     }
 
@@ -278,6 +308,14 @@ class CartController extends Controller
             unset($cart[$key]);
             $request->session()->put('guest_cart', $cart);
         }
+
         return back();
+    }
+
+    private function hasRealVariants(Product $product): bool
+    {
+        return $product->variants()
+            ->get(['id', 'options'])
+            ->contains(fn ($variant) => ! empty($variant->options));
     }
 }

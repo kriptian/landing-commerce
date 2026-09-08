@@ -20,7 +20,7 @@ class ProductController extends Controller
         // los crawlers no ejecutan JS. Servimos una vista Blade estática con OG dinámicos.
         if ($this->isCrawler($request)) {
             $title = $store->name;
-            $description = 'Catálogo de ' . $store->name;
+            $description = 'Catálogo de '.$store->name;
             $image = $this->absoluteUrl($store->logo_url) ?: $this->fallbackOgImage();
             $url = $request->fullUrl();
 
@@ -35,23 +35,24 @@ class ProductController extends Controller
         }
 
         // 1. Árbol: solo categorías con productos (propios o en descendientes), con contador de productos
-        $rootCats = $store->categories()->whereNull('parent_id')->get(['id','name']);
-        $categories = $rootCats->map(function($cat) use ($store) {
+        $rootCats = $store->categories()->whereNull('parent_id')->get(['id', 'name']);
+        $categories = $rootCats->map(function ($cat) use ($store) {
             $count = $this->productsCountForCategory($store, $cat->id);
+
             return [
                 'id' => $cat->id,
                 'name' => $cat->name,
                 'products_count' => $count,
                 'has_children_with_products' => $this->hasChildrenWithProducts($store, $cat->id),
             ];
-        })->filter(fn($c) => $c['products_count'] > 0)->values();
+        })->filter(fn ($c) => $c['products_count'] > 0)->values();
 
         // Empezamos la consulta de productos (incluimos variantes para calcular bajo stock en frontend)
         // También cargamos variantOptions para incluir sus imágenes en main_image_url
         $productsQuery = $store->products()->where('is_active', true)->with([
             'images',
             'variants:id,product_id,stock,minimum_stock,alert',
-            'variantOptions.children' // Cargar variantOptions con children para incluir imágenes de variantes
+            'variantOptions.children', // Cargar variantOptions con children para incluir imágenes de variantes
         ]);
 
         // --- LÓGICA DE FILTRADO: múltiples categorías y descendientes ---
@@ -60,14 +61,17 @@ class ProductController extends Controller
             $raw = $request->input('categories');
             $ids = is_array($raw) ? $raw : explode(',', (string) $raw);
             foreach ($ids as $id) {
-                $id = (int) $id; if ($id <= 0) continue;
+                $id = (int) $id;
+                if ($id <= 0) {
+                    continue;
+                }
                 $selectedIds->push($id);
                 $stack = [$id];
-                while (!empty($stack)) {
+                while (! empty($stack)) {
                     $currentId = array_pop($stack);
                     $children = $store->categories()->where('parent_id', $currentId)->pluck('id')->all();
                     foreach ($children as $childId) {
-                        if (!$selectedIds->contains($childId)) {
+                        if (! $selectedIds->contains($childId)) {
                             $selectedIds->push($childId);
                             $stack[] = $childId;
                         }
@@ -79,11 +83,11 @@ class ProductController extends Controller
             if ($id > 0) {
                 $selectedIds->push($id);
                 $stack = [$id];
-                while (!empty($stack)) {
+                while (! empty($stack)) {
                     $currentId = array_pop($stack);
                     $children = $store->categories()->where('parent_id', $currentId)->pluck('id')->all();
                     foreach ($children as $childId) {
-                        if (!$selectedIds->contains($childId)) {
+                        if (! $selectedIds->contains($childId)) {
                             $selectedIds->push($childId);
                             $stack[] = $childId;
                         }
@@ -96,13 +100,13 @@ class ProductController extends Controller
         }
 
         if ($request->filled('search')) {
-            $productsQuery->where('name', 'like', '%' . $request->search . '%');
+            $productsQuery->where('name', 'like', '%'.$request->search.'%');
         }
-        
+
         // Filtro: solo productos en promoción (global o individual)
         if ($request->boolean('promo')) {
             $storePromoOn = (int) ($store->promo_active ? 1 : 0) === 1 && (int) ($store->promo_discount_percent ?? 0) > 0;
-            if (!$storePromoOn) {
+            if (! $storePromoOn) {
                 $productsQuery->where('promo_active', true)->where('promo_discount_percent', '>', 0);
             }
         }
@@ -156,31 +160,40 @@ class ProductController extends Controller
         $galleryImages = [];
         if ($store->gallery_type === 'custom') {
             // Usar la relación que ya filtra por is_active
-            $galleryImages = $store->galleryImages()->with('product')->get()->map(function ($img) {
-                return [
-                    'id' => $img->id,
-                    'media_type' => $img->media_type ?? 'image',
-                    'image_url' => $img->image_url,
-                    'video_url' => $img->video_url,
-                    'title' => $img->title,
-                    'description' => $img->description,
-                    'product_id' => $img->product_id,
-                    'product' => $img->product ? [
-                        'id' => $img->product->id,
-                        'name' => $img->product->name,
-                    ] : null,
-                    'show_buy_button' => $img->show_buy_button,
-                ];
-            })->toArray();
+            $galleryImages = $store->galleryImages()
+                ->with(['product' => fn ($query) => $query
+                    ->where('store_id', $store->id)
+                    ->where('is_active', true)
+                    ->select(['id', 'store_id', 'name'])])
+                ->get()
+                ->map(function ($img) {
+                    return [
+                        'id' => $img->id,
+                        'media_type' => $img->media_type ?? 'image',
+                        'image_url' => $img->image_url,
+                        'video_url' => $img->video_url,
+                        'title' => $img->title,
+                        'description' => $img->description,
+                        'product_id' => $img->product_id,
+                        'product' => $img->product ? [
+                            'id' => $img->product->id,
+                            'name' => $img->product->name,
+                        ] : null,
+                        'show_buy_button' => $img->show_buy_button,
+                    ];
+                })->toArray();
         }
 
+        $products = $productsQuery->paginate(36)->withQueryString();
+        $products->getCollection()->each->makeHidden(['purchase_price']);
+
         // Si es una petición AJAX normal (Load More) y no es Inertia, devolver JSON puro
-        if ($request->wantsJson() && !$request->header('X-Inertia')) {
-            return response()->json($productsQuery->paginate(36)->withQueryString());
+        if ($request->wantsJson() && ! $request->header('X-Inertia')) {
+            return response()->json($products);
         }
 
         return Inertia::render('Public/ProductList', [
-            'products' => $productsQuery->paginate(36)->withQueryString(),
+            'products' => $products,
             'store' => [
                 'id' => $store->id,
                 'name' => $store->name,
@@ -243,11 +256,13 @@ class ProductController extends Controller
      */
     public function show(Store $store, Product $product)
     {
-        if ($product->store_id !== $store->id || !$product->is_active) {
+        if ($product->store_id !== $store->id || ! $product->is_active) {
             abort(404);
         }
 
-        $product->load('images', 'category', 'variants', 'variantOptions.children', 'store');
+        $product->load('images', 'category', 'variants', 'variantOptions.children');
+        $product->makeHidden(['purchase_price']);
+        $product->variants->each->makeHidden(['purchase_price']);
         // Productos relacionados: misma tienda, misma categoría si existe, activos, excluyendo el actual
         $related = $store->products()
             ->where('is_active', true)
@@ -258,19 +273,20 @@ class ProductController extends Controller
             ->with(['variants:id,product_id,stock', 'variantOptions:id,product_id'])
             ->latest()
             ->take(12)
-            ->get(['id','name','price','promo_active','promo_discount_percent','quantity','alert','track_inventory','main_image_url']);
+            ->get(['id', 'name', 'price', 'promo_active', 'promo_discount_percent', 'quantity', 'alert', 'track_inventory', 'main_image_url']);
 
         // Calcular stock total para productos relacionados considerando variantes
         $related = $related->map(function ($relatedProduct) {
             // Solo calcular stock de variantes si realmente es un producto configurable
             // (debe tener variantes físicas Y definiciones de opciones)
-            if ($relatedProduct->variants && $relatedProduct->variants->count() > 0 
+            if ($relatedProduct->variants && $relatedProduct->variants->count() > 0
                 && $relatedProduct->variantOptions && $relatedProduct->variantOptions->count() > 0) {
                 $relatedProduct->quantity = $relatedProduct->variants->sum('stock');
             }
             // Remover las relaciones del objeto para no enviarlas al frontend
             $relatedProduct->unsetRelation('variants');
             $relatedProduct->unsetRelation('variantOptions');
+
             return $relatedProduct;
         });
 
@@ -285,25 +301,26 @@ class ProductController extends Controller
             ->with(['variants:id,product_id,stock', 'variantOptions:id,product_id'])
             ->inRandomOrder()
             ->take(12)
-            ->get(['id','name','price','promo_active','promo_discount_percent','quantity','alert','track_inventory','main_image_url']);
+            ->get(['id', 'name', 'price', 'promo_active', 'promo_discount_percent', 'quantity', 'alert', 'track_inventory', 'main_image_url']);
 
         // Calcular stock total para productos sugeridos considerando variantes
         $youMayLike = $youMayLike->map(function ($suggestedProduct) {
             // Solo calcular stock de variantes si realmente es un producto configurable
             // (debe tener variantes físicas Y definiciones de opciones)
-            if ($suggestedProduct->variants && $suggestedProduct->variants->count() > 0 
+            if ($suggestedProduct->variants && $suggestedProduct->variants->count() > 0
                 && $suggestedProduct->variantOptions && $suggestedProduct->variantOptions->count() > 0) {
                 $suggestedProduct->quantity = $suggestedProduct->variants->sum('stock');
             }
             // Remover las relaciones del objeto para no enviarlas al frontend
             $suggestedProduct->unsetRelation('variants');
             $suggestedProduct->unsetRelation('variantOptions');
+
             return $suggestedProduct;
         });
         // Crawler: OG por producto
         if ($this->isCrawler(request())) {
-            $title = $product->name . ' · ' . $store->name;
-            $description = $product->short_description ?: ('Compra ' . $product->name . ' en ' . $store->name);
+            $title = $product->name.' · '.$store->name;
+            $description = $product->short_description ?: ('Compra '.$product->name.' en '.$store->name);
             $image = $this->absoluteUrl($product->main_image_url) ?: ($this->absoluteUrl($store->logo_url) ?: $this->fallbackOgImage());
             $url = request()->fullUrl();
 
@@ -316,13 +333,13 @@ class ProductController extends Controller
                 'icon' => $this->absoluteUrl($store->logo_url) ?: $this->fallbackOgImage(),
             ]);
         }
-        
+
         // Asegurar que variant_options se serialicen correctamente con sus imágenes
         $product->loadMissing('variantOptions.children');
-        
+
         // Convertir variant_options a array manualmente para asegurar que se serialicen correctamente
         $productArray = $product->toArray();
-        
+
         // Asegurar que variant_options se serialicen correctamente
         if ($product->variantOptions && $product->variantOptions->count() > 0) {
             $variantOptionsArray = [];
@@ -336,22 +353,20 @@ class ProductController extends Controller
                     'order' => $parentOption->order,
                     'children' => [],
                 ];
-                
+
                 // Agregar hijos
                 if ($parentOption->children && $parentOption->children->count() > 0) {
                     foreach ($parentOption->children as $child) {
                         $imagePath = $child->image_path;
-                        
 
-                        
                         // Asegurar que image_path esté en el formato correcto
-                        if (!empty($imagePath) && !str_starts_with($imagePath, 'http')) {
+                        if (! empty($imagePath) && ! str_starts_with($imagePath, 'http')) {
                             // Si no empieza con /storage/, agregarlo
-                            if (!str_starts_with($imagePath, '/storage/')) {
-                                $imagePath = '/storage/' . ltrim($imagePath, '/');
+                            if (! str_starts_with($imagePath, '/storage/')) {
+                                $imagePath = '/storage/'.ltrim($imagePath, '/');
                             }
                         }
-                        
+
                         $childData = [
                             'id' => $child->id,
                             'name' => $child->name,
@@ -359,23 +374,20 @@ class ProductController extends Controller
                             'price' => $child->price,
                             'stock' => $child->stock,
                             'alert' => $child->alert,
-                            'purchase_price' => $child->purchase_price,
                             'image_path' => $imagePath ?: null,
                             'order' => $child->order,
                         ];
-                        
 
-                        
                         $parentData['children'][] = $childData;
                     }
                 }
-                
+
                 $variantOptionsArray[] = $parentData;
             }
-            
+
             $productArray['variant_options'] = $variantOptionsArray;
         }
-        
+
         return inertia('Public/ProductPage', [
             'product' => $productArray,
             'store' => [
@@ -442,9 +454,10 @@ class ProductController extends Controller
         if ($category->store_id !== $store->id) {
             abort(404);
         }
-        $children = $category->children()->orderBy('name')->get(['id','name','parent_id']);
-        $data = $children->map(function($cat) use ($store) {
+        $children = $category->children()->orderBy('name')->get(['id', 'name', 'parent_id']);
+        $data = $children->map(function ($cat) use ($store) {
             $count = $this->productsCountForCategory($store, $cat->id);
+
             return [
                 'id' => $cat->id,
                 'name' => $cat->name,
@@ -452,7 +465,8 @@ class ProductController extends Controller
                 'products_count' => $count,
                 'has_children_with_products' => $this->hasChildrenWithProducts($store, $cat->id),
             ];
-        })->filter(fn($c) => $c['products_count'] > 0)->values();
+        })->filter(fn ($c) => $c['products_count'] > 0)->values();
+
         return response()->json([
             'data' => $data,
         ]);
@@ -462,22 +476,24 @@ class ProductController extends Controller
     {
         $ids = [$categoryId];
         $stack = [$categoryId];
-        while (!empty($stack)) {
+        while (! empty($stack)) {
             $current = array_pop($stack);
             $children = $store->categories()->where('parent_id', $current)->pluck('id')->all();
             foreach ($children as $child) {
-                if (!in_array($child, $ids, true)) {
+                if (! in_array($child, $ids, true)) {
                     $ids[] = $child;
                     $stack[] = $child;
                 }
             }
         }
+
         return $ids;
     }
 
     private function productsCountForCategory(Store $store, int $categoryId): int
     {
         $ids = $this->collectIdsIncludingDescendants($store, $categoryId);
+
         return $store->products()->whereIn('category_id', $ids)->count();
     }
 
@@ -489,36 +505,50 @@ class ProductController extends Controller
                 return true;
             }
         }
+
         return false;
     }
 
     private function isCrawler(Request $request): bool
     {
         $ua = strtolower((string) $request->userAgent());
-        if ($ua === '') return false;
+        if ($ua === '') {
+            return false;
+        }
         $bots = [
             'facebookexternalhit', 'facebot', 'whatsapp', 'twitterbot', 'linkedinbot',
-            'telegrambot', 'discordbot', 'slackbot', 'pinterest', 'googlebot', 'bingbot'
+            'telegrambot', 'discordbot', 'slackbot', 'pinterest', 'googlebot', 'bingbot',
         ];
         foreach ($bots as $bot) {
-            if (str_contains($ua, $bot)) return true;
+            if (str_contains($ua, $bot)) {
+                return true;
+            }
         }
+
         return false;
     }
 
     private function absoluteUrl(?string $path): ?string
     {
         $u = trim((string) ($path ?? ''));
-        if ($u === '') return null;
-        if (preg_match('/^https?:\/\//i', $u)) return $u;
+        if ($u === '') {
+            return null;
+        }
+        if (preg_match('/^https?:\/\//i', $u)) {
+            return $u;
+        }
         $host = request()->getSchemeAndHttpHost();
-        if (str_starts_with($u, '/')) return $host . $u;
-        return $host . '/' . ltrim($u, '/');
+        if (str_starts_with($u, '/')) {
+            return $host.$u;
+        }
+
+        return $host.'/'.ltrim($u, '/');
     }
 
     private function fallbackOgImage(): string
     {
         $host = request()->getSchemeAndHttpHost();
-        return $host . '/images/New_Logo_ondgtl.png?v=5';
+
+        return $host.'/images/New_Logo_ondgtl.png?v=5';
     }
 }

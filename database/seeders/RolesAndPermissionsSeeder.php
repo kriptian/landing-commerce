@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class RolesAndPermissionsSeeder extends Seeder
 {
@@ -27,6 +27,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'gestionar categorias',
             // Usuarios
             'gestionar usuarios',
+            // Operaciones sensibles
+            'editar inventario', 'gestionar cupones', 'gestionar galeria',
+            'registrar gastos', 'ver clientes', 'gestionar ventas fisicas',
         ];
         foreach ($perms as $p) {
             Permission::firstOrCreate(['name' => $p]);

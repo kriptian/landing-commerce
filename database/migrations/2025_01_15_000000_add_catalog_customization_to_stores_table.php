@@ -8,8 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasTable('stores')) {
+            return;
+        }
+
         Schema::table('stores', function (Blueprint $table) {
-            if (!Schema::hasColumn('stores', 'catalog_use_default')) {
+            if (! Schema::hasColumn('stores', 'catalog_use_default')) {
                 $table->boolean('catalog_use_default')->default(true)->after('plan_renews_at');
                 $table->string('catalog_button_color')->nullable()->after('catalog_use_default');
                 $table->string('catalog_promo_banner_color')->nullable()->after('catalog_button_color');
@@ -25,6 +29,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! Schema::hasTable('stores')) {
+            return;
+        }
+
         Schema::table('stores', function (Blueprint $table) {
             if (Schema::hasColumn('stores', 'catalog_menu_type')) {
                 $table->dropColumn('catalog_menu_type');
@@ -56,4 +64,3 @@ return new class extends Migration
         });
     }
 };
-

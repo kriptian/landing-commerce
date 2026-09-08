@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+            \App\Http\Middleware\AddDefensiveHeaders::class,
         ]);
 
         // Aliases de middlewares de la app
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'plan' => \App\Http\Middleware\RequirePlan::class,
             'restrict.physical-sales' => \App\Http\Middleware\RestrictPhysicalSalesRole::class,
             'allow.physical-sales.without-verification' => \App\Http\Middleware\AllowPhysicalSalesWithoutVerification::class,
+            'customer.store' => \App\Http\Middleware\EnsureCustomerBelongsToStore::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

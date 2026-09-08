@@ -10,6 +10,7 @@ const props = defineProps({
     store: Object,
     customer: Object,
     addresses: Array,
+    idempotencyKey: String,
 });
 
 // Colores personalizados del catálogo
@@ -113,19 +114,12 @@ const subtotal = computed(() => props.cartItems.reduce((t, item) => t + (getDisp
 // Cupón de descuento
 const couponCode = ref('');
 const coupon = ref(null);
+const couponDiscountAmount = ref(0);
 const couponError = ref('');
 const couponLoading = ref(false);
 const showAuthRequiredModal = ref(false); // Modal para loguearse
 
-const discountAmount = computed(() => {
-    if (!coupon.value) return 0;
-    if (coupon.value.type === 'percentage') {
-        const discount = (subtotal.value * coupon.value.value) / 100;
-        return coupon.value.max_discount ? Math.min(discount, coupon.value.max_discount) : discount;
-    } else {
-        return Math.min(coupon.value.value, subtotal.value);
-    }
-});
+const discountAmount = computed(() => coupon.value ? couponDiscountAmount.value : 0);
 
 // --- DELIVERY COST LOGIC ---
 const deliveryCost = computed(() => {
@@ -157,21 +151,25 @@ const applyCoupon = async () => {
         
         if (response.data.valid) {
             coupon.value = response.data.coupon;
+            couponDiscountAmount.value = Number(response.data.discount_amount) || 0;
             couponError.value = '';
         } else {
             // Verificar si es error de autenticación
             if (response.data.code === 'LOGIN_REQUIRED') {
                  showAuthRequiredModal.value = true;
                  coupon.value = null;
+                 couponDiscountAmount.value = 0;
                  // No mostrar error en texto rojo, el modal es suficiente
             } else {
                 couponError.value = response.data.message || 'Cupón inválido';
                 coupon.value = null;
+                couponDiscountAmount.value = 0;
             }
         }
     } catch (error) {
         couponError.value = error.response?.data?.message || 'Error al validar el cupón';
         coupon.value = null;
+        couponDiscountAmount.value = 0;
     } finally {
         couponLoading.value = false;
     }
@@ -181,6 +179,7 @@ const applyCoupon = async () => {
 const removeCoupon = () => {
     couponCode.value = '';
     coupon.value = null;
+    couponDiscountAmount.value = 0;
     couponError.value = '';
 };
 
@@ -233,6 +232,7 @@ const form = useForm({
     customer_address: '',
     address_id: null,
     coupon_code: null,
+    idempotency_key: props.idempotencyKey,
 });
 
 // ===== ESTA ES LA FUNCIÓN QUE CAMBIA =====
@@ -274,7 +274,7 @@ const submitOrder = () => {
         </nav>
     </header>
 
-    <main class="container mx-auto px-6 py-12 min-h-screen" :style="bodyStyleObj">
+    <main dusk="checkout-page" class="container mx-auto px-6 py-12 min-h-screen" :style="bodyStyleObj">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
             
             <div>
@@ -346,7 +346,7 @@ const submitOrder = () => {
                         ></textarea>
                     </div>
                     
-                    <button type="submit" :disabled="form.processing" class="w-full font-bold py-4 px-6 rounded-xl text-center disabled:opacity-50 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl" :class="catalogUseDefault ? 'bg-green-600 text-white hover:bg-green-700' : ''" :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}">
+                    <button dusk="submit-order" type="submit" :disabled="form.processing" class="w-full font-bold py-4 px-6 rounded-xl text-center disabled:opacity-50 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl" :class="catalogUseDefault ? 'bg-green-600 text-white hover:bg-green-700' : ''" :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}">
                         {{ form.processing ? 'Procesando...' : 'Realizar Pedido por WhatsApp' }}
                     </button>
                 </form>

@@ -7,6 +7,7 @@ use Inertia\Middleware;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Store;
 use App\Models\Product;
+use App\Services\DeploymentAuthorizer;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -67,6 +68,7 @@ class HandleInertiaRequests extends Middleware
                     $allowed = collect([$single])->filter()->merge($list)->map(fn($e) => strtolower(trim($e)))->unique()->all();
                     return in_array(strtolower($user->email), $allowed, true);
                 })(),
+                'canDeploy' => app(DeploymentAuthorizer::class)->allows(Auth::guard('web')->user(), $request),
             ],
             'customer' => [
                 'user' => $request->user('customer'),

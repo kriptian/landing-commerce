@@ -12,7 +12,7 @@ class CustomerController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth');
+        $this->middleware('can:ver clientes');
     }
 
     /**
@@ -30,12 +30,12 @@ class CustomerController extends Controller
         $query = $store->customers()->withCount('orders');
 
         // Búsqueda
-        if (!empty($validated['search'])) {
+        if (! empty($validated['search'])) {
             $search = $validated['search'];
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
@@ -94,4 +94,3 @@ class CustomerController extends Controller
         ]);
     }
 }
-

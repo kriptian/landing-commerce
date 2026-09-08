@@ -677,7 +677,7 @@ const updateQuantity = (index, delta) => {
         const availableStock = getAvailableStock(item);
         // Si hay stock limitado, verificar que no exceda el disponible
         if (typeof availableStock === 'number' && newQuantity > availableStock) {
-            stockAlertMessage.value = `No hay suficiente stock para el producto "${item.product_name}".<br><br>Stock disponible: ${availableStock}<br>Cantidad solicitada: ${newQuantity}`;
+            stockAlertMessage.value = `No hay suficiente stock para el producto "${item.product_name}".\n\nStock disponible: ${availableStock}\nCantidad solicitada: ${newQuantity}`;
             showStockAlertModal.value = true;
             return;
         }
@@ -693,7 +693,7 @@ const updateQuantityInput = (index, event) => {
         const availableStock = getAvailableStock(item);
         // Si hay stock limitado, verificar que no exceda el disponible
         if (typeof availableStock === 'number' && value > availableStock) {
-            stockAlertMessage.value = `No hay suficiente stock para el producto "${item.product_name}".<br><br>Stock disponible: ${availableStock}<br>Cantidad solicitada: ${value}`;
+            stockAlertMessage.value = `No hay suficiente stock para el producto "${item.product_name}".\n\nStock disponible: ${availableStock}\nCantidad solicitada: ${value}`;
             showStockAlertModal.value = true;
             event.target.value = item.quantity; // Restaurar valor anterior
             return;
@@ -1076,7 +1076,7 @@ const processSale = async () => {
         itemsWithoutStock.forEach(item => {
             message += `• ${item.name}: Solicitado ${item.requested}, Disponible ${item.available}\n`;
         });
-        stockAlertMessage.value = message.replace(/\n/g, '<br>');
+        stockAlertMessage.value = message;
         showStockAlertModal.value = true;
         return;
     }
@@ -2678,7 +2678,7 @@ const stopResize = () => {
                     </button>
                 </div>
                 <div class="mb-4">
-                    <div class="text-sm text-gray-700 whitespace-pre-line" v-html="stockAlertMessage"></div>
+                    <div class="text-sm text-gray-700 whitespace-pre-line">{{ stockAlertMessage }}</div>
                 </div>
                 <div class="flex justify-end">
                     <PrimaryButton @click="showStockAlertModal = false">Entendido</PrimaryButton>

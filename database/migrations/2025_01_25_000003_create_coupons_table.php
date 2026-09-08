@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('coupons', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('store_id')->constrained()->onDelete('cascade');
+            $table->foreignId('store_id');
             $table->string('code')->unique(); // Código único del cupón
             $table->enum('type', ['percentage', 'fixed'])->default('percentage');
             $table->decimal('value', 10, 2); // Porcentaje o monto fijo
@@ -37,4 +37,3 @@ return new class extends Migration
         Schema::dropIfExists('coupons');
     }
 };
-

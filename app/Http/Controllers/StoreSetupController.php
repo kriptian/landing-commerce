@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Redirect;
+use Inertia\Inertia;
 
 class StoreSetupController extends Controller
 {
@@ -34,21 +34,15 @@ class StoreSetupController extends Controller
             'facebook_url' => 'nullable|url|max:255',
             'instagram_url' => 'nullable|url|max:255',
             'tiktok_url' => 'nullable|url|max:255',
-            'plan' => 'required|in:emprendedor,negociante,creador_pdf',
-            'plan_cycle' => 'nullable|in:mensual,anual',
         ]);
 
         $store = $request->user()->store;
 
         if ($request->hasFile('logo')) {
             $path = $request->file('logo')->store('logos', 'public');
-            $validated['logo_url'] = '/storage/' . $path;
+            $validated['logo_url'] = '/storage/'.$path;
         }
 
-        // Si se cambia plan, marcamos fechas básicas
-        if (isset($validated['plan']) && $validated['plan'] !== $store->plan) {
-            $validated['plan_started_at'] = now();
-        }
         $store->update($validated);
 
         return Redirect::route('dashboard');

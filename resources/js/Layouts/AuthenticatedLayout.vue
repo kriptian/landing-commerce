@@ -15,6 +15,19 @@ const plan = ref((store && store.plan) ? store.plan : 'emprendedor');
 const isNegociante = computed(() => plan.value === 'negociante' || (usePage().props.auth?.isSuperAdmin === true));
 const isPdfCreator = computed(() => plan.value === 'creador_pdf' && (usePage().props.auth?.isSuperAdmin !== true));
 const canUsePdfBuilder = computed(() => isNegociante.value || plan.value === 'creador_pdf');
+const canAccessDeployment = computed(() => {
+  const auth = usePage().props.auth;
+  const user = auth?.user;
+  const localHost = typeof window !== 'undefined'
+    && ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+
+  return auth?.canDeploy === true || (
+    localHost
+    && user?.email?.trim().toLowerCase() === 'cristian.ospinagarcia@gmail.com'
+    && user?.store?.slug === 'la-aguacatera'
+    && Number(user.store.user_id) === Number(user.id)
+  );
+});
 
 const showUpgradeStep1 = ref(false);
 const showUpgradeStep2 = ref(false);
@@ -160,6 +173,12 @@ const confirmUpgrade = () => {
 
                                     <template #content>
                                         <DropdownLink
+                                            v-if="canAccessDeployment"
+                                            :href="route('admin.deployments.index')"
+                                        >
+                                            Desplegar producción
+                                        </DropdownLink>
+                                        <DropdownLink
                                             :href="route('profile.edit')"
                                         >
                                             Profile
@@ -281,6 +300,9 @@ const confirmUpgrade = () => {
                         </div>
 
                         <div class="mt-3 space-y-1">
+                            <ResponsiveNavLink v-if="canAccessDeployment" :href="route('admin.deployments.index')">
+                                Desplegar producción
+                            </ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('profile.edit')">
                                 Profile
                             </ResponsiveNavLink>

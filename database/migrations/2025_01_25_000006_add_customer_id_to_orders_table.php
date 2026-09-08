@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (! Schema::hasTable('orders')) {
+            return;
+        }
+
         Schema::table('orders', function (Blueprint $table) {
             $table->foreignId('customer_id')->nullable()->after('store_id')->constrained()->onDelete('set null');
             $table->foreignId('address_id')->nullable()->after('customer_id')->constrained()->onDelete('set null');
@@ -24,6 +28,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (! Schema::hasTable('orders')) {
+            return;
+        }
+
         Schema::table('orders', function (Blueprint $table) {
             $table->dropForeign(['customer_id']);
             $table->dropForeign(['address_id']);
@@ -32,4 +40,3 @@ return new class extends Migration
         });
     }
 };
-

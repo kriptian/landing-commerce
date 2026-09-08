@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->json('remind_later_tours')->nullable()->after('completed_tours');
+            $table->json('remind_later_tours')->nullable();
             $table->json('never_show_tours')->nullable()->after('remind_later_tours');
         });
     }

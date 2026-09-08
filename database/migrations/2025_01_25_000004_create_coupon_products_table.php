@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('coupon_products', function (Blueprint $table) {
             $table->id();
             $table->foreignId('coupon_id')->constrained()->onDelete('cascade');
-            $table->foreignId('product_id')->constrained()->onDelete('cascade');
+            $table->foreignId('product_id');
             $table->timestamps();
 
             // Evitar duplicados
@@ -30,4 +30,3 @@ return new class extends Migration
         Schema::dropIfExists('coupon_products');
     }
 };
-

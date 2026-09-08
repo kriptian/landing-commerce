@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('coupon_id')->constrained()->onDelete('cascade');
             $table->foreignId('customer_id')->nullable()->constrained()->onDelete('set null');
-            $table->foreignId('order_id')->nullable()->constrained()->onDelete('set null');
+            $table->foreignId('order_id')->nullable();
             $table->decimal('discount_amount', 10, 2);
             $table->timestamp('used_at');
             $table->timestamps();
@@ -30,4 +30,3 @@ return new class extends Migration
         Schema::dropIfExists('coupon_usages');
     }
 };
-

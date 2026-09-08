@@ -11,10 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (! Schema::hasColumn('users', 'store_id')) {
+            return;
+        }
+
         Schema::table('users', function (Blueprint $table) {
             // Eliminar la restricción única global en email
             $table->dropUnique(['email']);
-            
+
             // Crear una restricción única compuesta: email único por tienda
             // Esto permite que el mismo email exista en diferentes tiendas
             $table->unique(['store_id', 'email'], 'users_store_email_unique');
@@ -26,13 +30,16 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (! Schema::hasColumn('users', 'store_id')) {
+            return;
+        }
+
         Schema::table('users', function (Blueprint $table) {
             // Eliminar la restricción única compuesta
             $table->dropUnique('users_store_email_unique');
-            
+
             // Restaurar la restricción única global en email
             $table->unique('email');
         });
     }
 };
-

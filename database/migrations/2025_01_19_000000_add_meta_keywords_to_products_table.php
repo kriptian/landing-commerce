@@ -11,8 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (! Schema::hasTable('products')) {
+            return;
+        }
+
         Schema::table('products', function (Blueprint $table) {
-            if (!Schema::hasColumn('products', 'meta_keywords')) {
+            if (! Schema::hasColumn('products', 'meta_keywords')) {
                 $table->text('meta_keywords')->nullable()->after('long_description');
             }
         });
@@ -23,6 +27,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (! Schema::hasTable('products')) {
+            return;
+        }
+
         Schema::table('products', function (Blueprint $table) {
             if (Schema::hasColumn('products', 'meta_keywords')) {
                 $table->dropColumn('meta_keywords');
@@ -30,4 +38,3 @@ return new class extends Migration
         });
     }
 };
-

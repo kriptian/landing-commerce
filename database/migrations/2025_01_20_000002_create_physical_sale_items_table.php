@@ -14,8 +14,8 @@ return new class extends Migration
         Schema::create('physical_sale_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('physical_sale_id')->constrained()->onDelete('cascade');
-            $table->foreignId('product_id')->constrained()->onDelete('cascade');
-            $table->foreignId('product_variant_id')->nullable()->constrained()->onDelete('cascade');
+            $table->foreignId('product_id');
+            $table->foreignId('product_variant_id')->nullable();
             $table->integer('quantity');
             $table->decimal('unit_price', 10, 2);
             $table->decimal('subtotal', 15, 2);
@@ -33,4 +33,3 @@ return new class extends Migration
         Schema::dropIfExists('physical_sale_items');
     }
 };
-

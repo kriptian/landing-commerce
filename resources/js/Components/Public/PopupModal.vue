@@ -69,13 +69,27 @@ const close = () => {
 
 const emit = defineEmits(['open-register']);
 
+const getSafePopupLink = () => {
+    const link = props.store.popup_button_link?.trim();
+    if (!link || /[\u0000-\u001F\u007F\\]/.test(link) || link.startsWith('//')) return null;
+    if (link === '#register' || (link.startsWith('/') && !link.startsWith('//'))) return link;
+
+    try {
+        const url = new URL(link);
+        return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+    } catch {
+        return null;
+    }
+};
+
 const handleAction = () => {
     close(); // Always close popup on action
-    
-    if (props.store.popup_button_link === '#register') {
+
+    const link = getSafePopupLink();
+    if (link === '#register') {
         emit('open-register');
-    } else if (props.store.popup_button_link) {
-        window.location.href = props.store.popup_button_link;
+    } else if (link) {
+        window.location.assign(link);
     }
 };
 </script>

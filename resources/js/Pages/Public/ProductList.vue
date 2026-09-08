@@ -4,6 +4,10 @@ import { ref, watch, nextTick, computed, h, onMounted, onBeforeUnmount } from 'v
 import PopupModal from '@/Components/Public/PopupModal.vue';
 import RegisterModal from '@/Components/Public/RegisterModal.vue';
 import LoginModal from '@/Components/Public/LoginModal.vue';
+import { useToast } from 'vue-toastification';
+
+const toast = useToast();
+const buyingProductId = ref(null);
 
 // Window width para responsive
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -1020,15 +1024,7 @@ const isOutOfStock = (product) => {
     try {
         if (product && product.track_inventory === false) return false;
         
-        // Si tiene variantes y opciones definidas (ignorar ghost variants)
-        if (product.variants && product.variants.length > 0 && product.variant_options && product.variant_options.length > 0) {
-            
-            // FALLBACK: Si variantes suman 0 pero hay stock global, ignorar variantes
-            const variantSum = product.variants.reduce((acc, v) => acc + (Number(v.stock)||0), 0);
-            if (variantSum === 0 && (Number(product.quantity)||0) > 0) {
-                return false;
-            }
-
+        if (product.variants && product.variants.length > 0) {
             // Verificar si alguna variante tiene stock > 0
             const hasStock = product.variants.some(v => {
                  // Si la variante no trackea inventario, se asume con stock
@@ -1052,20 +1048,7 @@ const isLowStock = (product) => {
     try {
         if (product && product.track_inventory === false) return false;
 
-        // Si tiene variantes y opciones definidas (ignorar ghost variants)
-        if (product.variants && product.variants.length > 0 && product.variant_options && product.variant_options.length > 0) {
-            
-            // FALLBACK: Si variantes suman 0 pero hay stock global, tratar como simple
-            const variantSum = product.variants.reduce((acc, v) => acc + (Number(v.stock)||0), 0);
-            if (variantSum === 0 && (Number(product.quantity)||0) > 0) {
-                 // Caer al block "else" (lógica simple)… o duplicarla aquí.
-                 // Duplicamos lógica simple para evitar refactor masivo de ifs
-                const qty = Number(product.quantity || 0);
-                const alert = Number(product.alert || 0);
-                if (alert <= 0) return false;
-                return qty <= alert;
-            }
-
+        if (product.variants && product.variants.length > 0) {
             // Verificar primero si está totalmente agotado
             if (isOutOfStock(product)) return false;
 
@@ -1285,6 +1268,19 @@ const handleGalleryBuy = (item) => {
 };
 
 const buyNowFromGallery = (product) => {
+    if (isOutOfStock(product)) {
+        toast.error('Este producto está agotado.');
+        return;
+    }
+
+    if ((product.variants || []).length > 0) {
+        router.visit(route('catalogo.show', { store: props.store.slug, product: product.id }));
+        return;
+    }
+
+    if (buyingProductId.value !== null) return;
+    buyingProductId.value = product.id;
+
     router.post(route('cart.store'), {
         product_id: product.id,
         product_variant_id: null,
@@ -1296,7 +1292,13 @@ const buyNowFromGallery = (product) => {
             router.visit(route('checkout.index', { store: props.store.slug }), {
                 preserveScroll: false,
             });
-        }
+        },
+        onError: (errors) => {
+            toast.error(Object.values(errors)[0] || 'No se pudo agregar el producto.');
+        },
+        onFinish: () => {
+            buyingProductId.value = null;
+        },
     });
 };
 
@@ -2339,14 +2341,16 @@ watch(galleryItems, (newItems, oldItems) => {
 								</div>
 								
 								<!-- Botón comprar -->
-								<div v-if="(store?.gallery_type === 'products' && store?.gallery_show_buy_button !== false) || (store?.gallery_type === 'custom' && galleryItems[currentSlide].show_buy_button && galleryItems[currentSlide].product_id)" class="flex justify-center pointer-events-auto mb-8 sm:mb-12 md:mb-16">
+								<div v-if="(store?.gallery_type === 'products' && store?.gallery_show_buy_button !== false) || (store?.gallery_type === 'custom' && galleryItems[currentSlide].show_buy_button && galleryItems[currentSlide].product)" class="flex justify-center pointer-events-auto mb-8 sm:mb-12 md:mb-16">
 									<button 
+										dusk="gallery-buy-now"
 										@click="handleGalleryBuy(galleryItems[currentSlide])"
-										class="buy-now-gallery font-bold py-3 px-6 sm:px-8 rounded-full shadow-2xl transition-all transform hover:scale-105 active:scale-95 text-base sm:text-lg md:text-xl"
+										:disabled="store?.gallery_type === 'products' && (isOutOfStock(galleryItems[currentSlide]) || buyingProductId === galleryItems[currentSlide].id)"
+										class="buy-now-gallery font-bold py-3 px-6 sm:px-8 rounded-full shadow-2xl transition-all transform hover:scale-105 active:scale-95 text-base sm:text-lg md:text-xl disabled:cursor-not-allowed disabled:opacity-50"
 										:class="store?.catalog_use_default ? 'bg-white/80 backdrop-blur-sm text-gray-900 hover:bg-white/90 border-2 border-gray-200' : 'text-white'"
 										:style="buttonStyle"
 									>
-										COMPRAR AHORA
+										{{ buyingProductId === galleryItems[currentSlide].id ? 'PROCESANDO...' : 'COMPRAR AHORA' }}
 									</button>
 								</div>
 							</div>
@@ -2663,8 +2667,8 @@ watch(galleryItems, (newItems, oldItems) => {
 					<p v-if="hasPromo(product)" class="text-xs sm:text-sm text-gray-400 line-through">
 						{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
 					</p>
-					<button v-if="store?.catalog_show_buy_button" @click.stop.prevent="buyNowFromGallery(product)" class="w-full py-2 px-4 rounded-lg font-semibold text-sm text-center transition duration-300 hover:opacity-90" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
-						Comprar Ahora
+					<button v-if="store?.catalog_show_buy_button" :dusk="`catalog-buy-now-${product.id}`" @click.stop.prevent="buyNowFromGallery(product)" :disabled="isOutOfStock(product) || buyingProductId === product.id" class="w-full py-2 px-4 rounded-lg font-semibold text-sm text-center transition duration-300 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
+						{{ buyingProductId === product.id ? 'Procesando...' : 'Comprar Ahora' }}
 					</button>
 				</div>
 			</Link>
@@ -2701,8 +2705,8 @@ watch(galleryItems, (newItems, oldItems) => {
 								{{ new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(product.price) }}
 							</p>
 						</div>
-						<button v-if="store?.catalog_show_buy_button" @click.stop.prevent="buyNowFromGallery(product)" class="w-full py-3 px-6 rounded-lg font-bold text-center transition duration-300 hover:opacity-90" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
-							Comprar Ahora
+						<button v-if="store?.catalog_show_buy_button" :dusk="`catalog-buy-now-${product.id}`" @click.stop.prevent="buyNowFromGallery(product)" :disabled="isOutOfStock(product) || buyingProductId === product.id" class="w-full py-3 px-6 rounded-lg font-bold text-center transition duration-300 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
+							{{ buyingProductId === product.id ? 'Procesando...' : 'Comprar Ahora' }}
 						</button>
 					</div>
 				</Link>
@@ -2737,8 +2741,8 @@ watch(galleryItems, (newItems, oldItems) => {
 							{{ product.short_description }}
 						</p>
 					</div>
-					<button v-if="store?.catalog_show_buy_button" @click.stop.prevent="buyNowFromGallery(product)" class="w-full py-2 px-4 rounded-lg font-semibold text-sm text-center transition duration-300 hover:opacity-90" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
-						Comprar Ahora
+					<button v-if="store?.catalog_show_buy_button" :dusk="`catalog-buy-now-${product.id}`" @click.stop.prevent="buyNowFromGallery(product)" :disabled="isOutOfStock(product) || buyingProductId === product.id" class="w-full py-2 px-4 rounded-lg font-semibold text-sm text-center transition duration-300 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''" :style="buttonStyleObj">
+						{{ buyingProductId === product.id ? 'Procesando...' : 'Comprar Ahora' }}
 					</button>
 				</div>
 			</Link>
@@ -2816,24 +2820,6 @@ watch(galleryItems, (newItems, oldItems) => {
         </Link>
     </div>
     <CookieConsent />
-
-    <!-- MODALS -->
-    <RegisterModal 
-    :show="showRegisterModal" 
-    :store="store" 
-    @close="showRegisterModal = false" 
-/>
-<LoginModal
-    :show="showLoginModal"
-    :store="store"
-    @close="showLoginModal = false"
-    @switch-to-register="showLoginModal = false; showRegisterModal = true"
-/>
-<PopupModal 
-    v-if="store.popup_active"
-    :store="store" 
-    @open-register="showRegisterModal = true"
-/>
 
 <FloatingWhatsAppButton
     v-if="store.whatsapp_floating_button_active && store.phone"

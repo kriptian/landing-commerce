@@ -72,7 +72,7 @@
         <meta property="twitter:image" content="{{ config('app.url') }}/images/New_Logo_ondgtl.png?v=5">
 
         <!-- Structured Data: Organization (logo para Google) -->
-        <script type="application/ld+json">
+        <script type="application/ld+json" nonce="{{ Illuminate\Support\Facades\Vite::cspNonce() }}">
         {!! json_encode([
             '@context' => 'https://schema.org',
             '@type' => 'Organization',
@@ -90,7 +90,7 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
         
         <!-- Scripts -->
-        @routes
+        @routes(nonce: Illuminate\Support\Facades\Vite::cspNonce())
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
         @inertiaHead
     </head>

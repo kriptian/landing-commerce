@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Coupon;
-use App\Models\Store;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -13,7 +13,7 @@ class CouponController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth');
+        $this->middleware('can:gestionar cupones');
     }
 
     /**
@@ -22,10 +22,10 @@ class CouponController extends Controller
     public function index(Request $request): Response
     {
         $store = $request->user()->store;
-        
+
         $coupons = $store->coupons()
             ->withCount('usages')
-            ->with('products')
+            ->with('products:id,name')
             ->latest()
             ->paginate(20);
 
@@ -74,14 +74,18 @@ class CouponController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'description' => ['nullable', 'string', 'max:1000'],
             'product_ids' => ['nullable', 'array'],
-            'product_ids.*' => ['exists:products,id'],
+            'product_ids.*' => [
+                Rule::exists('products', 'id')->where('store_id', $store->id),
+            ],
         ]);
 
+        $productIds = $validated['product_ids'] ?? [];
+        unset($validated['product_ids']);
         $coupon = $store->coupons()->create($validated);
 
         // Asociar productos si se especificaron
-        if ($request->has('product_ids') && !empty($request->product_ids)) {
-            $coupon->products()->attach($request->product_ids);
+        if ($productIds !== []) {
+            $coupon->products()->attach($productIds);
         } else {
             // Si está vacío, no asociar productos (aplicable a todo el catálogo)
             $coupon->products()->detach();
@@ -97,11 +101,9 @@ class CouponController extends Controller
     public function show(Request $request, Coupon $coupon): Response
     {
         // Verificar que el cupón pertenece a la tienda del usuario
-        if ($coupon->store_id !== $request->user()->store_id) {
-            abort(403);
-        }
+        $coupon = $request->user()->store->coupons()->findOrFail($coupon->id);
 
-        $coupon->load(['products', 'usages.customer', 'usages.order']);
+        $coupon->load(['products:id,name', 'usages.customer', 'usages.order']);
 
         return Inertia::render('Admin/Coupons/Show', [
             'coupon' => $coupon,
@@ -114,13 +116,11 @@ class CouponController extends Controller
     public function edit(Request $request, Coupon $coupon): Response
     {
         // Verificar que el cupón pertenece a la tienda del usuario
-        if ($coupon->store_id !== $request->user()->store_id) {
-            abort(403);
-        }
+        $coupon = $request->user()->store->coupons()->findOrFail($coupon->id);
 
         $store = $request->user()->store;
         $products = $store->products()->where('is_active', true)->get(['id', 'name']);
-        $coupon->load('products');
+        $coupon->load('products:id,name');
 
         return Inertia::render('Admin/Coupons/Edit', [
             'coupon' => $coupon,
@@ -134,12 +134,11 @@ class CouponController extends Controller
     public function update(Request $request, Coupon $coupon)
     {
         // Verificar que el cupón pertenece a la tienda del usuario
-        if ($coupon->store_id !== $request->user()->store_id) {
-            abort(403);
-        }
+        $coupon = $request->user()->store->coupons()->findOrFail($coupon->id);
+        $store = $request->user()->store;
 
         $validated = $request->validate([
-            'code' => ['required', 'string', 'max:50', 'unique:coupons,code,' . $coupon->id],
+            'code' => ['required', 'string', 'max:50', 'unique:coupons,code,'.$coupon->id],
             'type' => ['required', 'in:percentage,fixed'],
             'value' => ['required', 'numeric', 'min:0'],
             'min_purchase' => ['nullable', 'numeric', 'min:0'],
@@ -151,18 +150,22 @@ class CouponController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'description' => ['nullable', 'string', 'max:1000'],
             'product_ids' => ['nullable', 'array'],
-            'product_ids.*' => ['exists:products,id'],
+            'product_ids.*' => [
+                Rule::exists('products', 'id')->where('store_id', $store->id),
+            ],
         ]);
 
+        $productIds = $validated['product_ids'] ?? null;
+        unset($validated['product_ids']);
         $coupon->update($validated);
 
         // Sincronizar productos
-        if ($request->has('product_ids')) {
-            if (empty($request->product_ids)) {
+        if ($productIds !== null) {
+            if ($productIds === []) {
                 // Si está vacío, eliminar todas las asociaciones (aplicable a todo el catálogo)
                 $coupon->products()->detach();
             } else {
-                $coupon->products()->sync($request->product_ids);
+                $coupon->products()->sync($productIds);
             }
         }
 
@@ -176,12 +179,10 @@ class CouponController extends Controller
     public function toggleActive(Request $request, Coupon $coupon)
     {
         // Verificar que el cupón pertenece a la tienda del usuario
-        if ($coupon->store_id !== $request->user()->store_id) {
-            abort(403);
-        }
+        $coupon = $request->user()->store->coupons()->findOrFail($coupon->id);
 
         $coupon->update([
-            'is_active' => !$coupon->is_active,
+            'is_active' => ! $coupon->is_active,
         ]);
 
         return back();
@@ -193,9 +194,7 @@ class CouponController extends Controller
     public function destroy(Request $request, Coupon $coupon)
     {
         // Verificar que el cupón pertenece a la tienda del usuario
-        if ($coupon->store_id !== $request->user()->store_id) {
-            abort(403);
-        }
+        $coupon = $request->user()->store->coupons()->findOrFail($coupon->id);
 
         $coupon->delete();
 
@@ -203,4 +202,3 @@ class CouponController extends Controller
             ->with('success', 'Cupón eliminado exitosamente');
     }
 }
-

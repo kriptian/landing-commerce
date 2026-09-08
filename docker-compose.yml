@@ -9,11 +9,12 @@ services:
         extra_hosts:
             - 'host.docker.internal:host-gateway'
         ports:
-            - '${APP_PORT:-80}:80'
-            - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
+            - '127.0.0.1:${APP_PORT:-80}:80'
+            - '127.0.0.1:${VITE_PORT:-5173}:${VITE_PORT:-5173}'
         environment:
             WWWUSER: '${WWWUSER}'
             LARAVEL_SAIL: 1
+            DEPLOYMENT_ENABLED: '${DEPLOYMENT_ENABLED:-true}'
             XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
             XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
             IGNITION_LOCAL_SITES_PATH: '${PWD}'
@@ -27,10 +28,48 @@ services:
             - meilisearch
             - mailpit
             - selenium
+    deployment-worker:
+        image: 'sail-8.4/app'
+        command: php artisan queue:work database --queue=deployments --sleep=1 --tries=10 --timeout=7200
+        stop_grace_period: 125m
+        environment:
+            WWWUSER: '${WWWUSER:-1000}'
+            LARAVEL_SAIL: 1
+            DEPLOYMENT_ENABLED: '${DEPLOYMENT_ENABLED:-true}'
+            DB_QUEUE_RETRY_AFTER: 7300
+        volumes:
+            - '.:/var/www/html'
+            - '${DEPLOYMENT_KEY_DIR:-/home/cristian_ospina/.ssh/landing-commerce-deploy}:/home/sail/.ssh:ro'
+        networks:
+            - sail
+        depends_on:
+            - mysql
+            - redis
+            - selenium
+        restart: unless-stopped
+    deployment-preparation-worker:
+        image: 'sail-8.4/app'
+        command: php artisan queue:work database --queue=deployment-preparation --sleep=1 --tries=600 --timeout=7200
+        stop_grace_period: 125m
+        environment:
+            WWWUSER: '${WWWUSER:-1000}'
+            LARAVEL_SAIL: 1
+            DEPLOYMENT_ENABLED: '${DEPLOYMENT_ENABLED:-true}'
+            DB_QUEUE_RETRY_AFTER: 7300
+            DUSK_APP_HOST: deployment-preparation-worker
+        volumes:
+            - '.:/var/www/html'
+        networks:
+            - sail
+        depends_on:
+            - mysql
+            - redis
+            - selenium
+        restart: unless-stopped
     mysql:
         image: 'mysql/mysql-server:8.0'
         ports:
-            - '${FORWARD_DB_PORT:-3306}:3306'
+            - '127.0.0.1:${FORWARD_DB_PORT:-3306}:3306'
         environment:
             MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
             MYSQL_ROOT_HOST: '%'
@@ -55,7 +94,7 @@ services:
     redis:
         image: 'redis:alpine'
         ports:
-            - '${FORWARD_REDIS_PORT:-6379}:6379'
+            - '127.0.0.1:${FORWARD_REDIS_PORT:-6379}:6379'
         volumes:
             - 'sail-redis:/data'
         networks:
@@ -70,7 +109,7 @@ services:
     meilisearch:
         image: 'getmeili/meilisearch:latest'
         ports:
-            - '${FORWARD_MEILISEARCH_PORT:-7700}:7700'
+            - '127.0.0.1:${FORWARD_MEILISEARCH_PORT:-7700}:7700'
         environment:
             MEILI_NO_ANALYTICS: '${MEILISEARCH_NO_ANALYTICS:-false}'
         volumes:
@@ -89,8 +128,8 @@ services:
     mailpit:
         image: 'axllent/mailpit:latest'
         ports:
-            - '${FORWARD_MAILPIT_PORT:-1025}:1025'
-            - '${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025'
+            - '127.0.0.1:${FORWARD_MAILPIT_PORT:-1025}:1025'
+            - '127.0.0.1:${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025'
         networks:
             - sail
     selenium:

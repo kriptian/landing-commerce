@@ -8,6 +8,11 @@ use Illuminate\Http\Request;
 
 class ExpenseController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('can:registrar gastos');
+    }
+
     public function store(Request $request)
     {
         // Validar que el usuario tenga permiso para crear gastos si es necesario
@@ -22,7 +27,7 @@ class ExpenseController extends Controller
         $user = $request->user();
         $store = $user->store;
 
-        if (!$store) {
+        if (! $store) {
             return response()->json(['message' => 'Usuario no asociado a una tienda.'], 403);
         }
 

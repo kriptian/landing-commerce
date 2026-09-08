@@ -10,13 +10,18 @@ use Inertia\Inertia;
 
 class GalleryImageController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('can:gestionar galeria');
+    }
+
     public function index()
     {
         $store = auth()->user()->store;
         $galleryImages = GalleryImage::where('store_id', $store->id)
             ->orderBy('order')
             ->get();
-        
+
         $products = $store->products()
             ->where('is_active', true)
             ->select('id', 'name')
@@ -43,7 +48,7 @@ class GalleryImageController extends Controller
                 'nullable',
                 'exists:products,id',
                 function ($attribute, $value, $fail) use ($store) {
-                    if ($value && !\App\Models\Product::where('id', $value)->where('store_id', $store->id)->exists()) {
+                    if ($value && ! \App\Models\Product::where('id', $value)->where('store_id', $store->id)->exists()) {
                         $fail('El producto seleccionado no pertenece a tu tienda.');
                     }
                 },
@@ -115,10 +120,10 @@ class GalleryImageController extends Controller
 
         // Obtener media_type del request o del modelo actual ANTES de validar
         $mediaType = $request->input('media_type');
-        if (!$mediaType || $mediaType === '') {
+        if (! $mediaType || $mediaType === '') {
             $mediaType = $galleryImage->media_type ?? 'image';
         }
-        
+
         // Asegurar que media_type esté presente en el request para la validación
         $request->merge(['media_type' => $mediaType]);
 
@@ -134,7 +139,7 @@ class GalleryImageController extends Controller
                 'nullable',
                 'exists:products,id',
                 function ($attribute, $value, $fail) use ($store) {
-                    if ($value && !\App\Models\Product::where('id', $value)->where('store_id', $store->id)->exists()) {
+                    if ($value && ! \App\Models\Product::where('id', $value)->where('store_id', $store->id)->exists()) {
                         $fail('El producto seleccionado no pertenece a tu tienda.');
                     }
                 },

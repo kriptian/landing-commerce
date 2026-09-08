@@ -11,6 +11,7 @@ import axios from 'axios';
 const props = defineProps({
     products: Object, // Objeto de paginación con los productos y sus variantes
     filters: Object,
+    inventoryWarnings: Array,
 });
 
 
@@ -445,6 +446,18 @@ const startResize = (e) => {
             <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
+                        <div v-if="inventoryWarnings.length" class="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
+                            <p class="font-semibold">Inventario por variante pendiente</p>
+                            <p class="mt-1 text-sm">
+                                Estos productos tienen cantidad general, pero todas sus variantes están en cero. Asigna existencias a cada variante para habilitar su compra.
+                            </p>
+                            <ul class="mt-2 list-disc pl-5 text-sm">
+                                <li v-for="warning in inventoryWarnings" :key="warning.id">
+                                    {{ warning.name }}: {{ warning.global_quantity }} generales, {{ warning.variants_count }} variantes sin stock
+                                </li>
+                            </ul>
+                        </div>
+
                         <!-- Barra de acciones: buscador con cortina + filtro -->
                         <div class="mb-4 flex items-center justify-between">
                             <div class="flex items-center gap-3">

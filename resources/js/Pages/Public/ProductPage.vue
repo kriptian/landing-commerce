@@ -17,8 +17,7 @@ const props = defineProps({
     suggested: Array,
 });
 
-import { ref as vref } from 'vue';
-const showVariantAlert = vref(false);
+const showVariantAlert = ref(false);
 const toast = useToast();
 
 // Colores personalizados del catálogo
@@ -206,7 +205,6 @@ const variantOptionsMap = computed(() => {
             price: child.price,
             stock: child.stock,
             alert: child.alert,
-            purchase_price: child.purchase_price,
             image_path: child.image_path,
             id: child.id,
         }));
@@ -228,6 +226,9 @@ const optionKeys = computed(() => {
     });
     return Array.from(keys);
 });
+const requiresVariantSelection = computed(() => (props.product.variants || []).some(
+    variant => variant.options && Object.keys(variant.options).length > 0
+));
 
 const optionValuesByKey = computed(() => {
     if (hasVariantOptions.value) {
@@ -450,7 +451,7 @@ const visibleCount = computed(() => 3);
 const visibleVariants = computed(() => showAllVariants.value ? props.product.variants : props.product.variants.slice(0, visibleCount.value));
 const hiddenVariantsCount = computed(() => Math.max(0, (props.product.variants?.length || 0) - visibleCount.value));
 
-const store = computed(() => props.product.store);
+const store = computed(() => props.store);
 // URL pública del producto para compartir (compatible con OG/preview)
 const productUrl = computed(() => route('catalogo.show', { store: (store.value || {}).slug, product: props.product.id }));
 
@@ -607,8 +608,10 @@ const selectedVariant = computed(() => {
             });
         }
         
+        if (!matchingVariant) return null;
+
         return {
-            id: matchingVariant?.id || null, 
+            id: matchingVariant.id,
             options: options,
             price: selectedOptionPrice.value,
             stock: realStock,
@@ -619,7 +622,7 @@ const selectedVariant = computed(() => {
     // Sistema antiguo
     return (props.product.variants || []).find(v => {
         const opts = v?.options || {};
-        return optionKeys.value.every(k => opts[k] === selectedOptions.value[k]);
+        return optionKeys.value.every(k => String(opts[k]) === String(selectedOptions.value[k]));
     }) || null;
 });
 
@@ -768,28 +771,12 @@ const stockBadge = computed(() => {
 
 const addToCart = () => {
     // Exigir selección completa cuando hay variantes con múltiples atributos
-    const hasVariants = hasVariantOptions.value || (optionKeys.value.length > 0);
-    if (hasVariants && !selectedVariant.value) {
+    if (requiresVariantSelection.value && !selectedVariant.value) {
         showVariantAlert.value = true;
         return;
     }
 
-    // Buscar el ProductVariant real que corresponde a las opciones seleccionadas
-    let variantId = null;
-    if (hasVariantOptions.value && selectedVariant.value) {
-        // Sistema nuevo: buscar el ProductVariant que coincide con las opciones seleccionadas
-        const selectedOptionsObj = selectedVariant.value.options || {};
-        const matchingVariant = (props.product.variants || []).find(v => {
-            const variantOptions = v?.options || {};
-            // Verificar que todas las opciones coincidan
-            return optionKeys.value.every(k => variantOptions[k] === selectedOptionsObj[k]);
-        });
-        variantId = matchingVariant?.id ?? null;
-    } else if (props.product.variants.length > 0 && selectedVariant.value) {
-        // Sistema antiguo: usar el ID directamente
-        variantId = selectedVariant.value?.id ?? null;
-    }
-    
+    const variantId = selectedVariant.value?.id ?? null;
     const qty = selectedQuantity.value;
 
     router.post(route('cart.store'), {
@@ -803,34 +790,21 @@ const addToCart = () => {
             // Limpiar selección y cantidad para permitir agregar otra variante
             initSelectedOptions();
             selectedQuantity.value = 1;
-        }
+        },
+        onError: (errors) => {
+            toast.error(Object.values(errors)[0] || 'No se pudo agregar el producto.');
+        },
     });
 };
 
 const buyNow = () => {
     // Exigir selección completa cuando hay variantes con múltiples atributos
-    const hasVariants = hasVariantOptions.value || (optionKeys.value.length > 0);
-    if (hasVariants && !selectedVariant.value) {
+    if (requiresVariantSelection.value && !selectedVariant.value) {
         showVariantAlert.value = true;
         return;
     }
 
-    // Buscar el ProductVariant real que corresponde a las opciones seleccionadas
-    let variantId = null;
-    if (hasVariantOptions.value && selectedVariant.value) {
-        // Sistema nuevo: buscar el ProductVariant que coincide con las opciones seleccionadas
-        const selectedOptionsObj = selectedVariant.value.options || {};
-        const matchingVariant = (props.product.variants || []).find(v => {
-            const variantOptions = v?.options || {};
-            // Verificar que todas las opciones coincidan
-            return optionKeys.value.every(k => variantOptions[k] === selectedOptionsObj[k]);
-        });
-        variantId = matchingVariant?.id ?? null;
-    } else if (props.product.variants.length > 0 && selectedVariant.value) {
-        // Sistema antiguo: usar el ID directamente
-        variantId = selectedVariant.value?.id ?? null;
-    }
-    
+    const variantId = selectedVariant.value?.id ?? null;
     const qty = selectedQuantity.value;
 
     router.post(route('cart.store'), {
@@ -845,8 +819,8 @@ const buyNow = () => {
                 preserveScroll: false,
             });
         },
-        onError: () => {
-            try { toast.error('Error al agregar el producto'); } catch (e) {}
+        onError: (errors) => {
+            try { toast.error(Object.values(errors)[0] || 'Error al agregar el producto'); } catch (e) {}
         }
     });
 };
@@ -966,15 +940,16 @@ const getVariantDisplayPrices = (variant) => {
 				</p>
                 <p v-if="product.short_description" class="text-lg text-gray-600">{{ product.short_description }}</p>
 
-                <div v-if="hasVariantOptions || product.variants.length > 0" class="border-t pt-4">
+                <div v-if="requiresVariantSelection" class="border-t pt-4">
                     <h3 class="text-xl font-semibold mb-3">Opciones Disponibles:</h3>
                     <div class="space-y-4">
-                        <div v-for="key in optionKeys" :key="`opt-${key}`">
+                        <div v-for="(key, keyIndex) in optionKeys" :key="`opt-${key}`">
                             <div class="text-sm text-gray-700 font-medium mb-1">{{ key }}</div>
                             <div class="flex flex-wrap gap-2">
                                 <button
-                                    v-for="value in getValuesForKey(key)"
+                                    v-for="(value, valueIndex) in getValuesForKey(key)"
                                     :key="`${key}:${value}`"
+                                    :dusk="`variant-option-${keyIndex}-${valueIndex}`"
                                     type="button"
                                     class="px-3 py-1 rounded border transition-all"
                                     :class="{
@@ -1007,8 +982,9 @@ const getVariantDisplayPrices = (variant) => {
                     </div>
 
                     <button 
+                        dusk="add-to-cart"
                         @click="addToCart"
-                        :disabled="(optionKeys.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
+                        :disabled="(requiresVariantSelection && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
                         class="w-full mt-6 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-300 disabled:text-gray-500"
                         :class="catalogUseDefault ? 'bg-blue-600/30 backdrop-blur-sm text-blue-700 enabled:hover:bg-blue-600/40 border-2 border-blue-600/50' : 'text-white border-2'"
                         :style="!catalogUseDefault && !(optionKeys.length > 0 && !selectedVariant) && !(isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock)) ? purchaseButtonSecondaryStyle : {}"
@@ -1017,8 +993,9 @@ const getVariantDisplayPrices = (variant) => {
                     </button>
                     
                     <button 
+                        dusk="product-buy-now"
                         @click="buyNow"
-                        :disabled="(optionKeys.length > 0 && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
+                        :disabled="(requiresVariantSelection && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
                         class="w-full mt-3 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:opacity-90 buy-now-button"
                         :class="catalogUseDefault ? 'bg-blue-600 text-white enabled:hover:bg-blue-700' : 'text-white'"
                         :style="!catalogUseDefault && !(optionKeys.length > 0 && !selectedVariant) && !(isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock)) ? purchaseButtonStyle : {}"

@@ -38,7 +38,7 @@ class CustomerAuthController extends Controller
                 'email',
                 'max:255',
                 // Email único solo para esta tienda en customers
-                'unique:customers,email,NULL,id,store_id,' . $store->id,
+                'unique:customers,email,NULL,id,store_id,'.$store->id,
             ],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'phone' => ['nullable', 'string', 'max:20'],
@@ -53,6 +53,7 @@ class CustomerAuthController extends Controller
         ]);
 
         Auth::guard('customer')->login($customer);
+        $request->session()->regenerate();
 
         return redirect()->route('catalogo.index', ['store' => $store->slug])
             ->with('success', '¡Cuenta creada exitosamente!');
@@ -109,4 +110,3 @@ class CustomerAuthController extends Controller
             ->with('success', 'Sesión cerrada exitosamente');
     }
 }
-

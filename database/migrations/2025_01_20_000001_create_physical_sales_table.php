@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('physical_sales', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('store_id')->constrained()->onDelete('cascade');
+            $table->foreignId('store_id');
             $table->foreignId('user_id')->constrained()->onDelete('cascade'); // Usuario que realizó la venta
             $table->string('sale_number')->unique(); // Número de factura/venta
             $table->decimal('subtotal', 15, 2);
@@ -34,4 +34,3 @@ return new class extends Migration
         Schema::dropIfExists('physical_sales');
     }
 };
-

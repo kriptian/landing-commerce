@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasTable('stores')) {
+            return;
+        }
+
         Schema::table('stores', function (Blueprint $table) {
             $table->enum('gallery_type', ['products', 'custom'])->default('products')->after('catalog_promo_banner_text_color');
             $table->boolean('gallery_show_buy_button')->default(true)->after('gallery_type');
@@ -16,9 +20,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! Schema::hasTable('stores')) {
+            return;
+        }
+
         Schema::table('stores', function (Blueprint $table) {
             $table->dropColumn(['gallery_type', 'gallery_show_buy_button']);
         });
     }
 };
-

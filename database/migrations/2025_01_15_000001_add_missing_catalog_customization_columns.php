@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasTable('stores')) {
+            return;
+        }
+
         // Primero verificar qué columnas existen
         $hasPromoBanner = Schema::hasColumn('stores', 'catalog_promo_banner_color');
         $hasVariant = Schema::hasColumn('stores', 'catalog_variant_button_color');
@@ -15,47 +19,47 @@ return new class extends Migration
         $hasCart = Schema::hasColumn('stores', 'catalog_cart_bubble_color');
         $hasSocial = Schema::hasColumn('stores', 'catalog_social_button_color');
         $hasLogo = Schema::hasColumn('stores', 'catalog_logo_position');
-        
+
         Schema::table('stores', function (Blueprint $table) use ($hasPromoBanner, $hasVariant, $hasPurchase, $hasCart, $hasSocial, $hasLogo) {
             // Determinar la columna de referencia para la primera columna nueva
             $ref = $hasPromoBanner ? 'catalog_promo_banner_color' : 'plan_renews_at';
-            
-            if (!$hasVariant) {
+
+            if (! $hasVariant) {
                 $table->string('catalog_variant_button_color')->nullable()->after($ref);
                 $ref = 'catalog_variant_button_color';
             } elseif ($hasVariant) {
                 $ref = 'catalog_variant_button_color';
             }
-            
-            if (!$hasPurchase) {
+
+            if (! $hasPurchase) {
                 $table->string('catalog_purchase_button_color')->nullable()->after($ref);
                 $ref = 'catalog_purchase_button_color';
             } elseif ($hasPurchase) {
                 $ref = 'catalog_purchase_button_color';
             }
-            
-            if (!$hasCart) {
+
+            if (! $hasCart) {
                 $table->string('catalog_cart_bubble_color')->nullable()->after($ref);
                 $ref = 'catalog_cart_bubble_color';
             } elseif ($hasCart) {
                 $ref = 'catalog_cart_bubble_color';
             }
-            
-            if (!$hasSocial) {
+
+            if (! $hasSocial) {
                 $table->string('catalog_social_button_color')->nullable()->after($ref);
                 $ref = 'catalog_social_button_color';
             } elseif ($hasSocial) {
                 $ref = 'catalog_social_button_color';
             }
-            
-            if (!$hasLogo) {
+
+            if (! $hasLogo) {
                 $table->string('catalog_logo_position')->default('center')->after($ref);
                 $ref = 'catalog_logo_position';
             } elseif ($hasLogo) {
                 $ref = 'catalog_logo_position';
             }
-            
-            if (!Schema::hasColumn('stores', 'catalog_menu_type')) {
+
+            if (! Schema::hasColumn('stores', 'catalog_menu_type')) {
                 $table->string('catalog_menu_type')->default('hamburger')->after($ref);
             }
         });
@@ -63,6 +67,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! Schema::hasTable('stores')) {
+            return;
+        }
+
         Schema::table('stores', function (Blueprint $table) {
             if (Schema::hasColumn('stores', 'catalog_menu_type')) {
                 $table->dropColumn('catalog_menu_type');
