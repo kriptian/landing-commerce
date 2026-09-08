@@ -2,10 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Casts\Attribute;
-use App\Models\Store;
 
 class Product extends Model
 {
@@ -43,7 +42,9 @@ class Product extends Model
         return Attribute::make(
             get: function () {
                 // 1. Primero busca la primera imagen asociada a este producto
-                $firstImage = $this->images()->first();
+                $firstImage = $this->relationLoaded('images')
+                    ? $this->images->first()
+                    : $this->images()->first();
 
                 if ($firstImage) {
                     // Devuelve la ruta de la imagen que ya tienes
@@ -52,7 +53,7 @@ class Product extends Model
 
                 // 2. Si no hay imagen del producto, busca en las imágenes de variantes
                 // Cargar variantOptions con children si no están cargados
-                if (!$this->relationLoaded('variantOptions')) {
+                if (! $this->relationLoaded('variantOptions')) {
                     $this->load('variantOptions.children');
                 }
 
@@ -60,14 +61,15 @@ class Product extends Model
                     foreach ($this->variantOptions as $parentOption) {
                         if ($parentOption->children && $parentOption->children->count() > 0) {
                             foreach ($parentOption->children as $child) {
-                                if (!empty($child->image_path)) {
+                                if (! empty($child->image_path)) {
                                     // Normalizar la ruta de la imagen
                                     $imagePath = $child->image_path;
-                                    if (!str_starts_with($imagePath, 'http://') && !str_starts_with($imagePath, 'https://')) {
-                                        if (!str_starts_with($imagePath, '/storage/')) {
-                                            $imagePath = '/storage/' . ltrim($imagePath, '/');
+                                    if (! str_starts_with($imagePath, 'http://') && ! str_starts_with($imagePath, 'https://')) {
+                                        if (! str_starts_with($imagePath, '/storage/')) {
+                                            $imagePath = '/storage/'.ltrim($imagePath, '/');
                                         }
                                     }
+
                                     return $imagePath;
                                 }
                             }
@@ -76,7 +78,7 @@ class Product extends Model
                 }
 
                 // 3. Si no hay imagen del producto ni de variantes, usamos el logo de la tienda si existe
-                if ($this->store && !empty($this->store->logo_url)) {
+                if ($this->store && ! empty($this->store->logo_url)) {
                     return $this->store->logo_url;
                 }
 

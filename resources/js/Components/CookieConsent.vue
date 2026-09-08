@@ -6,9 +6,10 @@ const page = usePage();
 const store = computed(() => page.props.store);
 
 const isVisible = ref(false);
+const consentKey = computed(() => `cookie_consent_${store.value?.id ?? 'global'}`);
 
 const acceptCookies = () => {
-    localStorage.setItem('cookie_consent', 'accepted');
+    localStorage.setItem(consentKey.value, 'accepted');
     isVisible.value = false;
 };
 
@@ -21,7 +22,7 @@ onMounted(() => {
     // Only show if store has enabled cookie consent
     if (!isActive.value) return;
 
-    const consent = localStorage.getItem('cookie_consent');
+    const consent = localStorage.getItem(consentKey.value);
     if (!consent) {
         isVisible.value = true;
     }

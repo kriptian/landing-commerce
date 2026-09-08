@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\Store;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 
 class ProductController extends Controller
@@ -34,65 +35,43 @@ class ProductController extends Controller
             ]);
         }
 
-        // 1. Árbol: solo categorías con productos (propios o en descendientes), con contador de productos
-        $rootCats = $store->categories()->whereNull('parent_id')->get(['id', 'name']);
-        $categories = $rootCats->map(function ($cat) use ($store) {
-            $count = $this->productsCountForCategory($store, $cat->id);
-
-            return [
-                'id' => $cat->id,
-                'name' => $cat->name,
-                'products_count' => $count,
-                'has_children_with_products' => $this->hasChildrenWithProducts($store, $cat->id),
-            ];
-        })->filter(fn ($c) => $c['products_count'] > 0)->values();
+        $allCategories = $store->categories()->orderBy('name')->get(['id', 'name', 'parent_id']);
+        $categoryCounts = $store->products()
+            ->where('is_active', true)
+            ->whereNotNull('category_id')
+            ->selectRaw('category_id, COUNT(*) as aggregate')
+            ->groupBy('category_id')
+            ->pluck('aggregate', 'category_id');
+        $categories = $this->categorySummaries($allCategories, $categoryCounts);
 
         // Empezamos la consulta de productos (incluimos variantes para calcular bajo stock en frontend)
         // También cargamos variantOptions para incluir sus imágenes en main_image_url
         $productsQuery = $store->products()->where('is_active', true)->with([
+            'category:id,name',
             'images',
-            'variants:id,product_id,stock,minimum_stock,alert',
+            'store:id,logo_url',
+            'variants:id,product_id,options,stock,minimum_stock,alert',
             'variantOptions.children', // Cargar variantOptions con children para incluir imágenes de variantes
         ]);
 
         // --- LÓGICA DE FILTRADO: múltiples categorías y descendientes ---
         $selectedIds = collect();
+        $categoryIds = $allCategories->pluck('id')->map(fn ($id) => (int) $id);
+        $childrenByParent = $allCategories->groupBy(fn ($category) => (int) ($category->parent_id ?? 0));
         if ($request->filled('categories')) {
             $raw = $request->input('categories');
             $ids = is_array($raw) ? $raw : explode(',', (string) $raw);
             foreach ($ids as $id) {
                 $id = (int) $id;
-                if ($id <= 0) {
+                if ($id <= 0 || ! $categoryIds->contains($id)) {
                     continue;
                 }
-                $selectedIds->push($id);
-                $stack = [$id];
-                while (! empty($stack)) {
-                    $currentId = array_pop($stack);
-                    $children = $store->categories()->where('parent_id', $currentId)->pluck('id')->all();
-                    foreach ($children as $childId) {
-                        if (! $selectedIds->contains($childId)) {
-                            $selectedIds->push($childId);
-                            $stack[] = $childId;
-                        }
-                    }
-                }
+                $selectedIds->push(...$this->descendantIds($childrenByParent, $id));
             }
         } elseif ($request->filled('category')) {
             $id = (int) $request->category;
-            if ($id > 0) {
-                $selectedIds->push($id);
-                $stack = [$id];
-                while (! empty($stack)) {
-                    $currentId = array_pop($stack);
-                    $children = $store->categories()->where('parent_id', $currentId)->pluck('id')->all();
-                    foreach ($children as $childId) {
-                        if (! $selectedIds->contains($childId)) {
-                            $selectedIds->push($childId);
-                            $stack[] = $childId;
-                        }
-                    }
-                }
+            if ($id > 0 && $categoryIds->contains($id)) {
+                $selectedIds->push(...$this->descendantIds($childrenByParent, $id));
             }
         }
         if ($selectedIds->isNotEmpty()) {
@@ -100,7 +79,32 @@ class ProductController extends Controller
         }
 
         if ($request->filled('search')) {
-            $productsQuery->where('name', 'like', '%'.$request->search.'%');
+            $search = trim((string) $request->input('search'));
+            $productsQuery->where(function ($query) use ($search) {
+                $like = '%'.$search.'%';
+                $query->where('products.name', 'like', $like)
+                    ->orWhere('products.short_description', 'like', $like)
+                    ->orWhere('products.long_description', 'like', $like)
+                    ->orWhere('products.meta_keywords', 'like', $like)
+                    ->orWhere('products.barcode', 'like', $like)
+                    ->orWhereHas('category', fn ($category) => $category->where('name', 'like', $like));
+            });
+        }
+
+        if ($request->filled('min_price') && is_numeric($request->input('min_price'))) {
+            $productsQuery->where('products.price', '>=', max(0, (float) $request->input('min_price')));
+        }
+
+        if ($request->filled('max_price') && is_numeric($request->input('max_price'))) {
+            $productsQuery->where('products.price', '<=', max(0, (float) $request->input('max_price')));
+        }
+
+        if ($request->input('availability') === 'in_stock') {
+            $productsQuery->where(function ($query) {
+                $query->where('products.track_inventory', false)
+                    ->orWhere('products.quantity', '>', 0)
+                    ->orWhereHas('variants', fn ($variants) => $variants->where('stock', '>', 0));
+            });
         }
 
         // Filtro: solo productos en promoción (global o individual)
@@ -146,12 +150,14 @@ class ProductController extends Controller
 
         // Verificar si hay productos con promoción en toda la tienda (no solo en la página actual)
         $hasProductsWithPromo = \App\Models\Product::where('store_id', $store->id)
+            ->where('is_active', true)
             ->where('promo_active', true)
             ->where('promo_discount_percent', '>', 0)
             ->exists();
 
         // Obtener el porcentaje máximo de promoción de todos los productos con promoción
         $maxProductPromoPercent = \App\Models\Product::where('store_id', $store->id)
+            ->where('is_active', true)
             ->where('promo_active', true)
             ->where('promo_discount_percent', '>', 0)
             ->max('promo_discount_percent') ?? 0;
@@ -185,7 +191,7 @@ class ProductController extends Controller
         }
 
         $products = $productsQuery->paginate(36)->withQueryString();
-        $products->getCollection()->each->makeHidden(['purchase_price']);
+        $products->setCollection($products->getCollection()->map(fn (Product $product) => $this->catalogCard($product)));
 
         // Si es una petición AJAX normal (Load More) y no es Inertia, devolver JSON puro
         if ($request->wantsJson() && ! $request->header('X-Inertia')) {
@@ -237,6 +243,7 @@ class ProductController extends Controller
                 'popup_button_text' => $store->popup_button_text,
                 'popup_button_link' => $store->popup_button_link,
                 'popup_show_button' => $store->popup_show_button ?? false,
+                'popup_frequency' => $store->popup_frequency ?? 'session',
             ],
             'categories' => $categories, // Mandamos solo las categorías principales para los botones
             'hasProductsWithPromo' => $hasProductsWithPromo, // Información global sobre productos con promoción
@@ -247,6 +254,10 @@ class ProductController extends Controller
                 'search' => $request->input('search'),
                 'promo' => $request->boolean('promo'),
                 'sort' => $request->input('sort', 'latest'),
+                'min_price' => $request->input('min_price'),
+                'max_price' => $request->input('max_price'),
+                'availability' => $request->input('availability'),
+                'selected_category' => $allCategories->firstWhere('id', (int) $request->input('category'))?->name,
             ],
         ]);
     }
@@ -454,31 +465,27 @@ class ProductController extends Controller
         if ($category->store_id !== $store->id) {
             abort(404);
         }
-        $children = $category->children()->orderBy('name')->get(['id', 'name', 'parent_id']);
-        $data = $children->map(function ($cat) use ($store) {
-            $count = $this->productsCountForCategory($store, $cat->id);
-
-            return [
-                'id' => $cat->id,
-                'name' => $cat->name,
-                'parent_id' => $cat->parent_id,
-                'products_count' => $count,
-                'has_children_with_products' => $this->hasChildrenWithProducts($store, $cat->id),
-            ];
-        })->filter(fn ($c) => $c['products_count'] > 0)->values();
+        $allCategories = $store->categories()->orderBy('name')->get(['id', 'name', 'parent_id']);
+        $categoryCounts = $store->products()
+            ->where('is_active', true)
+            ->whereNotNull('category_id')
+            ->selectRaw('category_id, COUNT(*) as aggregate')
+            ->groupBy('category_id')
+            ->pluck('aggregate', 'category_id');
+        $data = $this->categorySummaries($allCategories, $categoryCounts, $category->id);
 
         return response()->json([
             'data' => $data,
         ]);
     }
 
-    private function collectIdsIncludingDescendants(Store $store, int $categoryId): array
+    private function descendantIds(Collection $childrenByParent, int $categoryId): array
     {
         $ids = [$categoryId];
         $stack = [$categoryId];
         while (! empty($stack)) {
             $current = array_pop($stack);
-            $children = $store->categories()->where('parent_id', $current)->pluck('id')->all();
+            $children = $childrenByParent->get($current, collect())->pluck('id')->all();
             foreach ($children as $child) {
                 if (! in_array($child, $ids, true)) {
                     $ids[] = $child;
@@ -490,23 +497,62 @@ class ProductController extends Controller
         return $ids;
     }
 
-    private function productsCountForCategory(Store $store, int $categoryId): int
+    private function categorySummaries(Collection $categories, Collection $counts, ?int $parentId = null): Collection
     {
-        $ids = $this->collectIdsIncludingDescendants($store, $categoryId);
+        $childrenByParent = $categories->groupBy(fn ($category) => (int) ($category->parent_id ?? 0));
+        $targetParent = $parentId ?? 0;
 
-        return $store->products()->whereIn('category_id', $ids)->count();
+        return $childrenByParent->get($targetParent, collect())
+            ->map(function ($category) use ($childrenByParent, $counts) {
+                $childIds = $this->descendantIds($childrenByParent, (int) $category->id);
+                $productCount = collect($childIds)->sum(fn ($id) => (int) ($counts[$id] ?? 0));
+                $hasChildrenWithProducts = $childrenByParent->get((int) $category->id, collect())
+                    ->contains(function ($child) use ($childrenByParent, $counts) {
+                        return collect($this->descendantIds($childrenByParent, (int) $child->id))
+                            ->sum(fn ($id) => (int) ($counts[$id] ?? 0)) > 0;
+                    });
+
+                return [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'parent_id' => $category->parent_id,
+                    'products_count' => $productCount,
+                    'has_children_with_products' => $hasChildrenWithProducts,
+                ];
+            })
+            ->filter(fn ($category) => $category['products_count'] > 0)
+            ->values();
     }
 
-    private function hasChildrenWithProducts(Store $store, int $categoryId): bool
+    private function catalogCard(Product $product): array
     {
-        $childrenIds = $store->categories()->where('parent_id', $categoryId)->pluck('id')->all();
-        foreach ($childrenIds as $childId) {
-            if ($this->productsCountForCategory($store, $childId) > 0) {
-                return true;
-            }
-        }
+        $realVariants = $product->variants
+            ->filter(fn ($variant) => ! empty($variant->options))
+            ->values();
 
-        return false;
+        return [
+            'id' => $product->id,
+            'name' => $product->name,
+            'price' => $product->price,
+            'short_description' => $product->short_description,
+            'quantity' => $product->quantity,
+            'alert' => $product->alert,
+            'track_inventory' => $product->track_inventory,
+            'promo_active' => $product->promo_active,
+            'promo_discount_percent' => $product->promo_discount_percent,
+            'is_featured' => $product->is_featured,
+            'main_image_url' => $product->main_image_url,
+            'category' => $product->category ? [
+                'id' => $product->category->id,
+                'name' => $product->category->name,
+            ] : null,
+            'has_variants' => $realVariants->isNotEmpty(),
+            'variants' => $realVariants->map(fn ($variant) => [
+                'id' => $variant->id,
+                'stock' => $variant->stock,
+                'alert' => $variant->alert,
+            ])->all(),
+        ];
     }
 
     private function isCrawler(Request $request): bool

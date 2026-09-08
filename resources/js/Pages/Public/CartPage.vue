@@ -1,6 +1,6 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { useToast } from 'vue-toastification';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -137,13 +137,10 @@ const getDisplayUnitPrice = (item) => {
 };
 const getMaxQty = (item) => {
     if (item.product?.track_inventory === false) return 9999; // sin límite práctico
-    // Si existe variante pero no tiene stock (>0), caer al inventario total del producto
     if (item.variant) {
-        const vs = Number(item.variant?.stock ?? 0);
-        const pq = Number(item.product?.quantity ?? 0);
-        return Math.max(1, vs > 0 ? vs : pq);
+        return Math.max(0, Number(item.variant?.stock ?? 0));
     }
-    if (typeof item.product?.quantity === 'number') return Math.max(1, Number(item.product.quantity));
+    if (typeof item.product?.quantity === 'number') return Math.max(0, Number(item.product.quantity));
     return 99;
 };
 
@@ -160,33 +157,7 @@ const getStockBadge = (item) => {
 const totalPrice = computed(() => {
 	return props.cartItems.reduce((total, item) => total + (getDisplayUnitPrice(item) * item.quantity), 0);
 });
-
-// ===== Selección de productos (para UX similar al ejemplo) =====
-const selectedKeys = ref(new Set());
-watch(() => props.cartItems, (items) => {
-	const all = new Set(items.map(getItemKey));
-	selectedKeys.value = all; // seleccionar todos por defecto
-}, { immediate: true });
-
-const allSelected = computed(() => props.cartItems.length > 0 && props.cartItems.every(i => selectedKeys.value.has(getItemKey(i))));
-const toggleSelectAll = () => {
-	if (allSelected.value) {
-		selectedKeys.value = new Set();
-	} else {
-		selectedKeys.value = new Set(props.cartItems.map(getItemKey));
-	}
-};
-const isSelected = (key) => selectedKeys.value.has(key);
-const toggleSelect = (key) => {
-	const next = new Set(selectedKeys.value);
-	if (next.has(key)) next.delete(key); else next.add(key);
-	selectedKeys.value = next;
-};
-
-const selectedTotal = computed(() => props.cartItems
-	.filter(i => selectedKeys.value.has(getItemKey(i)))
-	.reduce((acc, i) => acc + getDisplayUnitPrice(i) * i.quantity, 0)
-);
+const hasUnavailableItems = computed(() => props.cartItems.some(item => getMaxQty(item) === 0));
 
 // ===== Cantidades =====
 const submitQuantity = (item, quantity) => {
@@ -325,21 +296,16 @@ const deleteItem = () => {
 			<div class="grid md:grid-cols-3 gap-6">
 				<!-- Lista de productos -->
 				<section class="md:col-span-2 space-y-4">
-					<!-- Selector general -->
 					<div class="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between">
-						<label class="flex items-center gap-3 text-gray-700">
-							<input type="checkbox" class="w-5 h-5 accent-blue-600" :checked="allSelected" @change="toggleSelectAll">
-							<span class="font-medium">Seleccionar todos</span>
-						</label>
+						<span class="font-medium text-gray-700">Productos en tu carrito</span>
 						<div class="text-sm text-gray-500">{{ cartItems.length }} producto(s)</div>
 					</div>
 
 					<!-- Items -->
 					<div v-for="item in cartItems" :key="getItemKey(item)" class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
 						<div class="flex items-start gap-3">
-							<input type="checkbox" class="mt-2 w-5 h-5 accent-blue-600" :checked="isSelected(getItemKey(item))" @change="toggleSelect(getItemKey(item))">
 							<div class="flex flex-col items-start">
-								<img :src="item.product.main_image_url" alt="product image" class="w-16 h-16 md:w-20 md:h-20 object-cover rounded-md ring-1 ring-gray-200">
+								<img :src="item.product.main_image_url" :alt="item.product.name" class="w-16 h-16 md:w-20 md:h-20 object-cover rounded-md ring-1 ring-gray-200">
 								<span v-if="(item.product?.track_inventory !== false) && ((item.variant ? Number(item.variant.stock||0) : Number(item.product?.quantity||0)) > 0) && (item.variant ? Number(item.variant.alert||0) : Number(item.product?.alert||0)) > 0 && (item.variant ? Number(item.variant.stock||0) <= Number(item.variant.alert||0) : Number(item.product?.quantity||0) <= Number(item.product?.alert||0))" class="mt-1 inline-flex items-center gap-1 bg-yellow-100 text-yellow-800 text-[10px] font-semibold px-1.5 py-0.5 rounded ring-1 ring-yellow-300">
 									<span class="inline-block w-1.5 h-1.5 bg-yellow-500 rounded-full"></span>
 									¡Pocas unidades!
@@ -368,9 +334,9 @@ const deleteItem = () => {
 										<p v-if="promoPercent(item) > 0" class="text-xs text-gray-400 line-through">{{ formatCurrency(getBaseUnitPrice(item)) }}</p>
 									</div>
                                     <div class="flex items-center gap-2 min-w-[140px] shrink-0 ml-auto">
-                                        <button @click="decrement(item)" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 shrink-0">−</button>
-                                        <input :value="item.quantity" @change="onQtyInput(item, $event)" :min="1" :max="getMaxQty(item)" inputmode="numeric" class="w-16 h-9 text-center border rounded-md" />
-                                        <button @click="increment(item)" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800 shrink-0">＋</button>
+                                        <button @click="decrement(item)" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 shrink-0" aria-label="Reducir cantidad">−</button>
+                                        <input :value="item.quantity" @change="onQtyInput(item, $event)" :min="1" :max="getMaxQty(item)" :disabled="getMaxQty(item) === 0" inputmode="numeric" class="w-16 h-9 text-center border rounded-full disabled:bg-gray-100" aria-label="Cantidad" />
+                                        <button @click="increment(item)" :disabled="getMaxQty(item) <= item.quantity" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800 shrink-0 disabled:cursor-not-allowed disabled:opacity-35" aria-label="Aumentar cantidad">+</button>
                                     </div>
 								</div>
 								<div class="mt-2 flex items-center justify-between text-sm">
@@ -378,6 +344,7 @@ const deleteItem = () => {
 									<p class="font-semibold">{{ formatCurrency(getDisplayUnitPrice(item) * item.quantity) }}</p>
 								</div>
 								<p class="mt-1 text-xs text-gray-500">Máx {{ getMaxQty(item) >= 9999 ? 'sin límite' : getMaxQty(item) }} unidad(es)</p>
+								<p v-if="getMaxQty(item) === 0" class="mt-2 text-sm font-semibold text-red-600">Esta opción ya no está disponible. Elimínala para continuar.</p>
 							</div>
 						</div>
 					</div>
@@ -388,14 +355,15 @@ const deleteItem = () => {
 					<div class="bg-white rounded-xl border border-gray-200 p-6 sticky top-24">
 						<h2 class="text-lg font-semibold mb-4">Resumen</h2>
 						<div class="flex items-center justify-between text-gray-700">
-							<span>Total seleccionado</span>
-							<span class="text-xl font-bold">{{ formatCurrency(selectedTotal) }}</span>
+							<span>Total</span>
+							<span class="text-xl font-bold">{{ formatCurrency(totalPrice) }}</span>
 						</div>
 						<Link 
-                            :href="route('checkout.index', { store: store.slug })" 
-                            class="mt-5 inline-flex w-full items-center justify-center rounded-lg font-semibold py-3 transition-colors"
-                            :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''"
-                            :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}"
+                        :href="route('checkout.index', { store: store.slug })"
+                        :aria-disabled="hasUnavailableItems"
+                        :class="[catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : '', { 'pointer-events-none opacity-40': hasUnavailableItems }]"
+                        class="mt-5 inline-flex w-full items-center justify-center rounded-lg font-semibold py-3 transition-colors"
+                        :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}"
                         >
                             Continuar compra
                         </Link>
@@ -410,12 +378,13 @@ const deleteItem = () => {
 				<div class="flex items-center justify-between">
 					<div class="text-sm">
 						<p class="text-gray-500">Total</p>
-						<p class="text-xl font-bold">{{ formatCurrency(selectedTotal) }}</p>
+						<p class="text-xl font-bold">{{ formatCurrency(totalPrice) }}</p>
 					</div>
 					<Link 
                         :href="route('checkout.index', { store: store.slug })" 
+                        :aria-disabled="hasUnavailableItems"
                         class="inline-flex items-center justify-center px-5 py-3 rounded-full font-semibold shadow-md active:scale-95 transition-colors"
-                        :class="catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : ''"
+                        :class="[catalogUseDefault ? 'bg-blue-600 text-white hover:bg-blue-700' : '', { 'pointer-events-none opacity-40': hasUnavailableItems }]"
                         :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}"
                     >
                         Continuar compra

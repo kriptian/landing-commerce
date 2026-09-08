@@ -7,9 +7,11 @@ import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import VariantInventoryModal from './VariantInventoryModal.vue';
+import ProductAiAssistant from '@/Components/Admin/ProductAiAssistant.vue';
 
 const props = defineProps({
-    categories: Array, 
+    categories: Array,
+    aiEnabled: Boolean,
 });
 
 import { usePage } from '@inertiajs/vue3';
@@ -240,6 +242,14 @@ const form = useForm({
     variants: [], // Mantener para retrocompatibilidad
     variant_attributes: [],
 });
+
+const applyAiDraft = (draft) => {
+    Object.entries(draft).forEach(([field, value]) => {
+        if (Object.prototype.hasOwnProperty.call(form, field)) {
+            form[field] = value;
+        }
+    });
+};
 
 // --- Lógica de Variantes Jerárquicas (Nuevo sistema) ---
 const variantParents = ref([]); // Variantes principales (ej: "Color", "Talla")
@@ -909,7 +919,8 @@ const checkEnter = (e) => {
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
                         <form @submit.prevent="submit" @keydown.enter="checkEnter" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            
+                            <ProductAiAssistant :enabled="aiEnabled" @apply="applyAiDraft" />
+
                             <div>
                                 <div class="mb-4">
                                     <label for="name" class="block font-medium text-sm text-gray-700">Nombre</label>

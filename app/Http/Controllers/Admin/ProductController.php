@@ -68,6 +68,7 @@ class ProductController extends Controller
     {
         return Inertia::render('Products/Create', [
             'categories' => auth()->user()->store->categories()->whereNull('parent_id')->orderBy('name')->get(['id', 'name']),
+            'aiEnabled' => config('ai.enabled') && filled(config('ai.gemini.api_key')),
         ]);
     }
 

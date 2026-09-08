@@ -65,6 +65,16 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(120)->by('deployment-status:'.($request->user('web')?->id ?? $request->ip()));
         });
 
+        RateLimiter::for('product-ai', function (Request $request) {
+            $user = $request->user('web');
+            $storeId = $user?->store_id ?? 'unknown';
+
+            return [
+                Limit::perMinute(2)->by('product-ai-user:'.($user?->id ?? $request->ip())),
+                Limit::perDay(20)->by('product-ai-store:'.$storeId),
+            ];
+        });
+
         Vite::prefetch(concurrency: 3);
     }
 

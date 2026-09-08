@@ -2,12 +2,12 @@
 
 namespace App\Http\Middleware;
 
-use Illuminate\Http\Request;
-use Inertia\Middleware;
-use Illuminate\Support\Facades\Auth;
-use App\Models\Store;
 use App\Models\Product;
+use App\Models\Store;
 use App\Services\DeploymentAuthorizer;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -36,7 +36,13 @@ class HandleInertiaRequests extends Middleware
         // Incluir el token CSRF en las props compartidas para que Inertia lo tenga disponible
         // El token se actualiza automáticamente en el meta tag por Laravel en cada respuesta
         $csrfToken = csrf_token();
-        
+        $storeId = $this->storeIdFromRoute($request);
+        $customer = $request->user('customer');
+
+        if (! $storeId || (int) $customer?->store_id !== $storeId) {
+            $customer = null;
+        }
+
         return array_merge(parent::share($request), [
             'csrf_token' => $csrfToken,
             'auth' => [
@@ -44,44 +50,49 @@ class HandleInertiaRequests extends Middleware
                 'user' => Auth::guard('web')->user(),
                 // Enviamos un arreglo plano de permisos (directos y vía roles)
                 // Solo para usuarios del guard 'web' (admin), no para customers
-                'permissions' => (function () use ($request) {
+                'permissions' => (function () {
                     $user = Auth::guard('web')->user(); // Guard 'web' explícito
-                    if (!$user || !method_exists($user, 'getAllPermissions')) {
+                    if (! $user || ! method_exists($user, 'getAllPermissions')) {
                         return [];
                     }
+
                     return $user->getAllPermissions()->pluck('name')->values()->toArray();
                 })(),
                 // Opcional: roles por nombre para debug UI si se requiere
-                'roles' => (function () use ($request) {
+                'roles' => (function () {
                     $user = Auth::guard('web')->user(); // Guard 'web' explícito
-                    if (!$user || !method_exists($user, 'roles')) {
+                    if (! $user || ! method_exists($user, 'roles')) {
                         return [];
                     }
+
                     return $user->roles->pluck('name')->values()->toArray();
                 })(),
                 // Flag explícito para súper admin real (por lista de correos)
-                'isSuperAdmin' => (function () use ($request) {
+                'isSuperAdmin' => (function () {
                     $user = Auth::guard('web')->user(); // Guard 'web' explícito
-                    if (! $user) return false;
+                    if (! $user) {
+                        return false;
+                    }
                     $single = (string) config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
                     $list = (array) config('app.super_admin_emails', []);
-                    $allowed = collect([$single])->filter()->merge($list)->map(fn($e) => strtolower(trim($e)))->unique()->all();
+                    $allowed = collect([$single])->filter()->merge($list)->map(fn ($e) => strtolower(trim($e)))->unique()->all();
+
                     return in_array(strtolower($user->email), $allowed, true);
                 })(),
                 'canDeploy' => app(DeploymentAuthorizer::class)->allows(Auth::guard('web')->user(), $request),
             ],
             'customer' => [
-                'user' => $request->user('customer'),
-                'defaultAddress' => (function () use ($request) {
-                    $customer = $request->user('customer');
-                    if (!$customer) {
+                'user' => $customer,
+                'defaultAddress' => (function () use ($customer) {
+                    if (! $customer) {
                         return null;
                     }
                     // Cargar la relación defaultAddress
                     $defaultAddress = $customer->addresses()->where('is_default', true)->first();
-                    if (!$defaultAddress) {
+                    if (! $defaultAddress) {
                         return null;
                     }
+
                     return [
                         'id' => $defaultAddress->id,
                         'label' => $defaultAddress->label,
@@ -94,11 +105,11 @@ class HandleInertiaRequests extends Middleware
                         'is_default' => $defaultAddress->is_default,
                     ];
                 })(),
-                'notifications' => (function () use ($request) {
-                    $customer = $request->user('customer');
-                    if (!$customer) {
+                'notifications' => (function () use ($customer) {
+                    if (! $customer) {
                         return [];
                     }
+
                     return $customer->notifications()
                         ->where('is_read', false)
                         ->orderBy('created_at', 'desc')
@@ -116,11 +127,11 @@ class HandleInertiaRequests extends Middleware
                         })
                         ->toArray();
                 })(),
-                'notificationsCount' => (function () use ($request) {
-                    $customer = $request->user('customer');
-                    if (!$customer) {
+                'notificationsCount' => (function () use ($customer) {
+                    if (! $customer) {
                         return 0;
                     }
+
                     return $customer->notifications()->where('is_read', false)->count();
                 })(),
             ],
@@ -140,7 +151,7 @@ class HandleInertiaRequests extends Middleware
                         $storeId = Store::where('slug', $storeParam)->value('id');
                     }
 
-                    if (!$storeId) {
+                    if (! $storeId) {
                         return 0; // fuera del catálogo público no mostramos conteo global
                     }
 
@@ -157,9 +168,13 @@ class HandleInertiaRequests extends Middleware
 
                     // Invitado: filtrar por productos de la tienda actual
                     $sessionCart = $request->session()->get('guest_cart', []);
-                    if (empty($sessionCart)) return 0;
+                    if (empty($sessionCart)) {
+                        return 0;
+                    }
                     // Si el item ya trae store_id, lo usamos directo; si no, hacemos fallback a mapear por producto
-                    $needsLookup = collect($sessionCart)->contains(function ($row) { return !isset($row['store_id']); });
+                    $needsLookup = collect($sessionCart)->contains(function ($row) {
+                        return ! isset($row['store_id']);
+                    });
                     $idToStore = [];
                     if ($needsLookup) {
                         $productIds = collect($sessionCart)->pluck('product_id')->filter()->unique()->values();
@@ -167,21 +182,40 @@ class HandleInertiaRequests extends Middleware
                             $idToStore = Product::whereIn('id', $productIds)->pluck('store_id', 'id');
                         }
                     }
+
                     return collect($sessionCart)->sum(function ($row) use ($idToStore, $storeId) {
-                        $rowStoreId = isset($row['store_id']) ? (int) $row['store_id'] : (int) ($idToStore[(int)($row['product_id'] ?? 0)] ?? 0);
-                        if ($rowStoreId !== (int) $storeId) return 0;
+                        $rowStoreId = isset($row['store_id']) ? (int) $row['store_id'] : (int) ($idToStore[(int) ($row['product_id'] ?? 0)] ?? 0);
+                        if ($rowStoreId !== (int) $storeId) {
+                            return 0;
+                        }
+
                         return (int) ($row['quantity'] ?? 0);
                     });
                 })(),
             ],
-            
+
             // ===== AQUÍ VA LA MAGIA NUEVA =====
             'adminNotifications' => [
-                'newOrdersCount' => Auth::check() && $request->user()->store 
-                    ? $request->user()->store->orders()->where('status', 'recibido')->count() 
+                'newOrdersCount' => Auth::check() && $request->user()->store
+                    ? $request->user()->store->orders()->where('status', 'recibido')->count()
                     : 0,
             ],
             // ===================================
         ]);
+    }
+
+    private function storeIdFromRoute(Request $request): ?int
+    {
+        $store = $request->route('store');
+
+        if ($store instanceof Store) {
+            return (int) $store->id;
+        }
+
+        if (is_string($store) || is_numeric($store)) {
+            return Store::query()->where('slug', $store)->value('id');
+        }
+
+        return null;
     }
 }

@@ -884,22 +884,26 @@ const getVariantDisplayPrices = (variant) => {
         </template>
     </Head>
 
-    <header class="bg-white shadow-sm sticky top-0 z-50">
-        <nav class="container mx-auto px-6 py-4 flex items-center justify-between gap-2">
+    <header class="bg-white/95 border-b border-black/5 backdrop-blur-xl sticky top-0 z-50">
+        <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 min-w-0 flex-1">
-                <Link :href="route('catalogo.index', { store: store.slug })" class="shrink-0" title="Ir al catálogo">
-                    <img v-if="store.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-10 w-10 rounded-full object-cover">
+                <Link :href="route('catalogo.index', { store: store.slug })" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 hover:bg-slate-50" aria-label="Volver al catálogo">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 18-6-6 6-6" /></svg>
                 </Link>
-                <h1 class="truncate text-lg sm:text-2xl font-bold text-gray-900">{{ store.name }}</h1>
+                <img v-if="store.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-10 w-10 rounded-xl object-cover ring-1 ring-black/10">
+                <h1 class="truncate text-base sm:text-lg font-extrabold tracking-tight text-gray-900">{{ store.name }}</h1>
             </div>
-            <div class="hidden md:flex items-center space-x-4">
-            </div>
+            <Link :href="route('cart.index', { store: store.slug })" class="relative inline-flex h-10 w-10 items-center justify-center rounded-full hover:bg-slate-100" aria-label="Carrito de compras">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 4.5h2l1.6 9.1a2 2 0 0 0 2 1.65h7.9a2 2 0 0 0 1.95-1.55L20 7.5H6m3.5 11.25h.01m6.49 0h.01" /></svg>
+                <span v-if="$page.props.cart.count > 0" class="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-red-600 px-1 text-center text-[10px] font-bold leading-4 text-white">{{ $page.props.cart.count > 99 ? '99+' : $page.props.cart.count }}</span>
+            </Link>
         </nav>
     </header>
-    <main class="container mx-auto px-6 py-12 min-h-screen" :style="bodyStyleObj">
+    <main class="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 sm:py-10 lg:px-8" :style="bodyStyleObj">
+        <div class="mx-auto max-w-7xl">
         
         
-        <section class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-start">
+        <section class="grid grid-cols-1 items-start gap-7 lg:grid-cols-[minmax(0,1.08fr)_minmax(22rem,.92fr)] lg:gap-12">
             <div class="gallery relative">
                 <button
                     type="button"
@@ -923,9 +927,9 @@ const getVariantDisplayPrices = (variant) => {
                     :images="allProductImages"
                 />
             </div>
-            <div class="info flex flex-col space-y-4">
+            <div class="info flex flex-col space-y-4 rounded-[2rem] border border-black/[0.06] bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:p-8 lg:sticky lg:top-24">
                 <div class="flex items-center gap-2">
-                    <h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 flex-1">{{ product.name }}</h1>
+                    <h1 class="text-3xl md:text-4xl font-extrabold tracking-[-0.035em] leading-tight text-gray-900 flex-1">{{ product.name }}</h1>
                     <!-- Badge en móvil junto al título para mejor jerarquía visual -->
                     <span v-if="stockBadge" class="md:hidden inline-flex items-center rounded text-white font-bold px-2 py-1 text-xs" :class="stockBadgeClass">{{ stockBadge }}</span>
                 </div>
@@ -951,7 +955,7 @@ const getVariantDisplayPrices = (variant) => {
                                     :key="`${key}:${value}`"
                                     :dusk="`variant-option-${keyIndex}-${valueIndex}`"
                                     type="button"
-                                    class="px-3 py-1 rounded border transition-all"
+                                    class="min-h-11 px-4 py-2 rounded-full border font-semibold transition-all"
                                     :class="{
                                         'bg-white text-gray-800 border-gray-300 hover:bg-gray-50': selectedOptions[key] !== value && isOptionAllowed(key, value) && catalogUseDefault,
                                         'bg-blue-600 text-white border-blue-600': selectedOptions[key] === value && catalogUseDefault && isOptionAllowed(key, value),
@@ -974,9 +978,9 @@ const getVariantDisplayPrices = (variant) => {
                         <span v-if="stockBadge" class="hidden md:inline-flex items-center rounded text-white font-bold px-2 py-1 text-xs md:text-sm" :class="stockBadgeClass">{{ stockBadge }}</span>
                         <label class="font-semibold">Cantidad:</label>
                         <div class="flex items-center gap-2">
-                            <button type="button" @click="decreaseQuantity" class="w-9 h-9 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200">−</button>
-                            <input type="number" v-model.number="selectedQuantity" :min="1" :max="isFinite(displayStock) ? displayStock : undefined" class="w-16 h-9 text-center border rounded-md" :style="inputStyleObj" />
-                            <button type="button" @click="increaseQuantity" class="w-9 h-9 rounded-full bg-gray-900 text-white hover:bg-gray-800">＋</button>
+                            <button type="button" @click="decreaseQuantity" class="w-10 h-10 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200" aria-label="Reducir cantidad">−</button>
+                            <input type="number" v-model.number="selectedQuantity" :min="1" :max="isFinite(displayStock) ? displayStock : undefined" class="w-16 h-10 text-center border rounded-full" aria-label="Cantidad" :style="inputStyleObj" />
+                            <button type="button" @click="increaseQuantity" class="w-10 h-10 rounded-full bg-gray-900 text-white hover:bg-gray-800" aria-label="Aumentar cantidad">+</button>
                         </div>
                 <p v-if="(selectedVariant || optionKeys.length == 0) && isInventoryTracked" class="ml-2 text-xs md:text-sm text-gray-600 whitespace-nowrap shrink-0">{{ isFinite(displayStock) ? displayStock : '∞' }} en stock</p>
                     </div>
@@ -985,7 +989,7 @@ const getVariantDisplayPrices = (variant) => {
                         dusk="add-to-cart"
                         @click="addToCart"
                         :disabled="(requiresVariantSelection && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
-                        class="w-full mt-6 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-300 disabled:text-gray-500"
+                        class="w-full mt-6 font-bold min-h-12 py-3 px-6 rounded-full text-center transition duration-300 disabled:bg-gray-300 disabled:text-gray-500"
                         :class="catalogUseDefault ? 'bg-blue-600/30 backdrop-blur-sm text-blue-700 enabled:hover:bg-blue-600/40 border-2 border-blue-600/50' : 'text-white border-2'"
                         :style="!catalogUseDefault && !(optionKeys.length > 0 && !selectedVariant) && !(isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock)) ? purchaseButtonSecondaryStyle : {}"
                     >
@@ -996,7 +1000,7 @@ const getVariantDisplayPrices = (variant) => {
                         dusk="product-buy-now"
                         @click="buyNow"
                         :disabled="(requiresVariantSelection && !selectedVariant) || (isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock))"
-                        class="w-full mt-3 font-bold py-3 px-6 rounded-lg text-center transition duration-300 disabled:bg-gray-400 enabled:hover:opacity-90 buy-now-button"
+                        class="w-full mt-3 font-bold min-h-12 py-3 px-6 rounded-full text-center transition duration-300 disabled:bg-gray-400 enabled:hover:opacity-90"
                         :class="catalogUseDefault ? 'bg-blue-600 text-white enabled:hover:bg-blue-700' : 'text-white'"
                         :style="!catalogUseDefault && !(optionKeys.length > 0 && !selectedVariant) && !(isInventoryTracked && (displayStock === 0 || selectedQuantity > displayStock)) ? purchaseButtonStyle : {}"
                     >
@@ -1013,7 +1017,7 @@ const getVariantDisplayPrices = (variant) => {
             </div>
         </section>
 
-        <section v-if="product.long_description" class="long-description mt-12 md:mt-16 border-t pt-8">
+        <section v-if="product.long_description" class="long-description mt-10 rounded-[2rem] border border-black/[0.06] bg-white p-6 sm:p-8">
             <h2 class="text-2xl font-bold mb-4">Descripción</h2>
             <div class="prose max-w-none text-gray-600">
                 <p>{{ product.long_description }}</p> 
@@ -1026,7 +1030,7 @@ const getVariantDisplayPrices = (variant) => {
             <div class="flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
                 <Link v-for="rp in related" :key="rp.id" :href="route('catalogo.show', { store: store.slug, product: rp.id })" class="group block border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition shrink-0 snap-start min-w-[160px] sm:min-w-[190px] md:min-w-[220px]">
                     <div class="relative">
-                        <img v-if="rp.main_image_url" :src="rp.main_image_url" alt="Imagen del producto" class="w-full h-36 sm:h-44 md:h-48 object-cover transform group-hover:scale-105 transition duration-300">
+                        <img v-if="rp.main_image_url" :src="rp.main_image_url" :alt="rp.name" loading="lazy" class="w-full h-36 sm:h-44 md:h-48 object-cover transform group-hover:scale-105 transition duration-300">
                         <span v-if="(rp.track_inventory !== false) && Number(rp.quantity || 0) <= 0" class="absolute top-3 left-3 bg-red-600 text-white text-[10px] font-semibold px-2 py-1 rounded">Agotado</span>
                     </div>
                     <div class="p-3 sm:p-4 flex flex-col gap-2">
@@ -1055,7 +1059,7 @@ const getVariantDisplayPrices = (variant) => {
             <div class="flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2">
                 <Link v-for="sp in suggested" :key="sp.id" :href="route('catalogo.show', { store: store.slug, product: sp.id })" class="group block border rounded-xl shadow-sm overflow-hidden bg-white hover:shadow-md transition shrink-0 snap-start min-w-[160px] sm:min-w-[190px] md:min-w-[220px]">
                     <div class="relative">
-                        <img v-if="sp.main_image_url" :src="sp.main_image_url" alt="Imagen del producto" class="w-full h-36 sm:h-44 md:h-48 object-cover transform group-hover:scale-105 transition duration-300">
+                        <img v-if="sp.main_image_url" :src="sp.main_image_url" :alt="sp.name" loading="lazy" class="w-full h-36 sm:h-44 md:h-48 object-cover transform group-hover:scale-105 transition duration-300">
                         <span v-if="(sp.track_inventory !== false) && Number(sp.quantity || 0) <= 0" class="absolute top-3 left-3 bg-red-600 text-white text-[10px] font-semibold px-2 py-1 rounded">Agotado</span>
                     </div>
                     <div class="p-3 sm:p-4 flex flex-col gap-2">
@@ -1077,6 +1081,7 @@ const getVariantDisplayPrices = (variant) => {
                 </Link>
             </div>
         </section>
+        </div>
 
     </main>
 
@@ -1184,33 +1189,7 @@ const getVariantDisplayPrices = (variant) => {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Animación de salto vertical y pulso para el botón "Comprar Ahora" */
-.buy-now-button:not(:disabled) {
-    animation: bounce-pulse 2s ease-in-out infinite;
-}
-
-@keyframes bounce-pulse {
-    0%, 100% {
-        transform: translateY(0) scale(1);
-        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7);
-    }
-    25% {
-        transform: translateY(-3px) scale(1.02);
-        box-shadow: 0 0 0 8px rgba(37, 99, 235, 0);
-    }
-    50% {
-        transform: translateY(0) scale(1.02);
-        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
-    }
-    75% {
-        transform: translateY(-2px) scale(1.01);
-        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
-    }
-}
-
-.buy-now-button:not(:disabled):hover {
-    animation: none;
-    transform: translateY(0) scale(1.05);
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.3);
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0.01ms !important; }
 }
 </style>

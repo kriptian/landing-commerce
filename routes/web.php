@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\PdfCatalogBuilderController;
 // Controladores de Autenticación y Perfil
 use App\Http\Controllers\Admin\PhysicalSaleController;
+use App\Http\Controllers\Admin\ProductAiController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
 // ===== AQUÍ ESTÁN LOS CAMBIOS =====
 // Controladores del Panel de Admin
@@ -150,6 +151,7 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
             Route::resource('categories', CategoryController::class)->except('show');
             Route::post('categories/{parentCategory}/subcategories', [CategoryController::class, 'storeSubcategory'])->name('categories.storeSubcategory');
             Route::get('categories/{category}/children', [CategoryController::class, 'children'])->name('categories.children');
+            Route::post('products/ai-draft', [ProductAiController::class, 'store'])->middleware('throttle:product-ai')->name('products.ai-draft');
             Route::resource('products', AdminProductController::class);
             Route::put('products-store/promo', [AdminProductController::class, 'updateStorePromo'])->name('products.store_promo');
         });

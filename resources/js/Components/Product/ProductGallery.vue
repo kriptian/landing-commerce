@@ -160,32 +160,34 @@ watch(showAll, async (open) => {
 
 <template>
     <div class="gallery-container">
-        <div class="main-image">
-            <img :src="activeImage" alt="Imagen principal del producto" />
-        </div>
+        <button type="button" class="main-image" aria-label="Ampliar imagen del producto" @click="openAll">
+            <img :src="activeImage" alt="Imagen principal del producto" decoding="async" />
+        </button>
         <div class="thumbnail-strip">
-            <div
+            <button
                 v-for="image in visibleThumbnails"
                 :key="image.id" class="thumbnail"
+                type="button"
                 @click="selectImage(image.path)"      
                 :class="{ 'active': activeImage === image.path }"
+                :aria-label="`Ver imagen ${image.id}`"
             >
-                <img :src="image.path" alt="Miniatura del producto" />
-            </div>
+                <img :src="image.path" alt="" loading="lazy" />
+            </button>
 
-            <div v-if="hiddenThumbnails.length > 0" class="more-tile" @click="openAll">
+            <button v-if="hiddenThumbnails.length > 0" type="button" class="more-tile" aria-label="Ver todas las imágenes" @click="openAll">
                 +{{ hiddenThumbnails.length }}
-            </div>
+            </button>
         </div>
 
         <div v-if="showAll" class="modal-backdrop" @click.self="closeAll">
-            <div class="modal-content">
-                <button class="close-btn" type="button" @click="closeAll">×</button>
+            <div class="modal-content" role="dialog" aria-modal="true" aria-label="Galería del producto">
+                <button class="close-btn" type="button" aria-label="Cerrar galería" @click="closeAll">×</button>
 
                 <div class="carousel">
-                    <button class="nav prev" type="button" @click.stop="prev">‹</button>
+                    <button class="nav prev" type="button" aria-label="Imagen anterior" @click.stop="prev">‹</button>
                     <img :src="allImages[currentIndex]?.path" alt="Imagen del carrusel" />
-                    <button class="nav next" type="button" @click.stop="next">›</button>
+                    <button class="nav next" type="button" aria-label="Imagen siguiente" @click.stop="next">›</button>
                 </div>
 
                 <div class="thumbs-wrapper" :class="{ 'has-overflow': hasThumbsOverflow }">
@@ -209,10 +211,19 @@ watch(showAll, async (open) => {
 </template>
 
 <style scoped>
+.main-image {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 24px;
+    background: #f1f5f9;
+}
 .main-image img {
     width: 100%;
-    border-radius: 8px;
-    border: 1px solid #eee;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    border-radius: 24px;
+    border: 1px solid #e5e7eb;
 }
 .thumbnail-strip {
     display: flex;
