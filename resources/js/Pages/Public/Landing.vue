@@ -14,16 +14,16 @@ const features = [
     <Head title="Tu tienda lista para vender" />
     <div class="min-h-screen bg-white text-slate-950">
         <header class="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
-            <nav class="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8" aria-label="Navegacion principal">
-                <a href="#inicio" class="flex items-center"><img src="/images/New_Logo_ondgtl.png?v=5" alt="Ondigital Solution" class="h-14 w-auto object-contain" /></a>
+            <nav class="mx-auto flex h-20 max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8" aria-label="Navegacion principal">
+                <a href="#inicio" class="flex items-center"><img src="/images/New_Logo_ondgtl.png?v=5" alt="Ondigital Solution" class="h-12 w-auto object-contain sm:h-14" /></a>
                 <div class="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
                     <a href="#como-funciona" class="hover:text-indigo-700">Como funciona</a>
                     <a href="#planes" class="hover:text-indigo-700">Planes</a>
                     <a :href="whatsapp" target="_blank" rel="noopener" class="hover:text-indigo-700">Hablar con nosotros</a>
                 </div>
-                <div class="flex items-center gap-2">
-                    <Link :href="route('login')" class="hidden px-3 py-2 text-sm font-bold text-slate-700 sm:inline-flex">Ingresar</Link>
-                    <Link :href="route('register')" class="ui-primary-button">Crear tienda</Link>
+                <div class="flex items-center gap-1.5 sm:gap-2">
+                    <Link :href="route('login')" class="inline-flex min-h-10 items-center justify-center rounded-xl px-2.5 text-xs font-extrabold text-slate-700 transition hover:bg-slate-100 sm:px-3 sm:text-sm">Ingresar</Link>
+                    <Link :href="route('register')" class="ui-primary-button px-3 text-xs sm:px-4 sm:text-sm">Crear tienda</Link>
                 </div>
             </nav>
         </header>
