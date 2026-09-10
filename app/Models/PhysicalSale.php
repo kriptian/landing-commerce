@@ -20,6 +20,9 @@ class PhysicalSale extends Model
         'payment_method',
         'notes',
         'delivery_cost',
+        'amount_tendered',
+        'change_due',
+        'idempotency_key',
     ];
 
     protected $casts = [
@@ -28,6 +31,8 @@ class PhysicalSale extends Model
         'discount' => 'decimal:2',
         'total' => 'decimal:2',
         'delivery_cost' => 'decimal:2',
+        'amount_tendered' => 'decimal:2',
+        'change_due' => 'decimal:2',
     ];
 
     public function store()
@@ -45,4 +50,3 @@ class PhysicalSale extends Model
         return $this->hasMany(PhysicalSaleItem::class);
     }
 }
-

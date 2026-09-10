@@ -1,9 +1,10 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
 import Pagination from '@/Components/Pagination.vue';
-import BarChart from '@/Components/BarChart.vue';
-import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     orders: Object,
@@ -12,20 +13,18 @@ const props = defineProps({
     chartData: Object,
     physicalSales: Object,
     physicalSalesStats: Object,
-    physicalSales: Object,
-    physicalSalesStats: Object,
     physicalSalesFilters: Object,
     expensesList: Object,
 });
 
-
-const reportType = ref('digital'); // 'digital' o 'physical'
-const activeTab = ref('chart');
-const activePhysicalTab = ref('sales'); // 'sales' o 'expenses'
+const page = usePage();
+const reportType = ref(page.url.includes('type=physical') ? 'physical' : 'digital');
+const activeTab = ref('activity');
+const activePhysicalTab = ref('sales');
 
 const filterForm = useForm({
-    start_date: props.filters.start_date || '',
-    end_date: props.filters.end_date || '',
+    start_date: props.filters?.start_date || formatYMD(getRangeDates('last30')[0]),
+    end_date: props.filters?.end_date || formatYMD(getRangeDates('last30')[1]),
 });
 
 const physicalSalesFilterForm = useForm({
@@ -34,808 +33,183 @@ const physicalSalesFilterForm = useForm({
     search: props.physicalSalesFilters?.search || '',
 });
 
-const applyFilters = () => {
-    if (reportType.value === 'digital') {
-        filterForm.get(route('admin.reports.index'), {
-            preserveState: true,
-            preserveScroll: true,
-        });
-    } else {
-        physicalSalesFilterForm.get(route('admin.reports.index', { type: 'physical' }), {
-            preserveState: true,
-            preserveScroll: true,
-        });
+function formatYMD(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getRangeDates(range) {
+    const today = new Date();
+    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    let start = new Date(end);
+
+    if (range === 'last7') start.setDate(start.getDate() - 6);
+    if (range === 'last30') start.setDate(start.getDate() - 29);
+    if (range === 'thisMonth') start = new Date(end.getFullYear(), end.getMonth(), 1);
+    if (range === 'lastMonth') {
+        start = new Date(end.getFullYear(), end.getMonth() - 1, 1);
+        return [start, new Date(end.getFullYear(), end.getMonth(), 0)];
     }
-};
+    return [start, end];
+}
 
-// Rangos rápidos de fechas
-const formatYMD = (date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-};
-
-const getToday = () => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+const applyFilters = () => {
+    if (reportType.value === 'physical') {
+        physicalSalesFilterForm.get(route('admin.reports.index', { type: 'physical' }), { preserveState: true, preserveScroll: true });
+        return;
+    }
+    filterForm.get(route('admin.reports.index'), { preserveState: true, preserveScroll: true });
 };
 
 const setQuickRange = (range) => {
-    const today = getToday();
-    let start, end;
-    switch (range) {
-        case 'today':
-            start = today;
-            end = today;
-            break;
-        case 'last7':
-            start = new Date(today);
-            start.setDate(start.getDate() - 6);
-            end = today;
-            break;
-        case 'last30':
-            start = new Date(today);
-            start.setDate(start.getDate() - 29);
-            end = today;
-            break;
-        case 'thisMonth':
-            start = new Date(today.getFullYear(), today.getMonth(), 1);
-            end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-            break;
-        case 'lastMonth':
-            start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-            end = new Date(today.getFullYear(), today.getMonth(), 0);
-            break;
-        default:
-            return;
-    }
-    
-    // Determine which form to update based on reportType
-    const activeForm = reportType.value === 'digital' ? filterForm : physicalSalesFilterForm;
-    activeForm.start_date = formatYMD(start);
-    activeForm.end_date = formatYMD(end);
+    if (!range) return;
+    const [start, end] = getRangeDates(range);
+    const form = reportType.value === 'physical' ? physicalSalesFilterForm : filterForm;
+    form.start_date = formatYMD(start);
+    form.end_date = formatYMD(end);
     applyFilters();
 };
 
-const isRangeSelected = (range) => {
-    // Determine which form to check
-    const activeForm = reportType.value === 'digital' ? filterForm : physicalSalesFilterForm;
-    const sd = activeForm.start_date;
-    const ed = activeForm.end_date;
-    
-    if (!sd || !ed) return false;
-    const today = getToday();
-    const ymd = (d) => formatYMD(d);
-    const equals = (a, b) => a === b;
-    switch (range) {
-        case 'today':
-            return equals(sd, ymd(today)) && equals(ed, ymd(today));
-        case 'last7': {
-            const start = new Date(today);
-            start.setDate(start.getDate() - 6);
-            return equals(sd, ymd(start)) && equals(ed, ymd(today));
-        }
-        case 'last30': {
-            const start = new Date(today);
-            start.setDate(start.getDate() - 29);
-            return equals(sd, ymd(start)) && equals(ed, ymd(today));
-        }
-        case 'thisMonth': {
-            const start = new Date(today.getFullYear(), today.getMonth(), 1);
-            const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-            return equals(sd, ymd(start)) && equals(ed, ymd(end));
-        }
-        case 'lastMonth': {
-            const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-            const end = new Date(today.getFullYear(), today.getMonth(), 0);
-            return equals(sd, ymd(start)) && equals(ed, ymd(end));
-        }
-        default:
-            return false;
-    }
-};
-
-const formattedChartData = computed(() => {
-    return {
-        labels: props.chartData.labels,
-        datasets: [
-            {
-                label: 'Entregadas',
-                backgroundColor: '#10B981',
-                borderColor: '#059669',
-                borderWidth: 1,
-                borderRadius: 4,
-                data: props.chartData.delivered,
-                barPercentage: 0.6,
-                categoryPercentage: 0.6,
-            },
-            {
-                label: 'Canceladas',
-                backgroundColor: '#EF4444',
-                borderColor: '#DC2626',
-                borderWidth: 1,
-                borderRadius: 4,
-                data: props.chartData.cancelled,
-                barPercentage: 0.6,
-                categoryPercentage: 0.6,
-            },
-        ],
-    };
+const activeRange = computed(() => {
+    const form = reportType.value === 'physical' ? physicalSalesFilterForm : filterForm;
+    return ['today', 'last7', 'last30', 'thisMonth', 'lastMonth'].find((range) => {
+        const [start, end] = getRangeDates(range);
+        return form.start_date === formatYMD(start) && form.end_date === formatYMD(end);
+    }) || '';
 });
 
-const formatDate = (datetime) => {
-    if (!datetime) return '';
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(datetime).toLocaleDateString('es-CO', options);
+const dailyActivity = computed(() => {
+    const labels = props.chartData?.labels || [];
+    return labels.map((label, index) => ({
+        date: label,
+        delivered: Number(props.chartData?.delivered?.[index] || 0),
+        cancelled: Number(props.chartData?.cancelled?.[index] || 0),
+    }));
+});
+
+const maxDailyActivity = computed(() => Math.max(1, ...dailyActivity.value.map((day) => day.delivered + day.cancelled)));
+const activityWidth = (value) => `${Math.max(value ? 7 : 0, (value / maxDailyActivity.value) * 100)}%`;
+
+const formatCurrency = (value) => new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+}).format(Number(value || 0));
+
+const formatDate = (value, withTime = false) => {
+    if (!value) return '';
+    return new Date(value).toLocaleString('es-CO', withTime
+        ? { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+        : { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
-const formatDateShort = (datetime) => {
-    if (!datetime) return '';
-    return new Date(datetime).toLocaleString('es-CO', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-};
+const formatActivityDate = (value) => new Date(`${value}T12:00:00`).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
+const statusLabel = (status) => ({ recibido: 'Recibido', en_preparacion: 'En preparacion', despachado: 'Despachado', entregado: 'Entregado', cancelado: 'Cancelado' }[status] || status);
+const statusClass = (status) => ({
+    entregado: 'bg-emerald-50 text-emerald-700',
+    recibido: 'bg-amber-50 text-amber-700',
+    en_preparacion: 'bg-blue-50 text-blue-700',
+    despachado: 'bg-violet-50 text-violet-700',
+    cancelado: 'bg-rose-50 text-rose-700',
+}[status] || 'bg-slate-100 text-slate-700');
 
-const formatCurrency = (value) => {
-    return new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(value);
-};
-
-// Calcular ganancia de una venta individual
 const calculateSaleProfit = (sale) => {
-    if (!sale || !sale.items) return '-';
-    
-    let totalProfit = 0;
-    let hasCost = true; // Flag para saber si al menos un item tiene costo
-
-    for (const item of sale.items) {
-        let purchasePrice = 0;
-        
-        // Prioridad: Variante > Producto
-        if (item.variant && item.variant.purchase_price > 0) {
-            purchasePrice = parseFloat(item.variant.purchase_price);
-        } else if (item.product && item.product.purchase_price > 0) {
-            purchasePrice = parseFloat(item.product.purchase_price);
-        }
-        
-        // Si hay precio de compra, calculamos
-        if (purchasePrice > 0) {
-            const profit = (parseFloat(item.unit_price) - purchasePrice) * item.quantity;
-            totalProfit += profit;
-        } else {
-            // Si falta el costo de algún producto, ¿qué mostramos?
-            // El usuario pidió mostrar "-" si no hay precio de compra.
-            // Si al menos UN producto no tiene costo, la ganancia total es incierta.
-            // Pero podríamos sumar lo que hay. 
-            // La instrucción decía: "Si el precio de compra no está disponible o es cero, se debe mostrar un '-' en su lugar (referido a la columna o fila)".
-            // Asumiremos que si hay items sin costo, mostramos "-" para alertar.
-            // O podríamos ser permisivos. 
-            // Siguiendo la lógica estricta:
-            hasCost = false;
-        }
-    }
-
-    if (!hasCost) return '-';
-    return formatCurrency(totalProfit);
+    if (!sale?.items?.length) return '-';
+    let total = 0;
+    let hasAllCosts = true;
+    sale.items.forEach((item) => {
+        const cost = Number(item.purchase_price ?? item.variant?.purchase_price ?? item.product?.purchase_price ?? 0);
+        if (cost <= 0) hasAllCosts = false;
+        total += (Number(item.unit_price) - cost) * Number(item.quantity);
+    });
+    return hasAllCosts ? formatCurrency(total) : '-';
 };
 
-// Calcular descuento total (Manual + Suma de descuentos por item)
 const calculateTotalDiscount = (sale) => {
-    let totalDiscount = parseFloat(sale.discount || 0);
-
-    if (sale.items) {
-        sale.items.forEach(item => {
-            const originalPrice = parseFloat(item.original_price || 0);
-            const unitPrice = parseFloat(item.unit_price || 0);
-            
-            // Si hay precio original y es mayor al vendido, la diferencia es descuento
-            if (originalPrice > unitPrice) {
-                totalDiscount += (originalPrice - unitPrice) * item.quantity;
-            }
-        });
-    }
-
-    return formatCurrency(totalDiscount);
-};
-
-// Scroll lateral con degradados para la tabla de órdenes
-const scrollBoxRef = ref(null);
-const showLeftFade = ref(false);
-const showRightFade = ref(false);
-const updateFades = () => {
-    const el = scrollBoxRef.value;
-    if (!el) return;
-    const maxScrollLeft = el.scrollWidth - el.clientWidth;
-    const left = el.scrollLeft || 0;
-    showLeftFade.value = left > 0;
-    showRightFade.value = left < (maxScrollLeft - 1);
-};
-const page = usePage();
-
-// Sincronizar reportType con el parámetro 'type' de la URL cuando cambia
-watch(() => page.url, (newUrl) => {
-    const url = new URL(newUrl, window.location.origin);
-    const type = url.searchParams.get('type');
-    if (type === 'physical') {
-        reportType.value = 'physical';
-    } else {
-        reportType.value = 'digital';
-    }
-}, { immediate: true });
-
-onMounted(() => {
-    // Check if 'type' query param exists and switch tab
-    const urlParams = new URLSearchParams(window.location.search);
-    const type = urlParams.get('type');
-    if (type === 'physical') {
-        reportType.value = 'physical';
-    } else {
-        reportType.value = 'digital';
-    }
-
-    nextTick(() => updateFades());
-    scrollBoxRef.value?.addEventListener('scroll', updateFades, { passive: true });
-    window.addEventListener('resize', updateFades);
-});
-onBeforeUnmount(() => {
-    scrollBoxRef.value?.removeEventListener('scroll', updateFades);
-    window.removeEventListener('resize', updateFades);
-});
-
-// Redimensionable: primera columna
-const REP_COL_KEY = 'rep_firstcol_w_px';
-const FIRST_MIN = 60;
-const FIRST_MAX = 320;
-const firstColWidth = ref(Number(localStorage.getItem(REP_COL_KEY)) || 160);
-const firstColStyle = computed(() => ({
-    width: firstColWidth.value + 'px',
-    minWidth: firstColWidth.value + 'px',
-    maxWidth: firstColWidth.value + 'px',
-}));
-let startX = 0;
-let startW = 0;
-const onResizeMove = (e) => {
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const next = Math.max(FIRST_MIN, Math.min(FIRST_MAX, startW + (clientX - startX)));
-    firstColWidth.value = next;
-};
-const stopResize = () => {
-    document.removeEventListener('mousemove', onResizeMove);
-    document.removeEventListener('mouseup', stopResize);
-    document.removeEventListener('touchmove', onResizeMove);
-    document.removeEventListener('touchend', stopResize);
-    try { localStorage.setItem(REP_COL_KEY, String(firstColWidth.value)); } catch (_) {}
-};
-const startResize = (e) => {
-    startX = e.touches ? e.touches[0].clientX : e.clientX;
-    startW = firstColWidth.value;
-    document.addEventListener('mousemove', onResizeMove, { passive: false });
-    document.addEventListener('mouseup', stopResize);
-    document.addEventListener('touchmove', onResizeMove, { passive: false });
-    document.addEventListener('touchend', stopResize);
+    let total = Number(sale.discount || 0);
+    sale.items?.forEach((item) => {
+        const difference = Number(item.original_price || 0) - Number(item.unit_price || 0);
+        if (difference > 0) total += difference * Number(item.quantity);
+    });
+    return formatCurrency(total);
 };
 </script>
 
 <template>
-    <Head title="Reportes de Ventas" />
-
+    <Head title="Reportes de ventas" />
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Reportes de Ventas</h2>
-        </template>
+        <AdminPage>
+            <PageHeader eyebrow="Analitica" title="Reportes de ventas" description="Consulta el movimiento de tu negocio por canal y periodo." />
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                
-                <!-- Sub-pestañas: Tipo de Reporte -->
-                <div class="mb-6 border-b border-gray-200">
-                    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                        <button 
-                            @click="reportType = 'digital'; activeTab = 'chart'" 
-                            :class="[
-                                reportType === 'digital' 
-                                    ? 'border-blue-500 text-blue-600' 
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
-                                'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
-                            ]"
-                        >
-                            Pedidos Digitales
-                        </button>
-                        <button 
-                            @click="reportType = 'physical'" 
-                            :class="[
-                                reportType === 'physical' 
-                                    ? 'border-blue-500 text-blue-600' 
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
-                                'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
-                            ]"
-                        >
-                            Ventas Físicas
-                        </button>
-                    </nav>
+            <div class="mb-6 flex flex-col gap-3 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <label for="report-channel" class="ui-label">Canal de venta</label>
+                    <select id="report-channel" v-model="reportType" class="ui-input min-w-64">
+                        <option value="digital">Tienda online</option>
+                        <option value="physical">Punto de venta</option>
+                    </select>
                 </div>
-
-                <!-- Estadísticas y Filtros para Pedidos Digitales -->
-                <div v-if="reportType === 'digital'">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                            <div class="p-6">
-                                <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Ventas Totales (en el período)</h3>
-                                <p class="mt-1 text-3xl font-semibold text-gray-900">{{ formatCurrency(stats.totalSales) }}</p>
-                            </div>
-                        </div>
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                            <div class="p-6">
-                                <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wider">Órdenes Totales (en el período)</h3>
-                                <p class="mt-1 text-3xl font-semibold text-gray-900">{{ stats.totalOrders }}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-8">
-                        <div class="p-6">
-                            <form @submit.prevent="applyFilters">
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                                    <div>
-                                        <label for="start_date" class="block text-sm font-medium text-gray-700">Desde</label>
-                                        <input type="date" id="start_date" v-model="filterForm.start_date" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                                    </div>
-                                    <div>
-                                        <label for="end_date" class="block text-sm font-medium text-gray-700">Hasta</label>
-                                        <input type="date" id="end_date" v-model="filterForm.end_date" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                                    </div>
-                                    <div class="flex space-x-2">
-                                        <button type="submit" :disabled="filterForm.processing" class="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50">
-                                            Filtrar
-                                        </button>
-                                        <Link :href="route('admin.reports.index')" class="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded hover:bg-gray-400 text-center">
-                                            Limpiar
-                                        </Link>
-                                    </div>
-                                </div>
-                                <div class="mt-4 flex flex-wrap gap-2">
-                                    <span class="text-sm text-gray-500 mr-2 self-center">Rangos rápidos:</span>
-                                    <button type="button" @click="setQuickRange('today')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('today') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Hoy</button>
-                                    <button type="button" @click="setQuickRange('last7')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last7') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 7 días</button>
-                                    <button type="button" @click="setQuickRange('last30')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last30') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 30 días</button>
-                                    <button type="button" @click="setQuickRange('thisMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('thisMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Este mes</button>
-                                    <button type="button" @click="setQuickRange('lastMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('lastMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Mes pasado</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-
-                    <!-- Pestañas internas para Pedidos Digitales -->
-                    <div class="mb-4 border-b border-gray-200">
-                        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                            <button @click="activeTab = 'chart'" :class="[activeTab === 'chart' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm']">
-                                Gráfico
-                            </button>
-                            <button @click="activeTab = 'table'" :class="[activeTab === 'table' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm']">
-                                Tabla de Órdenes
-                            </button>
-                        </nav>
-                    </div>
-                </div>
-
-                <div v-if="reportType === 'physical'">
-                    <div class="flex flex-wrap gap-4 mb-6">
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg flex-1 min-w-[200px]">
-                            <div class="p-6">
-                                <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Ventas Totales</h3>
-                                <p class="mt-1 text-2xl font-semibold text-gray-900">
-                                    {{ physicalSalesStats ? formatCurrency(physicalSalesStats.totalSales || 0) : '$0' }}
-                                </p>
-                            </div>
-                        </div>
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg flex-1 min-w-[200px]">
-                            <div class="p-6">
-                                <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Gastos / Salidas</h3>
-                                <p class="mt-1 text-2xl font-semibold text-red-600">
-                                    {{ physicalSalesStats ? formatCurrency(physicalSalesStats.totalExpenses || 0) : '$0' }}
-                                </p>
-                            </div>
-                        </div>
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg flex-1 min-w-[200px]">
-                            <div class="p-6">
-                                <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Efectivo Neto</h3>
-                                <p class="mt-1 text-2xl font-semibold text-blue-600">
-                                    {{ physicalSalesStats ? formatCurrency(physicalSalesStats.netCash || 0) : '$0' }}
-                                </p>
-                            </div>
-                        </div>
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg flex-1 min-w-[200px]">
-                            <div class="p-6">
-                                <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Ganancia Total</h3>
-                                <p class="mt-1 text-2xl font-semibold text-green-600">
-                                    {{ physicalSalesStats ? formatCurrency(physicalSalesStats.totalProfit || 0) : '$0' }}
-                                </p>
-                            </div>
-                        </div>
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg flex-1 min-w-[200px]">
-                            <div class="p-6">
-                                <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider"># Ventas</h3>
-                                <p class="mt-1 text-2xl font-semibold text-gray-900">
-                                    {{ physicalSalesStats ? physicalSalesStats.totalCount || 0 : 0 }}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Sub-pestañas para Físicas -->
-                    <div class="mb-6 border-b border-gray-200">
-                        <nav class="-mb-px flex space-x-8">
-                            <button 
-                                @click="activePhysicalTab = 'sales'"
-                                :class="[activePhysicalTab === 'sales' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm']"
-                            >
-                                Historial Ventas
-                            </button>
-                            <button 
-                                @click="activePhysicalTab = 'expenses'"
-                                :class="[activePhysicalTab === 'expenses' ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm']"
-                            >
-                                Historial Gastos
-                            </button>
-                        </nav>
-                    </div>
-
-                    <!-- Contenido Pestaña Ventas -->
-                    <div v-if="activePhysicalTab === 'sales'">
-                        <!-- Filtros Ventas -->
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
-                            <div class="p-6">
-                                <form @submit.prevent="applyFilters">
-                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                                        <div>
-                                            <label for="search_sale" class="block text-sm font-medium text-gray-700">Buscar por número</label>
-                                            <input 
-                                                type="text" 
-                                                id="search_sale" 
-                                                v-model="physicalSalesFilterForm.search" 
-                                                placeholder="Ej: V-000001"
-                                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label for="physical_start_date" class="block text-sm font-medium text-gray-700">Fecha inicio</label>
-                                            <input 
-                                                type="date" 
-                                                id="physical_start_date" 
-                                                v-model="physicalSalesFilterForm.start_date"
-                                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label for="physical_end_date" class="block text-sm font-medium text-gray-700">Fecha fin</label>
-                                            <input 
-                                                type="date" 
-                                                id="physical_end_date" 
-                                                v-model="physicalSalesFilterForm.end_date"
-                                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                                            />
-                                        </div>
-                                        <div class="flex gap-2">
-                                            <button type="submit" :disabled="physicalSalesFilterForm.processing" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
-                                                Filtrar
-                                            </button>
-                                            <Link :href="route('admin.reports.index', { type: 'physical' })" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 text-center">
-                                                Limpiar
-                                            </Link>
-                                        </div>
-                                    </div>
-                                    <div class="mt-4 flex flex-wrap gap-2">
-                                        <span class="text-sm text-gray-500 mr-2 self-center">Rangos rápidos:</span>
-                                        <button type="button" @click="setQuickRange('today')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('today') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Hoy</button>
-                                        <button type="button" @click="setQuickRange('last7')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last7') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 7 días</button>
-                                        <button type="button" @click="setQuickRange('last30')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last30') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 30 días</button>
-                                        <button type="button" @click="setQuickRange('thisMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('thisMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Este mes</button>
-                                        <button type="button" @click="setQuickRange('lastMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('lastMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Mes pasado</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-
-                        <!-- Tabla Ventas -->
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                            <div class="p-6">
-                                <div class="flex justify-between items-center mb-4">
-                                    <h3 class="text-lg font-semibold">Historial de Ventas Físicas</h3>
-                                    <a 
-                                        :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date, search: physicalSalesFilters?.search })"
-                                        v-if="physicalSales && physicalSales.data && physicalSales.data.length > 0"
-                                        class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
-                                            <path d="M7 10a1 1 0 011-1h2V4a1 1 0 112 0v5h2a1 1 0 01.7 1.714l-3 3a1 1 0 01-1.4 0l-3-3A1 1 0 017 10z"/>
-                                            <path d="M5 15a1 1 0 011 1v2a2 2 0 002 2h8a2 2 0 002-2v-2a1 1 0 112 0v2a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a1 1 0 011-1z"/>
-                                        </svg>
-                                        Exportar Ventas
-                                    </a>
-                                </div>
-
-                                <div class="overflow-x-auto">
-                                    <table class="min-w-full divide-y divide-gray-200">
-                                        <thead class="bg-gray-50">
-                                            <tr>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Número</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendedor</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Método de Pago</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Subtotal</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descuento</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ganancia</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="bg-white divide-y divide-gray-200">
-                                            <tr v-for="sale in physicalSales?.data" :key="sale.id">
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                                                    <Link :href="route('admin.physical-sales.show', sale.id)" class="hover:underline">
-                                                        {{ sale.sale_number }}
-                                                    </Link>
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {{ sale.user?.name || 'N/A' }}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {{ formatDateShort(sale.created_at) }}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                                                    {{ sale.payment_method }}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {{ formatCurrency(sale.subtotal) }}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {{ calculateTotalDiscount(sale) }}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                                                    {{ formatCurrency(sale.total) }}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {{ calculateSaleProfit(sale) }}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                                    <Link 
-                                                        :href="route('admin.physical-sales.show', sale.id)"
-                                                        class="text-blue-600 hover:text-blue-900"
-                                                    >
-                                                        Ver
-                                                    </Link>
-                                                </td>
-                                            </tr>
-                                            <tr v-if="!physicalSales || !physicalSales.data || physicalSales.data.length === 0">
-                                                <td colspan="8" class="px-6 py-4 text-center text-gray-500">
-                                                    No hay ventas para mostrar en este período.
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <Pagination v-if="physicalSales && physicalSales.links" class="mt-6" :links="physicalSales.links" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Contenido Pestaña Gastos -->
-                    <div v-if="activePhysicalTab === 'expenses'">
-                        <!-- Filtros Gastos (Reutilizamos los mismos filtros físicos) -->
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
-                            <div class="p-6">
-                                <form @submit.prevent="applyFilters">
-                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                                        <div class="hidden md:block">
-                                            <!-- Espaciador -->
-                                        </div>
-                                        <div>
-                                            <label for="exp_start_date" class="block text-sm font-medium text-gray-700">Fecha inicio</label>
-                                            <input 
-                                                type="date" 
-                                                id="exp_start_date" 
-                                                v-model="physicalSalesFilterForm.start_date"
-                                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label for="exp_end_date" class="block text-sm font-medium text-gray-700">Fecha fin</label>
-                                            <input 
-                                                type="date" 
-                                                id="exp_end_date" 
-                                                v-model="physicalSalesFilterForm.end_date"
-                                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                                            />
-                                        </div>
-                                        <div class="flex gap-2">
-                                            <button type="submit" :disabled="physicalSalesFilterForm.processing" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
-                                                Filtrar Gastos
-                                            </button>
-                                            <Link :href="route('admin.reports.index', { type: 'physical' })" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 text-center">
-                                                Limpiar
-                                            </Link>
-                                        </div>
-                                    </div>
-                                    <div class="mt-4 flex flex-wrap gap-2">
-                                        <span class="text-sm text-gray-500 mr-2 self-center">Rangos rápidos:</span>
-                                        <button type="button" @click="setQuickRange('today')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('today') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Hoy</button>
-                                        <button type="button" @click="setQuickRange('last7')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last7') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 7 días</button>
-                                        <button type="button" @click="setQuickRange('last30')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('last30') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Últimos 30 días</button>
-                                        <button type="button" @click="setQuickRange('thisMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('thisMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Este mes</button>
-                                        <button type="button" @click="setQuickRange('lastMonth')" :class="['px-3 py-1 rounded-full text-sm border', isRangeSelected('lastMonth') ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50']">Mes pasado</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-
-                        <!-- Tabla de Gastos -->
-                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                            <div class="p-6">
-                                <div class="flex justify-between items-center mb-4">
-                                    <h3 class="text-lg font-semibold text-red-600">Historial de Gastos</h3>
-                                    <!-- Botón Exportar (Mismo endpoint, descarga todo el reporte multisheet) -->
-                                    <a 
-                                        :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date, search: physicalSalesFilters?.search })"
-                                        class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 focus:outline-none transition"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
-                                            <path d="M7 10a1 1 0 011-1h2V4a1 1 0 112 0v5h2a1 1 0 01.7 1.714l-3 3a1 1 0 01-1.4 0l-3-3A1 1 0 017 10z"/>
-                                            <path d="M5 15a1 1 0 011 1v2a2 2 0 002 2h8a2 2 0 002-2v-2a1 1 0 112 0v2a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a1 1 0 011-1z"/>
-                                        </svg>
-                                        Exportar Reporte
-                                    </a>
-                                </div>
-                                <div class="overflow-x-auto">
-                                    <table class="min-w-full divide-y divide-gray-200">
-                                        <thead class="bg-red-50">
-                                            <tr>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-red-800 uppercase">Fecha</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-red-800 uppercase">Descripción</th>
-                                                <th class="px-6 py-3 text-left text-xs font-medium text-red-800 uppercase">Registrado por</th>
-                                                <th class="px-6 py-3 text-right text-xs font-medium text-red-800 uppercase">Monto</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="bg-white divide-y divide-gray-200">
-                                            <tr v-for="expense in expensesList.data" :key="expense.id">
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {{ formatDateShort(expense.expense_date) }}
-                                                </td>
-                                                <td class="px-6 py-4 text-sm text-gray-900">
-                                                    {{ expense.description }}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {{ expense.user?.name || 'N/A' }}
-                                                </td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600 text-right">
-                                                    {{ formatCurrency(expense.amount) }}
-                                                </td>
-                                            </tr>
-                                            <tr v-if="!expensesList || !expensesList.data || expensesList.data.length === 0">
-                                                <td colspan="4" class="px-6 py-4 text-center text-gray-500">
-                                                    No hay gastos registrados en este período.
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <Pagination v-if="expensesList && expensesList.links" class="mt-6" :links="expensesList.links" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div v-if="reportType === 'digital' && activeTab === 'chart'">
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                        <div class="p-6">
-                            <h3 class="text-lg font-semibold mb-4">Ventas en el Período Seleccionado</h3>
-                            <BarChart :chart-data="formattedChartData" />
-                            <!-- <p>Gráfico temporalmente deshabilitado por debug</p> -->
-                        </div>
-                    </div>
-                </div>
-
-                <div v-if="reportType === 'digital' && activeTab === 'table'">
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                        <div class="p-6 text-gray-900">
-                            
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="text-lg font-semibold">Historial de Órdenes</h3>
-                                <a :href="route('admin.reports.export', { start_date: filters.start_date, end_date: filters.end_date })"
-                                   v-if="orders.data.length > 0"
-                                   class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
-                                        <path d="M7 10a1 1 0 011-1h2V4a1 1 0 112 0v5h2a1 1 0 01.7 1.714l-3 3a1 1 0 01-1.4 0l-3-3A1 1 0 017 10z"/>
-                                        <path d="M5 15a1 1 0 011 1v2a2 2 0 002 2h8a2 2 0 002-2v-2a1 1 0 112 0v2a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a1 1 0 011-1z"/>
-                                    </svg>
-                                    Exportar a Excel
-                                </a>
-                            </div>
-                            <div ref="scrollBoxRef" class="relative overflow-x-auto">
-                                <div v-show="showLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
-                                <div v-show="showRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>
-                                <table class="min-w-[920px] sm:min-w-full divide-y divide-gray-200">
-                                    <thead class="sticky top-0 z-10 bg-gray-50">
-                                        <tr>
-                                            <th class="sticky left-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap relative" :style="firstColStyle">
-                                                Orden #
-                                                <div @mousedown="startResize" @touchstart.prevent="startResize" class="absolute top-0 right-0 h-full w-3 cursor-col-resize group">
-                                                    <div class="mx-auto my-auto h-6 w-1.5 bg-gray-300 rounded-full group-hover:bg-indigo-400"></div>
-                                                </div>
-                                            </th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Cliente</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Fecha</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Estado</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Total</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Productos</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Cantidades</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">P. Unitario</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="bg-white divide-y divide-gray-200">
-                                        <tr v-for="(order, idx) in orders.data" :key="order.id" class="odd:bg-white even:bg-gray-100">
-                                            <td class="sticky left-0 z-10 px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:underline border-r truncate" :style="firstColStyle" :title="order.sequence_number || order.id" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">
-                                                <Link :href="route('admin.orders.show', order.id)">{{ order.sequence_number || order.sequence_number === 0 ? order.sequence_number : order.id }}</Link>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ order.customer_name }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(order.created_at) }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap">
-                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                                      :class="{
-                                                          'bg-green-100 text-green-800': order.status === 'entregado',
-                                                          'bg-yellow-100 text-yellow-800': order.status === 'recibido',
-                                                          'bg-blue-100 text-blue-800': order.status === 'en_preparacion',
-                                                          'bg-purple-100 text-purple-800': order.status === 'despachado',
-                                                          'bg-red-100 text-red-800': order.status === 'cancelado',
-                                                      }">
-                                                    {{ order.status }}
-                                                </span>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{{ formatCurrency(order.total_price) }}</td>
-                                            <td class="px-6 py-4 whitespace-pre-line text-sm text-gray-600 max-w-xl"> 
-                                                <template v-for="item in order.items" :key="item.id">
-                                                    <div>
-                                                        <span class="font-medium">{{ item.product_name || item.product?.name }}</span>
-                                                        <span v-if="item.variant_options || item.variant?.options">
-                                                            ({{ Object.entries(item.variant_options || item.variant?.options || {}).map(([k,v])=>`${k}: ${v}`).join(', ') }})
-                                                        </span>
-                                                    </div>
-                                                </template>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-pre-line text-sm text-gray-600"> 
-                                                <div v-for="item in order.items" :key="'q'+item.id">{{ item.quantity }}</div>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-pre-line text-sm text-gray-600"> 
-                                                <div v-for="item in order.items" :key="'p'+item.id">{{ formatCurrency(item.unit_price) }}</div>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                <Link :href="route('admin.orders.show', order.id)" class="text-blue-600 hover:text-blue-900">Ver</Link>
-                                            </td>
-                                        </tr>
-                                        <tr v-if="orders.data.length === 0">
-                                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">
-                                                No hay órdenes para mostrar en este período.
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <Pagination class="mt-6" :links="orders.links" />
-                        </div>
-                    </div>
-                </div>
-
+                <p class="max-w-xl text-sm text-slate-500">{{ reportType === 'digital' ? 'Pedidos recibidos desde el catalogo publico.' : 'Ventas registradas directamente en caja y gastos operativos.' }}</p>
             </div>
-        </div>
-        
+
+            <template v-if="reportType === 'digital'">
+                <form class="mb-7 border-b border-slate-200 pb-7" @submit.prevent="applyFilters">
+                    <div class="grid gap-4 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+                        <div><label for="digital-range" class="ui-label">Periodo rapido</label><select id="digital-range" :value="activeRange" class="ui-input" @change="setQuickRange($event.target.value)"><option value="">Personalizado</option><option value="today">Hoy</option><option value="last7">Ultimos 7 dias</option><option value="last30">Ultimos 30 dias</option><option value="thisMonth">Este mes</option><option value="lastMonth">Mes pasado</option></select></div>
+                        <div><label for="start-date" class="ui-label">Desde</label><input id="start-date" v-model="filterForm.start_date" type="date" class="ui-input" /></div>
+                        <div><label for="end-date" class="ui-label">Hasta</label><input id="end-date" v-model="filterForm.end_date" type="date" class="ui-input" /></div>
+                        <div class="flex items-center gap-3"><button type="submit" class="ui-primary-button" :disabled="filterForm.processing">Consultar</button><Link :href="route('admin.reports.index')" class="text-sm font-bold text-slate-500 hover:text-slate-900">Restablecer</Link></div>
+                    </div>
+                </form>
+
+                <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div><p class="text-sm font-semibold text-slate-500">Ventas del periodo</p><p class="mt-1 text-3xl font-black tracking-tight text-slate-950">{{ formatCurrency(stats?.totalSales) }}</p></div>
+                    <nav class="flex gap-5 border-b border-slate-200" aria-label="Vista del reporte"><button type="button" class="border-b-2 pb-2 text-sm font-bold" :class="activeTab === 'activity' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500'" @click="activeTab = 'activity'">Actividad diaria</button><button type="button" class="border-b-2 pb-2 text-sm font-bold" :class="activeTab === 'orders' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500'" @click="activeTab = 'orders'">Pedidos</button></nav>
+                </div>
+
+                <section v-if="activeTab === 'activity'" class="ui-card overflow-hidden">
+                    <header class="flex flex-col gap-3 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="font-extrabold text-slate-900">Movimiento diario</h2><p class="mt-1 text-sm text-slate-500">Compara entregas y cancelaciones sin perder espacio en un grafico vacio.</p></div><div class="flex gap-4 text-xs font-bold text-slate-600"><span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-emerald-500"></i>Entregados</span><span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-rose-400"></i>Cancelados</span></div></header>
+                    <div v-if="dailyActivity.length" class="divide-y divide-slate-100 px-5">
+                        <div v-for="day in dailyActivity" :key="day.date" class="grid gap-2 py-4 sm:grid-cols-[140px_1fr_80px] sm:items-center"><span class="text-sm font-bold capitalize text-slate-700">{{ formatActivityDate(day.date) }}</span><div class="flex h-3 overflow-hidden rounded-full bg-slate-100"><span class="bg-emerald-500" :style="{ width: activityWidth(day.delivered) }"></span><span class="bg-rose-400" :style="{ width: activityWidth(day.cancelled) }"></span></div><span class="text-right text-xs font-semibold text-slate-500">{{ day.delivered }} / {{ day.cancelled }}</span></div>
+                    </div>
+                    <div v-else class="p-12 text-center"><p class="font-bold text-slate-700">Todavia no hay actividad en este periodo</p><p class="mt-1 text-sm text-slate-500">Prueba con un rango de fechas mas amplio.</p></div>
+                </section>
+
+                <section v-else class="ui-card overflow-hidden">
+                    <header class="flex flex-col gap-3 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 class="font-extrabold text-slate-900">Pedidos del periodo</h2><p class="mt-1 text-sm text-slate-500">Abre un pedido para consultar productos, cantidades y seguimiento.</p></div><a v-if="orders?.data?.length" :href="route('admin.reports.export', { start_date: filters?.start_date, end_date: filters?.end_date })" class="ui-secondary-button">Exportar Excel</a></header>
+                    <div class="overflow-x-auto"><table class="min-w-[800px] w-full"><thead class="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500"><tr><th class="px-5 py-3">Pedido</th><th class="px-5 py-3">Cliente</th><th class="px-5 py-3">Fecha</th><th class="px-5 py-3">Estado</th><th class="px-5 py-3 text-right">Total</th><th class="px-5 py-3"></th></tr></thead><tbody class="divide-y divide-slate-100"><tr v-for="order in orders?.data" :key="order.id" class="hover:bg-slate-50"><td class="px-5 py-4 font-bold text-slate-900">#{{ order.sequence_number ?? order.id }}</td><td class="px-5 py-4 text-sm text-slate-600">{{ order.customer_name }}</td><td class="px-5 py-4 text-sm text-slate-500">{{ formatDate(order.created_at) }}</td><td class="px-5 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="statusClass(order.status)">{{ statusLabel(order.status) }}</span></td><td class="px-5 py-4 text-right font-extrabold text-slate-900">{{ formatCurrency(order.total_price) }}</td><td class="px-5 py-4 text-right"><Link :href="route('admin.orders.show', order.id)" class="text-sm font-bold text-indigo-700">Ver detalle</Link></td></tr></tbody></table></div>
+                    <div v-if="!orders?.data?.length" class="p-12 text-center text-sm text-slate-500">No hay pedidos en este periodo.</div><Pagination v-if="orders?.links" class="border-t border-slate-100 p-5" :links="orders.links" />
+                </section>
+            </template>
+
+            <template v-else>
+                <nav class="mb-6 flex gap-6 border-b border-slate-200" aria-label="Movimiento de caja"><button type="button" class="border-b-2 pb-3 text-sm font-bold" :class="activePhysicalTab === 'sales' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500'" @click="activePhysicalTab = 'sales'">Ventas</button><button type="button" class="border-b-2 pb-3 text-sm font-bold" :class="activePhysicalTab === 'expenses' ? 'border-rose-500 text-rose-700' : 'border-transparent text-slate-500'" @click="activePhysicalTab = 'expenses'">Gastos y salidas</button></nav>
+
+                <form class="mb-7 border-b border-slate-200 pb-7" @submit.prevent="applyFilters">
+                    <div class="grid gap-4" :class="activePhysicalTab === 'sales' ? 'lg:grid-cols-[1fr_1fr_1fr_1fr_auto]' : 'lg:grid-cols-[1fr_1fr_1fr_auto]'">
+                        <div v-if="activePhysicalTab === 'sales'"><label for="sale-search" class="ui-label">Buscar venta</label><input id="sale-search" v-model="physicalSalesFilterForm.search" type="search" class="ui-input" placeholder="Numero o producto" /></div>
+                        <div><label for="physical-range" class="ui-label">Periodo rapido</label><select id="physical-range" :value="activeRange" class="ui-input" @change="setQuickRange($event.target.value)"><option value="">Todo el historial</option><option value="today">Hoy</option><option value="last7">Ultimos 7 dias</option><option value="last30">Ultimos 30 dias</option><option value="thisMonth">Este mes</option><option value="lastMonth">Mes pasado</option></select></div>
+                        <div><label for="physical-start" class="ui-label">Desde</label><input id="physical-start" v-model="physicalSalesFilterForm.start_date" type="date" class="ui-input" /></div>
+                        <div><label for="physical-end" class="ui-label">Hasta</label><input id="physical-end" v-model="physicalSalesFilterForm.end_date" type="date" class="ui-input" /></div>
+                        <div class="flex items-end gap-3"><button type="submit" class="ui-primary-button" :disabled="physicalSalesFilterForm.processing">Consultar</button><Link :href="route('admin.reports.index', { type: 'physical' })" class="pb-2 text-sm font-bold text-slate-500 hover:text-slate-900">Restablecer</Link></div>
+                    </div>
+                </form>
+
+                <section v-if="activePhysicalTab === 'sales'" class="ui-card overflow-hidden">
+                    <header class="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-end lg:justify-between"><div><p class="text-sm font-semibold text-slate-500">Vendido en el periodo</p><p class="mt-1 text-3xl font-black tracking-tight text-slate-950">{{ formatCurrency(physicalSalesStats?.totalSales) }}</p><p class="mt-2 text-sm text-slate-500">Ganancia estimada: <strong class="text-emerald-700">{{ formatCurrency(physicalSalesStats?.totalProfit) }}</strong></p></div><a v-if="physicalSales?.data?.length" :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date, search: physicalSalesFilters?.search })" class="ui-secondary-button">Exportar reporte</a></header>
+                    <div class="overflow-x-auto"><table class="min-w-[980px] w-full"><thead class="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500"><tr><th class="px-5 py-3">Venta</th><th class="px-5 py-3">Vendedor</th><th class="px-5 py-3">Fecha</th><th class="px-5 py-3">Pago</th><th class="px-5 py-3 text-right">Descuento</th><th class="px-5 py-3 text-right">Total</th><th class="px-5 py-3 text-right">Ganancia</th><th class="px-5 py-3"></th></tr></thead><tbody class="divide-y divide-slate-100"><tr v-for="sale in physicalSales?.data" :key="sale.id" class="hover:bg-slate-50"><td class="px-5 py-4 font-bold text-slate-900">{{ sale.sale_number }}</td><td class="px-5 py-4 text-sm text-slate-600">{{ sale.user?.name || 'Sin asignar' }}</td><td class="px-5 py-4 text-sm text-slate-500">{{ formatDate(sale.created_at, true) }}</td><td class="px-5 py-4 text-sm capitalize text-slate-600">{{ sale.payment_method }}</td><td class="px-5 py-4 text-right text-sm text-slate-500">{{ calculateTotalDiscount(sale) }}</td><td class="px-5 py-4 text-right font-extrabold text-slate-900">{{ formatCurrency(sale.total) }}</td><td class="px-5 py-4 text-right text-sm font-bold text-emerald-700">{{ calculateSaleProfit(sale) }}</td><td class="px-5 py-4 text-right"><Link :href="route('admin.physical-sales.show', sale.id)" class="text-sm font-bold text-indigo-700">Ver detalle</Link></td></tr></tbody></table></div>
+                    <div v-if="!physicalSales?.data?.length" class="p-12 text-center text-sm text-slate-500">No hay ventas en este periodo.</div><Pagination v-if="physicalSales?.links" class="border-t border-slate-100 p-5" :links="physicalSales.links" />
+                </section>
+
+                <section v-else class="ui-card overflow-hidden">
+                    <header class="flex flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-sm font-semibold text-slate-500">Gastos del periodo</p><p class="mt-1 text-3xl font-black tracking-tight text-rose-700">{{ formatCurrency(physicalSalesStats?.totalExpenses) }}</p><p class="mt-2 text-sm text-slate-500">Efectivo despues de gastos: <strong class="text-slate-800">{{ formatCurrency(physicalSalesStats?.netCash) }}</strong></p></div><a :href="route('admin.physical-sales.export', { start_date: physicalSalesFilters?.start_date, end_date: physicalSalesFilters?.end_date })" class="ui-secondary-button">Exportar reporte</a></header>
+                    <div class="overflow-x-auto"><table class="min-w-[680px] w-full"><thead class="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500"><tr><th class="px-5 py-3">Fecha</th><th class="px-5 py-3">Descripcion</th><th class="px-5 py-3">Registrado por</th><th class="px-5 py-3 text-right">Monto</th></tr></thead><tbody class="divide-y divide-slate-100"><tr v-for="expense in expensesList?.data" :key="expense.id" class="hover:bg-slate-50"><td class="px-5 py-4 text-sm text-slate-500">{{ formatDate(expense.expense_date, true) }}</td><td class="px-5 py-4 font-semibold text-slate-800">{{ expense.description }}</td><td class="px-5 py-4 text-sm text-slate-500">{{ expense.user?.name || 'Sin asignar' }}</td><td class="px-5 py-4 text-right font-extrabold text-rose-700">{{ formatCurrency(expense.amount) }}</td></tr></tbody></table></div>
+                    <div v-if="!expensesList?.data?.length" class="p-12 text-center text-sm text-slate-500">No hay gastos en este periodo.</div><Pagination v-if="expensesList?.links" class="border-t border-slate-100 p-5" :links="expensesList.links" />
+                </section>
+            </template>
+        </AdminPage>
     </AuthenticatedLayout>
 </template>

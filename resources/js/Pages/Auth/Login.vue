@@ -1,132 +1,43 @@
 <script setup>
-import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import TextInput from '@/Components/TextInput.vue';
+import FormField from '@/Components/FormField.vue';
+import GuestLayout from '@/Layouts/GuestLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
-defineProps({
-    canResetPassword: {
-        type: Boolean,
-    },
-    status: {
-        type: String,
-    },
-});
-
-const form = useForm({
-    store_name: '',
-    email: '',
-    password: '',
-});
+defineProps({ canResetPassword: Boolean, status: String });
 
 const showPassword = ref(false);
-
-const submit = () => {
-    form.post(route('login'), {
-        onFinish: () => form.reset('password'),
-        onError: (errors) => {
-            // Los errores se mostrarán automáticamente con InputError
-            console.log('Errores de login:', errors);
-        },
-    });
-};
+const form = useForm({ store_name: '', email: '', password: '' });
+const submit = () => form.post(route('login'), { onFinish: () => form.reset('password') });
 </script>
 
 <template>
-    <div class="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <Head title="Iniciar sesión" />
+    <GuestLayout title="Bienvenido de nuevo" description="Ingresa a la tienda que administras para continuar.">
+        <Head title="Iniciar sesion" />
+        <div v-if="status" class="ui-status-success mb-5" role="status">{{ status }}</div>
 
-        <div class="w-full max-w-md bg-white shadow-xl rounded-2xl p-6 sm:p-8 border border-gray-100">
-            <!-- Logo encima del título -->
-            <img src="/images/New_Logo_ondgtl.png?v=5" alt="ondigitalsolution.com" class="block mx-auto mb-4 h-[135px] sm:h-[160px] w-auto object-contain" />
+        <form class="space-y-5" @submit.prevent="submit">
+            <FormField id="store_name" label="Nombre de tu tienda" :error="form.errors.store_name" help="Es el nombre con el que registraste el negocio." required v-slot="field">
+                <input id="store_name" v-model="form.store_name" type="text" class="ui-input" :class="{ 'ui-input-error': field.invalid }" :aria-describedby="field.describedBy" :aria-invalid="field.invalid" autocomplete="organization" placeholder="Ej. Tienda La Esquina" autofocus required />
+            </FormField>
+            <FormField id="email" label="Correo electronico" :error="form.errors.email" required v-slot="field">
+                <input id="email" v-model="form.email" type="email" class="ui-input" :class="{ 'ui-input-error': field.invalid }" :aria-describedby="field.describedBy" :aria-invalid="field.invalid" autocomplete="username" placeholder="tu@correo.com" required />
+            </FormField>
+            <FormField id="password" label="Contrasena" :error="form.errors.password" required v-slot="field">
+                <div class="relative">
+                    <input id="password" v-model="form.password" :type="showPassword ? 'text' : 'password'" class="ui-input pr-24" :class="{ 'ui-input-error': field.invalid }" :aria-describedby="field.describedBy" :aria-invalid="field.invalid" autocomplete="current-password" required />
+                    <button type="button" class="absolute inset-y-0 right-3 top-1.5 text-xs font-bold text-indigo-700" @click="showPassword = !showPassword">{{ showPassword ? 'Ocultar' : 'Mostrar' }}</button>
+                </div>
+            </FormField>
 
-            <div class="mb-1 text-center">
-                <h2 class="text-2xl font-bold text-gray-900">Iniciar sesión</h2>
-                <p class="text-sm text-gray-600">Accede a tu panel de tienda</p>
+            <div class="flex justify-end">
+                <Link v-if="canResetPassword" :href="route('password.request')" class="text-sm font-semibold text-indigo-700 hover:text-indigo-900">Olvide mi contrasena</Link>
             </div>
-            <div class="mx-auto h-1 w-16 bg-orange-400 rounded-full mb-5"></div>
+            <button type="submit" class="ui-primary-button w-full" :disabled="form.processing">{{ form.processing ? 'Ingresando...' : 'Entrar a mi tienda' }}</button>
+        </form>
 
-            <div v-if="status" class="mb-4 text-sm font-medium text-green-600">
-                {{ status }}
-            </div>
-
-            <form @submit.prevent="submit" class="space-y-4">
-                    <div>
-                        <InputLabel for="store_name" value="Nombre de Tienda" />
-                        <TextInput
-                            id="store_name"
-                            type="text"
-                            class="mt-1 block w-full"
-                            v-model="form.store_name"
-                            required
-                            autofocus
-                            placeholder="Ej: Mi Tienda"
-                            autocomplete="organization"
-                        />
-                        <InputError class="mt-2" :message="form.errors.store_name" />
-                    </div>
-
-                    <div>
-                        <InputLabel for="email" value="Email" />
-                        <TextInput
-                            id="email"
-                            type="email"
-                            class="mt-1 block w-full"
-                            v-model="form.email"
-                            required
-                            autocomplete="username"
-                        />
-                        <InputError class="mt-2" :message="form.errors.email" />
-                    </div>
-
-                    <div>
-                        <InputLabel for="password" value="Contraseña" />
-                        <div class="relative">
-                            <TextInput
-                                id="password"
-                                :type="showPassword ? 'text' : 'password'"
-                                class="mt-1 block w-full pr-10"
-                                v-model="form.password"
-                                required
-                                autocomplete="current-password"
-                            />
-                            <button type="button" @click="showPassword = !showPassword" :aria-label="showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'" class="absolute inset-y-0 right-0 mr-2 mt-1.5 p-2 text-gray-500 hover:text-gray-700">
-                                <svg v-if="!showPassword" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
-                                    <path d="M2.25 12c2.5-4.5 6.215-7.5 9.75-7.5 3.535 0 7.25 3 9.75 7.5-2.5 4.5-6.215 7.5-9.75 7.5-3.535 0-7.25-3-9.75-7.5Z" />
-                                    <circle cx="12" cy="12" r="3.25" />
-                                </svg>
-                                <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
-                                    <path d="M1 1l22 22" />
-                                    <path d="M9.88 9.88A3 3 0 0 0 12 15a3 3 0 0 0 2.121-.879M10.59 5.08A10.84 10.84 0 0 1 12 4.5c3.535 0 7.25 3 9.75 7.5-.89 1.602-2.02 3.01-3.32 4.14" />
-                                </svg>
-                            </button>
-                        </div>
-                        <InputError class="mt-2" :message="form.errors.password" />
-                    </div>
-
-            <div class="flex items-center justify-end">
-                <template v-if="canResetPassword">
-                    <Link
-                        :href="route('password.request')"
-                        class="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
-                    >
-                        ¿Olvidaste tu contraseña?
-                    </Link>
-                </template>
-            </div>
-
-                    <div class="flex items-center justify-end pt-2">
-                        <PrimaryButton
-                            class="ms-4"
-                            :class="{ 'opacity-25': form.processing }"
-                            :disabled="form.processing"
-                        >
-                            Iniciar sesión
-                        </PrimaryButton>
-                    </div>
-            </form>
+        <div class="mt-6 border-t border-slate-200 pt-5 text-center text-sm text-slate-600">
+            ¿Aun no tienes tienda? <Link :href="route('register')" class="font-bold text-indigo-700 hover:text-indigo-900">Crear una gratis</Link>
         </div>
-    </div>
+    </GuestLayout>
 </template>

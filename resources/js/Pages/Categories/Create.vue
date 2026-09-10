@@ -4,6 +4,10 @@ import { Head, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import { safeRoute } from '@/utils/safeRoute';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
+import FormSection from '@/Components/Admin/FormSection.vue';
+import { Link } from '@inertiajs/vue3';
 
 const form = useForm({
     name: '', // El nombre de la categoría principal
@@ -104,83 +108,37 @@ const submit = () => {
     <Head title="Crear categoría" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Crear categoría</h2>
-        </template>
+        <AdminPage>
+            <PageHeader eyebrow="Catalogo" title="Nueva categoria" description="Crea primero un grupo general y agrega divisiones solo cuando ayuden al cliente a encontrar productos.">
+                <template #actions><Link :href="route('admin.categories.index')" class="ui-secondary-button">Cancelar</Link></template>
+            </PageHeader>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 text-gray-900">
-                        <!-- Mensajes de error generales -->
-                        <div v-if="showErrors && errorMessages.length > 0" class="mb-4 p-4 rounded-lg bg-red-50 border border-red-200">
-                            <h4 class="font-medium text-red-800 mb-2">Errores al crear la categoría:</h4>
-                            <ul class="list-disc list-inside text-sm text-red-700 space-y-1">
-                                <li v-for="(msg, index) in errorMessages" :key="index">{{ msg }}</li>
-                            </ul>
+            <form class="space-y-6" @submit.prevent="submit">
+                <div v-if="showErrors && errorMessages.length" class="ui-status-error" role="alert"><p class="font-bold">Revisa estos puntos:</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="msg in errorMessages" :key="msg">{{ msg }}</li></ul></div>
+                <FormSection number="1" title="Categoria principal" description="Usa un nombre breve que tus clientes reconozcan facilmente.">
+                    <label for="name" class="ui-label">Nombre</label>
+                    <input id="name" v-model="form.name" type="text" class="ui-input" :class="{ 'ui-input-error': form.errors.name }" placeholder="Ej. Ropa, Hogar o Accesorios" autofocus required>
+                    <p v-if="form.errors.name" class="ui-error">{{ form.errors.name }}</p>
+                </FormSection>
+
+                <FormSection number="2" title="Organizacion opcional" description="Puedes dejar esta parte vacia y agregar subcategorias mas adelante.">
+                    <div v-if="!form.subcategories.length" class="rounded-xl border-2 border-dashed border-slate-200 p-8 text-center"><p class="font-semibold text-slate-800">¿Necesitas dividir esta categoria?</p><p class="mt-1 text-sm text-slate-500">Por ejemplo: Ropa > Mujer > Camisetas.</p></div>
+                    <div class="space-y-4">
+                        <div v-for="(subcategory, index) in form.subcategories" :key="index" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div class="flex items-start gap-3"><div class="min-w-0 flex-1"><label :for="`subcategory-${index}`" class="ui-label">Subcategoria {{ index + 1 }}</label><input :id="`subcategory-${index}`" v-model="subcategory.name" class="ui-input" placeholder="Ej. Mujer" /></div><button type="button" class="mt-7 rounded-lg p-2 text-sm font-bold text-rose-700 hover:bg-rose-100" @click="removeSubcategory(index)">Quitar</button></div>
+                            <button type="button" class="mt-3 text-sm font-bold text-indigo-700" @click="toggleChildren(index)">{{ subcategory._showChildren ? 'Ocultar tercer nivel' : '+ Agregar tercer nivel' }}</button>
+                            <div v-if="subcategory._showChildren" class="mt-3 space-y-2 border-l-2 border-indigo-200 pl-4">
+                                <div v-for="(child, childIndex) in subcategory.children" :key="childIndex" class="flex gap-2"><input v-model="child.name" class="ui-input mt-0" placeholder="Ej. Camisetas" /><button type="button" class="rounded-lg px-3 text-rose-700 hover:bg-rose-100" aria-label="Quitar tercer nivel" @click="removeChildFromSubcategory(index, childIndex)">Quitar</button></div>
+                                <button type="button" class="ui-secondary-button" @click="addChildToSubcategory(index)">+ Otro tercer nivel</button>
+                            </div>
                         </div>
-                        
-                        <form @submit.prevent="submit">
-                            <div class="mb-6 border-b pb-6">
-                                <label for="name" class="block font-medium text-lg text-gray-800">Nombre de la Categoría</label>
-                                <input id="name" v-model="form.name" type="text" class="block mt-2 w-full rounded-md shadow-sm border-gray-300" required>
-                                <p v-if="form.errors.name" class="text-sm text-red-600 mt-2">{{ form.errors.name }}</p>
-                            </div>
-
-                            <div class="mt-6">
-                                <h3 class="font-medium text-lg text-gray-800">Estructura de Subcategorías</h3>
-                                <p class="text-sm text-gray-500">Definí subcategorías y un subnivel adicional (máximo 3 niveles en total).</p>
-
-                                <div v-for="(subcategory, index) in form.subcategories" :key="index" class="mt-4 border rounded-lg overflow-hidden">
-                                    <div class="flex items-center gap-4 p-3">
-                                        <input 
-                                            v-model="subcategory.name" 
-                                            type="text" 
-                                            :placeholder="`Nombre de la Subcategoría ${index + 1}`"
-                                            class="block w-full rounded-md shadow-sm border-gray-300"
-                                        >
-                                        <button @click.prevent="removeSubcategory(index)" type="button" class="bg-red-500 text-white font-bold p-2 rounded-full h-8 w-8 flex items-center justify-center">
-                                            -
-                                        </button>
-                                    </div>
-                                    <div class="bg-gray-50 px-3 pb-3">
-                                        <button type="button" class="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800" @click.prevent="toggleChildren(index)">
-                                            <span class="w-5 h-5 inline-flex items-center justify-center rounded-full border border-gray-300 text-gray-700">{{ subcategory._showChildren ? 'v' : '>' }}</span>
-                                            <span>{{ subcategory._showChildren ? 'Colapsar subniveles' : 'Expandir subniveles' }}</span>
-                                        </button>
-                                        <div v-if="subcategory._showChildren" class="mt-3 space-y-2">
-                                            <div v-for="(child, cidx) in (subcategory.children || [])" :key="cidx" class="flex items-center gap-3">
-                                                <input v-model="child.name" type="text" class="block w-full rounded-md shadow-sm border-gray-300" :placeholder="`Subnivel ${cidx+1}`" />
-                                                <button @click.prevent="removeChildFromSubcategory(index, cidx)" type="button" class="bg-red-500 text-white font-bold p-2 rounded-full h-8 w-8 flex items-center justify-center">-
-                                                </button>
-                                            </div>
-                                            <button type="button" class="mt-1 inline-flex items-center gap-2 border border-green-500 text-green-600 py-1 px-3 rounded hover:bg-green-50" @click.prevent="addChildToSubcategory(index)">
-                                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="3" width="11" height="15" rx="2" ry="2" stroke-width="1.5" /><circle cx="18" cy="18" r="3" stroke-width="1.5" /><path stroke-linecap="round" stroke-width="1.5" d="M18 16.5v3M16.5 18h3" /></svg>
-                                                Agregar subnivel
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <p v-if="form.errors.subcategories" class="text-sm text-red-600 mt-2">{{ form.errors.subcategories }}</p>
-
-
-                                <button @click.prevent="addSubcategory" type="button" class="mt-4 inline-flex items-center gap-2 border border-green-500 text-green-600 py-2 px-4 rounded hover:bg-green-50">
-                                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="3" width="11" height="15" rx="2" ry="2" stroke-width="1.5" /><circle cx="18" cy="18" r="3" stroke-width="1.5" /><path stroke-linecap="round" stroke-width="1.5" d="M18 16.5v3M16.5 18h3" /></svg>
-                                    Añadir Subcategoría
-                                </button>
-                            </div>
-
-                            <div class="flex items-center justify-end mt-8 border-t pt-6">
-                                <button type="submit" :disabled="form.processing" class="bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 inline-flex items-center gap-2">
-                                    <span class="text-lg">+</span>
-                                    <span>Crear</span>
-                                </button>
-                            </div>
-                        </form>
                     </div>
-                </div>
-            </div>
-        </div>
+                    <button type="button" class="ui-secondary-button mt-4" @click="addSubcategory">+ Agregar subcategoria</button>
+                </FormSection>
+
+                <div class="sticky bottom-3 z-20 flex justify-end rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur"><button type="submit" class="ui-primary-button" :disabled="form.processing">{{ form.processing ? 'Creando...' : 'Crear categoria' }}</button></div>
+            </form>
+        </AdminPage>
     </AuthenticatedLayout>
 
     <AlertModal

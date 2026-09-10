@@ -3,6 +3,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import Pagination from '@/Components/Pagination.vue';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
 
 const props = defineProps({
     customers: Object,
@@ -39,12 +41,8 @@ const formatPrice = (price) => {
     <Head title="Clientes" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Clientes</h2>
-        </template>
-
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <AdminPage>
+            <PageHeader eyebrow="Relacion comercial" title="Clientes" description="Conoce quienes compran, cuanto han invertido y consulta rapidamente su historial." />
                 <!-- Tabs -->
                 <div class="mb-6 border-b border-gray-200">
                     <nav class="-mb-px flex space-x-8">
@@ -76,45 +74,44 @@ const formatPrice = (price) => {
                 <!-- Contenido de Clientes -->
                 <div v-if="activeTab === 'customers'">
                 <!-- Estadísticas -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-                        <p class="text-sm text-gray-600 mb-1">Total de Clientes</p>
-                        <p class="text-3xl font-bold text-gray-900">{{ stats.total_customers }}</p>
+                <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div class="ui-card p-5">
+                        <p class="text-sm font-semibold text-slate-500">Clientes registrados</p>
+                        <p class="mt-2 text-3xl font-extrabold text-slate-900">{{ stats.total_customers }}</p>
                     </div>
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-                        <p class="text-sm text-gray-600 mb-1">Total de Pedidos</p>
-                        <p class="text-3xl font-bold text-gray-900">{{ stats.total_orders }}</p>
+                    <div class="ui-card p-5">
+                        <p class="text-sm font-semibold text-slate-500">Pedidos realizados</p>
+                        <p class="mt-2 text-3xl font-extrabold text-slate-900">{{ stats.total_orders }}</p>
                     </div>
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-                        <p class="text-sm text-gray-600 mb-1">Ingresos Totales</p>
-                        <p class="text-3xl font-bold text-gray-900">{{ formatPrice(stats.total_revenue) }}</p>
+                    <div class="ui-card p-5">
+                        <p class="text-sm font-semibold text-slate-500">Ingresos acumulados</p>
+                        <p class="mt-2 text-3xl font-extrabold text-slate-900">{{ formatPrice(stats.total_revenue) }}</p>
                     </div>
                 </div>
 
                 <!-- Búsqueda -->
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
-                    <div class="p-6">
-                        <div class="flex gap-4">
+                <div class="ui-card mb-6 p-4 sm:p-5">
+                        <form class="flex flex-col gap-3 sm:flex-row" @submit.prevent="search">
                             <input
                                 v-model="searchQuery"
-                                @keyup.enter="search"
                                 type="text"
                                 placeholder="Buscar por nombre, email o teléfono..."
-                                class="flex-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                class="ui-input mt-0 flex-1"
                             />
                             <button
-                                @click="search"
-                                class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                                type="submit"
+                                class="ui-primary-button"
                             >
                                 Buscar
                             </button>
-                        </div>
-                    </div>
+                        </form>
                 </div>
+
+                <div class="mb-4 space-y-3 md:hidden"><article v-for="customer in customers.data" :key="customer.id" class="ui-card p-4"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><h2 class="truncate font-bold text-slate-900">{{ customer.name }}</h2><p class="truncate text-sm text-slate-500">{{ customer.email }}</p></div><p class="font-extrabold text-slate-900">{{ formatPrice(customer.orders?.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0) || 0) }}</p></div><div class="mt-4 flex items-center justify-between rounded-xl bg-slate-50 p-3 text-sm"><span>{{ customer.orders_count }} pedidos</span><span>{{ customer.phone || 'Sin telefono' }}</span></div><Link :href="route('admin.customers.show', customer.id)" class="ui-secondary-button mt-4 w-full">Ver historial</Link></article><div v-if="!customers.data.length" class="ui-card p-8 text-center text-sm text-slate-500">No se encontraron clientes.</div></div>
 
                 <!-- Lista de clientes -->
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="overflow-x-auto">
+                    <div class="hidden overflow-x-auto md:block">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -167,8 +164,7 @@ const formatPrice = (price) => {
                     </div>
                 </div>
                 </div>
-            </div>
-        </div>
+        </AdminPage>
     </AuthenticatedLayout>
 </template>
 

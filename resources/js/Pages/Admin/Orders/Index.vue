@@ -1,264 +1,120 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
 import Pagination from '@/Components/Pagination.vue';
-import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const props = defineProps({
     orders: Object,
     filters: Object,
 });
 
-
-// Buscador reactivo con debounce
 const q = ref(props.filters?.q || '');
 const start = ref(props.filters?.start || '');
 const end = ref(props.filters?.end || '');
 
-let t;
-const pushFilters = () => {
-    clearTimeout(t);
-    t = setTimeout(() => {
-        router.get(route('admin.orders.index'), {
-            status: props.filters?.status || undefined,
-            q: q.value || undefined,
-            start: start.value || undefined,
-            end: end.value || undefined,
-        }, { preserveState: true, replace: true, preserveScroll: true });
-    }, 350);
+const statuses = [
+    { value: '', label: 'Todos' },
+    { value: 'recibido', label: 'Recibidos' },
+    { value: 'en_preparacion', label: 'En preparacion' },
+    { value: 'despachado', label: 'Despachados' },
+    { value: 'entregado', label: 'Entregados' },
+    { value: 'cancelado', label: 'Cancelados' },
+];
+
+const applyFilters = (status = props.filters?.status || '') => {
+    router.get(route('admin.orders.index'), {
+        status: status || undefined,
+        q: q.value || undefined,
+        start: start.value || undefined,
+        end: end.value || undefined,
+    }, { preserveState: true, replace: true, preserveScroll: true });
 };
 
-watch(q, pushFilters);
-watch([start, end], pushFilters);
-
-// Formateo fecha
-const formatDate = (datetime) => {
-    const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-    return new Date(datetime).toLocaleDateString('es-CO', options);
+const clearFilters = () => {
+    q.value = '';
+    start.value = '';
+    end.value = '';
+    applyFilters('');
 };
 
-// Scroll lateral + degradados + header sticky + filas cebra
-const scrollBoxRef = ref(null);
-const showLeftFade = ref(false);
-const showRightFade = ref(false);
-const updateFades = () => {
-    const el = scrollBoxRef.value;
-    if (!el) return;
-    const maxScrollLeft = el.scrollWidth - el.clientWidth;
-    const left = el.scrollLeft || 0;
-    showLeftFade.value = left > 0;
-    showRightFade.value = left < (maxScrollLeft - 1);
-};
-onMounted(() => {
-    nextTick(() => updateFades());
-    scrollBoxRef.value?.addEventListener('scroll', updateFades, { passive: true });
-    window.addEventListener('resize', updateFades);
-});
-onBeforeUnmount(() => {
-    scrollBoxRef.value?.removeEventListener('scroll', updateFades);
-    window.removeEventListener('resize', updateFades);
+const formatDate = (datetime) => new Date(datetime).toLocaleDateString('es-CO', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
 });
 
-// Redimensionable: primera columna
-const ORD_COL_KEY = 'ord_firstcol_w_px';
-const FIRST_MIN = 60;
-const FIRST_MAX = 320;
-const firstColWidth = ref(Number(localStorage.getItem(ORD_COL_KEY)) || 160);
-const firstColStyle = computed(() => ({
-    width: firstColWidth.value + 'px',
-    minWidth: firstColWidth.value + 'px',
-    maxWidth: firstColWidth.value + 'px',
-}));
-let startX = 0;
-let startW = 0;
-const onResizeMove = (e) => {
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const next = Math.max(FIRST_MIN, Math.min(FIRST_MAX, startW + (clientX - startX)));
-    firstColWidth.value = next;
-};
-const stopResize = () => {
-    document.removeEventListener('mousemove', onResizeMove);
-    document.removeEventListener('mouseup', stopResize);
-    document.removeEventListener('touchmove', onResizeMove);
-    document.removeEventListener('touchend', stopResize);
-    try { localStorage.setItem(ORD_COL_KEY, String(firstColWidth.value)); } catch (_) {}
-};
-const startResize = (e) => {
-    startX = e.touches ? e.touches[0].clientX : e.clientX;
-    startW = firstColWidth.value;
-    document.addEventListener('mousemove', onResizeMove, { passive: false });
-    document.addEventListener('mouseup', stopResize);
-    document.addEventListener('touchmove', onResizeMove, { passive: false });
-    document.addEventListener('touchend', stopResize);
-};
+const formatCurrency = (value) => new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+}).format(Number(value || 0));
+
+const statusLabel = (status) => statuses.find((item) => item.value === status)?.label || status;
+
+const statusClass = (status) => ({
+    recibido: 'bg-amber-50 text-amber-700',
+    en_preparacion: 'bg-blue-50 text-blue-700',
+    despachado: 'bg-violet-50 text-violet-700',
+    entregado: 'bg-emerald-50 text-emerald-700',
+    cancelado: 'bg-rose-50 text-rose-700',
+}[status] || 'bg-slate-100 text-slate-600');
 </script>
 
 <template>
-    <Head title="Gestionar Órdenes" />
+    <Head title="Pedidos" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex justify-between items-center">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Gestionar Órdenes</h2>
+        <AdminPage>
+            <PageHeader eyebrow="Ventas online" title="Pedidos" description="Consulta nuevas compras, coordina entregas y mantén informado a cada cliente." />
+
+            <nav class="flex gap-2 overflow-x-auto pb-1" aria-label="Estados de pedidos">
+                <button
+                    v-for="item in statuses"
+                    :key="item.value"
+                    type="button"
+                    class="min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold transition"
+                    :class="(filters?.status || '') === item.value ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-700'"
+                    @click="applyFilters(item.value)"
+                >
+                    {{ item.label }}
+                </button>
+            </nav>
+
+            <form class="ui-card grid gap-3 p-4 md:grid-cols-[minmax(240px,1fr)_170px_170px_auto] md:p-5" @submit.prevent="applyFilters()">
+                <div><label for="order-search" class="ui-label">Cliente o telefono</label><input id="order-search" v-model="q" class="ui-input" placeholder="Ej. Maria o 300..." /></div>
+                <div><label for="order-start" class="ui-label">Desde</label><input id="order-start" v-model="start" type="date" class="ui-input" /></div>
+                <div><label for="order-end" class="ui-label">Hasta</label><input id="order-end" v-model="end" type="date" class="ui-input" /></div>
+                <div class="flex items-end gap-2"><button type="submit" class="ui-primary-button flex-1">Aplicar</button><button type="button" class="ui-secondary-button" @click="clearFilters">Limpiar</button></div>
+            </form>
+
+            <div v-if="!orders.data?.length" class="ui-card p-10 text-center">
+                <h2 class="text-lg font-bold text-slate-900">No hay pedidos con estos filtros</h2>
+                <p class="mt-2 text-sm text-slate-500">Prueba otro estado, cliente o rango de fechas.</p>
+                <button type="button" class="ui-secondary-button mt-5" @click="clearFilters">Ver todos los pedidos</button>
             </div>
-        </template>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 text-gray-900">
-                        
-                        <div class="mb-4">
-                            <div class="flex flex-wrap gap-2">
-                                <Link 
-                                    :href="route('admin.orders.index')" 
-                                    class="px-3 py-2 text-sm font-medium rounded-md"
-                                    :class="{
-                                        'bg-blue-600 text-white': !filters.status,
-                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status
-                                    }"
-                                >
-                                    Todos
-                                </Link>
-                                <Link 
-                                    :href="route('admin.orders.index', { status: 'recibido' })"
-                                    class="px-3 py-2 text-sm font-medium rounded-md"
-                                    :class="{
-                                        'bg-yellow-500 text-white': filters.status === 'recibido',
-                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status !== 'recibido'
-                                    }"
-                                >
-                                    Recibidos
-                                </Link>
-                                <Link 
-                                    :href="route('admin.orders.index', { status: 'en_preparacion' })"
-                                    class="px-3 py-2 text-sm font-medium rounded-md"
-                                    :class="{
-                                        'bg-blue-500 text-white': filters.status === 'en_preparacion',
-                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status !== 'en_preparacion'
-                                    }"
-                                >
-                                    En Preparación
-                                </Link>
-                                <Link 
-                                    :href="route('admin.orders.index', { status: 'despachado' })"
-                                    class="px-3 py-2 text-sm font-medium rounded-md"
-                                    :class="{
-                                        'bg-purple-500 text-white': filters.status === 'despachado',
-                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status !== 'despachado'
-                                    }"
-                                >
-                                    Despachados
-                                </Link>
-                                <Link 
-                                    :href="route('admin.orders.index', { status: 'entregado' })"
-                                    class="px-3 py-2 text-sm font-medium rounded-md"
-                                    :class="{
-                                        'bg-green-500 text-white': filters.status === 'entregado',
-                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status !== 'entregado'
-                                    }"
-                                >
-                                    Entregados
-                                </Link>
-                                <Link 
-                                    :href="route('admin.orders.index', { status: 'cancelado' })"
-                                    class="px-3 py-2 text-sm font-medium rounded-md"
-                                    :class="{
-                                        'bg-red-500 text-white': filters.status === 'cancelado',
-                                        'bg-gray-200 text-gray-700 hover:bg-gray-300': filters.status !== 'cancelado'
-                                    }"
-                                >
-                                    Cancelados
-                                </Link>
-                            </div>
-                        </div>
-
-                        <!-- Barra de búsqueda y rango de fechas (reactiva + responsive) -->
-                        <div class="mb-4">
-                            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
-                                <div class="md:col-span-2">
-                                    <div class="relative">
-                                        <input v-model="q" type="text" placeholder="Buscar por nombre o teléfono" class="w-full pl-10 pr-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                                        <svg class="absolute left-2 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M10 2a8 8 0 105.293 14.707l3.5 3.5a1 1 0 001.414-1.414l-3.5-3.5A8 8 0 0010 2zm0 2a6 6 0 110 12A6 6 0 0110 4z"/></svg>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-2 md:col-span-2">
-                                    <input v-model="start" type="date" class="w-full border rounded-md text-sm py-2 px-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                                    <span class="text-gray-500 text-sm">a</span>
-                                    <input v-model="end" type="date" class="w-full border rounded-md text-sm py-2 px-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <button @click.prevent="() => { q=''; start=''; end=''; pushFilters(); }" class="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium py-2 px-3 rounded-md w-full md:w-auto justify-center">
-                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                                        Limpiar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-
-                        <div ref="scrollBoxRef" class="relative overflow-x-auto">
-                            <div v-show="showLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
-                            <div v-show="showRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>
-                            <table class="min-w-[920px] sm:min-w-full divide-y divide-gray-200">
-                                <thead class="sticky top-0 z-10 bg-gray-50">
-                                    <tr>
-                                        <th scope="col" class="sticky left-0 z-20 bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap relative" :style="firstColStyle">
-                                            Orden #
-                                            <div @mousedown="startResize" @touchstart.prevent="startResize" class="absolute top-0 right-0 h-full w-3 cursor-col-resize group">
-                                                <div class="mx-auto my-auto h-6 w-1.5 bg-gray-300 rounded-full group-hover:bg-indigo-400"></div>
-                                            </div>
-                                        </th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Cliente</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Teléfono</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Fecha</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Items</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Total</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Estado</th>
-                                        <th scope="col" class="relative px-6 py-3">
-                                            <span class="sr-only">Ver</span>
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="(order, idx) in orders.data" :key="order.id" class="odd:bg-white even:bg-gray-100">
-                                        <td class="sticky left-0 z-10 px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r truncate" :style="firstColStyle" :title="order.sequence_number || order.id" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ order.sequence_number || order.sequence_number === 0 ? order.sequence_number : order.id }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{{ order.customer_name }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ order.customer_phone }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(order.created_at) }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ order.items_count }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$ {{ Number(order.total_price).toLocaleString('es-CO') }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                                  :class="{
-                                                      'bg-yellow-100 text-yellow-800': order.status === 'recibido',
-                                                      'bg-blue-100 text-blue-800': order.status === 'en_preparacion',
-                                                      'bg-purple-100 text-purple-800': order.status === 'despachado',
-                                                      'bg-green-100 text-green-800': order.status === 'entregado',
-                                                      'bg-red-100 text-red-800': order.status === 'cancelado',
-                                                  }">
-                                                {{ order.status }}
-                                            </span>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <Link :href="route('admin.orders.show', order.id)" class="text-indigo-600 hover:text-indigo-900">Ver</Link>
-                                        </td>
-                                    </tr>
-                                    <tr v-if="orders.data.length === 0">
-                                        <td colspan="8" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
-                                            No se encontraron órdenes con este filtro.
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <Pagination class="mt-6" :links="orders.links" />
-
+            <div v-else class="space-y-3 lg:hidden">
+                <article v-for="order in orders.data" :key="order.id" class="ui-card p-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Pedido</p><h2 class="mt-1 text-lg font-extrabold text-slate-900">#{{ order.sequence_number ?? order.id }}</h2></div>
+                        <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="statusClass(order.status)">{{ statusLabel(order.status) }}</span>
                     </div>
-                </div>
+                    <div class="mt-4"><p class="font-bold text-slate-900">{{ order.customer_name }}</p><p class="text-sm text-slate-500">{{ order.customer_phone || 'Sin telefono' }}</p></div>
+                    <dl class="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm"><div><dt class="text-slate-500">Fecha</dt><dd class="mt-1 font-semibold text-slate-800">{{ formatDate(order.created_at) }}</dd></div><div><dt class="text-slate-500">Total</dt><dd class="mt-1 font-extrabold text-slate-900">{{ formatCurrency(order.total_price) }}</dd></div></dl>
+                    <Link :href="route('admin.orders.show', order.id)" class="ui-primary-button mt-4 w-full">Gestionar pedido</Link>
+                </article>
             </div>
-        </div>
-        
+
+            <div v-if="orders.data?.length" class="ui-card hidden overflow-hidden lg:block">
+                <div class="overflow-x-auto"><table class="w-full"><thead><tr><th class="px-5 py-4 text-left">Pedido</th><th class="px-5 py-4 text-left">Cliente</th><th class="px-5 py-4 text-left">Fecha</th><th class="px-5 py-4 text-left">Productos</th><th class="px-5 py-4 text-left">Total</th><th class="px-5 py-4 text-left">Estado</th><th class="px-5 py-4 text-right">Accion</th></tr></thead><tbody><tr v-for="order in orders.data" :key="order.id"><td class="px-5 py-4 font-extrabold text-slate-900">#{{ order.sequence_number ?? order.id }}</td><td class="px-5 py-4"><p class="font-bold text-slate-900">{{ order.customer_name }}</p><p class="text-sm text-slate-500">{{ order.customer_phone || 'Sin telefono' }}</p></td><td class="px-5 py-4 text-sm text-slate-600">{{ formatDate(order.created_at) }}</td><td class="px-5 py-4 text-sm text-slate-600">{{ order.items_count }}</td><td class="px-5 py-4 font-extrabold text-slate-900">{{ formatCurrency(order.total_price) }}</td><td class="px-5 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="statusClass(order.status)">{{ statusLabel(order.status) }}</span></td><td class="px-5 py-4 text-right"><Link :href="route('admin.orders.show', order.id)" class="ui-secondary-button">Gestionar</Link></td></tr></tbody></table></div>
+            </div>
+
+            <Pagination v-if="orders.links" :links="orders.links" />
+        </AdminPage>
     </AuthenticatedLayout>
 </template>

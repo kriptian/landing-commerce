@@ -26,6 +26,18 @@ const hasPhysicalSalesRole = computed(() => {
     const roles = page.props.auth?.roles || [];
     return roles.includes('physical-sales');
 });
+const hasElevatedAccess = computed(() => (
+    page.props.auth?.user?.is_admin
+    || (page.props.auth?.roles || []).includes('Administrador')
+));
+const canOverridePrices = computed(() => (
+    hasElevatedAccess.value
+    || (page.props.auth?.permissions || []).includes('modificar precios y descuentos pos')
+));
+const canRegisterExpenses = computed(() => (
+    hasElevatedAccess.value
+    || (page.props.auth?.permissions || []).includes('registrar gastos')
+));
 
 const handleExit = () => {
     if (hasPhysicalSalesRole.value) {
@@ -78,7 +90,7 @@ const downloadInvoicePDF = async () => {
         }
     } catch (error) {
         console.error(error);
-        alert('Error al generar el PDF');
+        showPosNotice('Intenta nuevamente o imprime el comprobante.', 'No se pudo generar el PDF');
     } finally {
         isGeneratingPDF.value = false;
     }
@@ -263,14 +275,7 @@ const calculateSaleProfit = (sale) => {
     // Verificar items
     if (sale.items && sale.items.length > 0) {
         sale.items.forEach(item => {
-            let cost = 0;
-            // Intentar obtener cost de variante o producto
-            // Nota: item.variant es relation, item.product es relation
-            if (item.variant && item.variant.purchase_price > 0) {
-                cost = parseFloat(item.variant.purchase_price);
-            } else if (item.product && item.product.purchase_price > 0) {
-                cost = parseFloat(item.product.purchase_price);
-            }
+            const cost = parseFloat(item.purchase_price) || 0;
             
             if (cost > 0) {
                 hasCost = true;
@@ -305,6 +310,8 @@ const barcodeInput = ref('');
 const showPaymentModal = ref(false);
 const paymentMethod = ref('efectivo');
 const amountTendered = ref(0); // Campo para dinero recibido
+const isProcessingSale = ref(false);
+const saleIdempotencyKey = ref(window.crypto.randomUUID());
 
 // Reset cash input when opening payment modal
 watch(showPaymentModal, (newValue) => {
@@ -327,6 +334,10 @@ const productDiscountType = ref('percentage');
 const productDiscountValue = ref(0);
 const showStockAlertModal = ref(false);
 const stockAlertMessage = ref('');
+const posNotice = ref({ show: false, type: 'error', title: '', message: '' });
+const showPosNotice = (message, title = 'No se pudo completar la accion', type = 'error') => {
+    posNotice.value = { show: true, type, title, message };
+};
 // Referencias para el escáner de código de barras
 const html5QrCode = ref(null);
 
@@ -389,31 +400,21 @@ const subtotal = computed(() => {
 });
 
 const discountAmount = computed(() => {
+    let value;
     if (discountType.value === 'percentage') {
-        return (subtotal.value * discount.value) / 100;
+        value = (subtotal.value * discount.value) / 100;
+    } else {
+        value = Number(discount.value) || 0;
     }
-    return discount.value;
+
+    return Math.min(subtotal.value, Math.max(0, value));
 });
 
 // Costo de envío
 const includeDeliveryCost = ref(false);
-const deliveryCost = ref(0);
-
-// Inicializar con valores de la tienda si existen, pero solo si no hay items en el carrito (o siempre, según preferencia)
-// El usuario reportó que no tomaba el valor. Vamos a asegurar que si activa el check, tome el valor.
-onMounted(() => {
-    if (props.store?.delivery_cost_active) {
-         // Opcional: activar por defecto
-         // includeDeliveryCost.value = true; 
-         // deliveryCost.value = parseFloat(props.store.delivery_cost);
-    }
-});
-
-watch(includeDeliveryCost, (newValue) => {
-    if (newValue && deliveryCost.value === 0 && props.store?.delivery_cost) {
-        deliveryCost.value = parseFloat(props.store.delivery_cost);
-    }
-});
+const deliveryCost = computed(() => (
+    props.store?.delivery_cost_active ? (parseFloat(props.store.delivery_cost) || 0) : 0
+));
 
 const total = computed(() => {
     let t = subtotal.value - discountAmount.value;
@@ -531,11 +532,11 @@ const searchByBarcode = async (barcode) => {
                 barcodeInput.value = '';
             }
         } else {
-            alert('Producto no encontrado con ese código de barras');
+            showPosNotice('No encontramos un producto con ese codigo de barras.', 'Producto no encontrado');
             focusSearchInput();
         }
     } catch (error) {
-        alert('Error al buscar producto');
+        showPosNotice('Revisa la conexion e intenta buscar el producto nuevamente.', 'No se pudo buscar el producto');
         focusSearchInput();
     }
 };
@@ -547,10 +548,12 @@ const calculatePriceWithDiscount = (product, variant = null) => {
     let finalPrice = parseFloat(basePrice);
     let discountPercent = 0;
     
-    // Aplicar descuento de producto si está activo
-    if (product.promo_active && product.promo_discount_percent > 0) {
+    if (props.store?.promo_active && props.store?.promo_discount_percent > 0) {
+        discountPercent = parseFloat(props.store.promo_discount_percent);
+        finalPrice = Math.round((finalPrice * (100 - discountPercent) / 100) * 100) / 100;
+    } else if (product.promo_active && product.promo_discount_percent > 0) {
         discountPercent = parseFloat(product.promo_discount_percent);
-        finalPrice = Math.round((finalPrice * (100 - discountPercent)) / 100);
+        finalPrice = Math.round((finalPrice * (100 - discountPercent) / 100) * 100) / 100;
     }
     
     return {
@@ -924,12 +927,12 @@ const initBarcodeScanner = async () => {
                     }
                 );
             } catch (err2) {
-                alert('No se pudo acceder a la cámara. Por favor, permite el acceso a la cámara en la configuración del navegador.');
+                showPosNotice('Permite el acceso a la camara en la configuracion del navegador e intenta nuevamente.', 'Camara no disponible');
                 showBarcodeScanner.value = false;
             }
         }
     } catch (error) {
-        alert('Error al inicializar el escáner. Por favor, intenta nuevamente.');
+        showPosNotice('Cierra otras aplicaciones que usen la camara e intenta nuevamente.', 'No se pudo iniciar el escaner');
         showBarcodeScanner.value = false;
     }
 };
@@ -952,7 +955,7 @@ const closeBarcodeScanner = async () => {
 const openCashDrawer = async () => {
     try {
         if (!window.axios) {
-            alert('Error: No se pudo inicializar la conexión. Por favor, recarga la página.');
+            showPosNotice('Recarga la pagina para restablecer la conexion con la impresora.', 'Conexion no disponible');
             return;
         }
 
@@ -961,11 +964,11 @@ const openCashDrawer = async () => {
         if (response.data && response.data.success) {
             // Éxito silencioso - el cajón debería abrirse
         } else {
-            alert('No se pudo abrir el cajón. Asegúrate de que la impresora esté conectada y configurada.');
+            showPosNotice('Verifica que la impresora este conectada y configurada.', 'No se pudo abrir el cajon');
         }
     } catch (error) {
         console.error('Error al intentar abrir el cajón:', error);
-        alert('No se pudo abrir el cajón. Asegúrate de que la impresora esté conectada y configurada.');
+        showPosNotice('Verifica que la impresora este conectada y configurada.', 'No se pudo abrir el cajon');
     }
 };
 
@@ -1052,8 +1055,15 @@ router.on('finish', () => {
 
 // Procesar venta
 const processSale = async () => {
+    if (isProcessingSale.value) return;
+
     if (cartItems.value.length === 0) {
-        alert('El carrito está vacío');
+        showPosNotice('Agrega al menos un producto antes de procesar la venta.', 'El carrito esta vacio');
+        return;
+    }
+
+    if (paymentMethod.value === 'efectivo' && Number(amountTendered.value) < total.value) {
+        showPosNotice('Ingresa un valor igual o mayor al total de la venta.', 'Efectivo insuficiente');
         return;
     }
 
@@ -1081,28 +1091,26 @@ const processSale = async () => {
         return;
     }
 
-        const saleData = {
+    const saleData = {
         items: cartItems.value.map(item => ({
             product_id: item.product_id,
             variant_id: item.variant_id,
             quantity: item.quantity,
-            unit_price: item.unit_price,
-            original_price: item.original_price,
-            discount_percent: item.discount_percent,
+            ...(canOverridePrices.value ? { unit_price: item.unit_price } : {}),
         })),
-        subtotal: subtotal.value,
-        tax: 0,
-        discount: discountAmount.value,
-        total: total.value,
-        delivery_cost: includeDeliveryCost.value ? (parseFloat(deliveryCost.value) || 0) : 0,
+        ...(canOverridePrices.value ? { discount: discountAmount.value } : {}),
+        include_delivery: includeDeliveryCost.value,
         payment_method: paymentMethod.value,
+        amount_tendered: paymentMethod.value === 'efectivo' ? Number(amountTendered.value) : null,
         notes: saleNotes.value,
+        idempotency_key: saleIdempotencyKey.value,
     };
 
     try {
+        isProcessingSale.value = true;
         // Usar axios que ya está configurado con CSRF
         if (!window.axios) {
-            alert('Error: No se pudo inicializar la conexión. Por favor, recarga la página.');
+            showPosNotice('Recarga la pagina para restablecer la conexion e intenta nuevamente.', 'Conexion no disponible');
             return;
         }
 
@@ -1131,7 +1139,7 @@ const processSale = async () => {
         }
         
         if (!csrfToken) {
-            alert('Error: No se pudo obtener el token de seguridad. Por favor, recarga la página.');
+            showPosNotice('Recarga la pagina antes de volver a procesar la venta.', 'Sesion no disponible');
             return;
         }
         
@@ -1167,7 +1175,7 @@ const processSale = async () => {
                 if (!csrfToken && retryCount === 0) {
                     try {
                         // Hacer una petición GET simple para obtener el token actualizado del servidor
-                        const tokenResponse = await window.axios.get(route('dashboard'), {
+                        await window.axios.get(route('admin.physical-sales.index'), {
                             headers: {
                                 'X-Requested-With': 'XMLHttpRequest'
                             }
@@ -1279,6 +1287,7 @@ const processSale = async () => {
             saleNotes.value = '';
             paymentMethod.value = 'efectivo';
             selectedCategory.value = null;
+            saleIdempotencyKey.value = window.crypto.randomUUID();
             
             // Actualizar token CSRF después de una petición exitosa
             if (window.updateCsrfToken) {
@@ -1291,7 +1300,7 @@ const processSale = async () => {
             // Recargar página para actualizar lista de ventas
             router.reload();
         } else {
-            alert('Error: ' + (response.data?.message || 'No se pudo procesar la venta'));
+            showPosNotice(response.data?.message || 'No se pudo procesar la venta.', 'Venta no procesada');
         }
     } catch (error) {
         // Log completo del error para debugging
@@ -1351,9 +1360,16 @@ const processSale = async () => {
             errorMessage = error.message;
         }
         
-        alert(errorMessage);
+        showPosNotice(errorMessage, 'Venta no procesada');
+    } finally {
+        isProcessingSale.value = false;
     }
 };
+
+const hasActivePromotion = (product) => (
+    (props.store?.promo_active && props.store?.promo_discount_percent > 0)
+    || (product.promo_active && product.promo_discount_percent > 0)
+);
 
 // Limpiar al desmontar
 onBeforeUnmount(() => {
@@ -1479,11 +1495,11 @@ const stopResize = () => {
 
         <!-- Vista de Ventas (POS) -->
         <!-- Vista Desktop -->
-        <div v-if="activeTab === 'sales'" class="hidden lg:flex fixed inset-0 bg-white flex-row" style="margin-top: 0; z-index: 10;">
+        <div v-if="activeTab === 'sales'" class="fixed inset-0 hidden flex-row bg-slate-50 lg:flex" style="margin-top: 0; z-index: 10;">
             <!-- Panel Izquierdo: Productos -->
             <div :style="{ width: leftPanelWidth + '%' }" class="h-full flex flex-col border-r border-gray-300">
                 <!-- Header con búsqueda -->
-                <div class="bg-blue-50 border-b border-blue-100 px-4 py-3 flex-shrink-0">
+                <div class="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-3">
                     <div class="flex items-center gap-3 mb-3">
                         <button 
                             @click="handleExit"
@@ -1497,6 +1513,7 @@ const stopResize = () => {
                         
                         <!-- Botón Nuevo Gasto -->
                         <button 
+                            v-if="canRegisterExpenses"
                             @click="showExpenseModal = true"
                             class="px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 text-sm font-medium flex items-center gap-2 border border-red-200"
                             title="Registrar Gasto / Salida"
@@ -1536,7 +1553,7 @@ const stopResize = () => {
                             @click="selectedCategory = null; searchQuery = ''"
                             :class="[
                                 'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap border',
-                                selectedCategory === null ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                selectedCategory === null ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                             ]"
                         >
                             TODOS
@@ -1547,7 +1564,7 @@ const stopResize = () => {
                             @click="selectedCategory = category.id; searchQuery = ''"
                             :class="[
                                 'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap border',
-                                selectedCategory === category.id ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                selectedCategory === category.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                             ]"
                         >
                             {{ category.name }}
@@ -1564,7 +1581,7 @@ const stopResize = () => {
                         <div
                             v-for="product in filteredProducts"
                             :key="product.id"
-                            class="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md cursor-pointer flex flex-col"
+                            class="flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-lg"
                             @click="handleProductClick(product)"
                         >
                             <div class="aspect-square bg-gray-100 flex items-center justify-center" style="min-height: 120px;">
@@ -1580,7 +1597,7 @@ const stopResize = () => {
                             </div>
                             <div class="p-2 flex-1 flex flex-col">
                                 <div class="mb-1">
-                                    <template v-if="product.promo_active && product.promo_discount_percent > 0">
+                                    <template v-if="hasActivePromotion(product)">
                                         <p class="text-xs line-through text-red-600">
                                             {{ formatCurrency(calculatePriceWithDiscount(product).originalPrice) }}
                                         </p>
@@ -1613,7 +1630,7 @@ const stopResize = () => {
             <!-- Panel Derecho: Facturación -->
             <div class="flex-1 h-full flex flex-col bg-white overflow-hidden" style="min-width: 300px;">
                 <!-- Header -->
-                <div class="bg-blue-50 border-b border-blue-100 px-4 py-3 flex-shrink-0">
+                <div class="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-3">
                     <div class="flex items-center gap-3">
                         <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/>
@@ -1679,38 +1696,41 @@ const stopResize = () => {
                                     </td>
                                     <td class="px-3 py-3 text-right align-middle w-40" :title="`Precio unitario: ${formatCurrency(item.unit_price)}`">
                                         <input
+                                            v-if="canOverridePrices"
                                             type="text"
                                             :value="formatNumberForInput(item.original_price || item.unit_price)"
                                             @input="handlePriceInput(index, $event)"
                                             class="w-full text-right border border-gray-300 rounded text-sm py-2 px-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             placeholder="0"
                                         />
+                                        <span v-else class="font-medium text-gray-900">
+                                            {{ formatCurrency(item.unit_price) }}
+                                        </span>
                                     </td>
                                     <td class="px-3 py-3 text-right align-middle w-32" :title="item.discount_type === 'amount' ? `Descuento: $${item.discount_value}` : `Descuento: ${item.discount_percent}%`">
-                                        <!-- Si es monto fijo, mostrar button con valor -->
-                                        <button 
-                                            v-if="item.discount_type === 'amount'"
-                                            @click="openProductDiscountModal(index)"
-                                            class="w-full text-right border border-blue-200 bg-blue-50 text-blue-700 font-semibold rounded text-sm py-2 px-2 hover:bg-blue-100 transition-colors"
-                                        >
-                                            $ {{ formatNumberForInput(item.discount_value) }}
-                                        </button>
-                                        
-                                        <!-- Si es porcentaje, mostrar input original con símbolo % -->
-                                        <div v-else class="relative">
-                                            <input
-                                                type="number"
-                                                :value="item.discount_percent"
-                                                @change="updateDiscountFromInput(index, $event)"
-                                                @click.self="openProductDiscountModal(index)" 
-                                                class="w-full text-right border border-gray-300 rounded text-sm py-2 pl-2 pr-6 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                min="0"
-                                                max="100"
-                                                step="0.01"
-                                            />
-                                            <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm font-medium pointer-events-none">%</span>
-                                        </div>
-                                        <!-- Nota: quitamos @click del input para evitar abrir modal indeseado al editar, pero se puede añadir un icono o doble click -->
+                                        <template v-if="canOverridePrices">
+                                            <button
+                                                v-if="item.discount_type === 'amount'"
+                                                @click="openProductDiscountModal(index)"
+                                                class="w-full text-right border border-blue-200 bg-blue-50 text-blue-700 font-semibold rounded text-sm py-2 px-2 hover:bg-blue-100 transition-colors"
+                                            >
+                                                $ {{ formatNumberForInput(item.discount_value) }}
+                                            </button>
+                                            <div v-else class="relative">
+                                                <input
+                                                    type="number"
+                                                    :value="item.discount_percent"
+                                                    @change="updateDiscountFromInput(index, $event)"
+                                                    @click.self="openProductDiscountModal(index)"
+                                                    class="w-full text-right border border-gray-300 rounded text-sm py-2 pl-2 pr-6 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    min="0"
+                                                    max="100"
+                                                    step="0.01"
+                                                />
+                                                <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm font-medium pointer-events-none">%</span>
+                                            </div>
+                                        </template>
+                                        <span v-else>{{ formatNumber(item.discount_percent) }}%</span>
                                     </td>
                                     <td class="px-3 py-3 text-right align-middle w-36" :title="`Subtotal: ${formatCurrency(item.quantity * item.unit_price)}`">
                                         <span class="font-semibold text-gray-900 text-sm">
@@ -1742,37 +1762,32 @@ const stopResize = () => {
                     </div>
                     <div class="flex justify-between text-sm items-center">
                         <span class="text-gray-700">Descuento:</span>
-                        <span 
+                        <button
+                            v-if="canOverridePrices"
+                            type="button"
                             @click="openGeneralDiscountModal"
-                            class="font-medium cursor-pointer hover:text-blue-600 flex items-center gap-1"
+                            class="font-medium hover:text-blue-600 flex items-center gap-1"
                         >
                             {{ discount > 0 ? '-' + formatCurrency(discountAmount) : formatCurrency(0) }}
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
                             </svg>
-                        </span>
+                        </button>
+                        <span v-else class="font-medium">{{ formatCurrency(0) }}</span>
                     </div>
                     
                     <!-- Costo de envío -->
                     <div class="flex justify-between text-sm items-center">
                         <label class="flex items-center text-gray-700 gap-2 cursor-pointer">
-                            <input 
-                                type="checkbox" 
-                                v-model="includeDeliveryCost"
+                                <input
+                                    type="checkbox"
+                                    v-model="includeDeliveryCost"
+                                    :disabled="!store?.delivery_cost_active"
                                 class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 w-4 h-4"
                             >
                             <span>Incluir Envío:</span>
                         </label>
-                        <div v-if="includeDeliveryCost" class="relative w-32">
-                            <span class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                            <input 
-                                type="number" 
-                                v-model="deliveryCost" 
-                                class="w-full text-right border border-gray-300 rounded text-sm py-1 pl-6 pr-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="0"
-                                min="0"
-                            >
-                        </div>
+                        <span v-if="includeDeliveryCost" class="font-medium">{{ formatCurrency(deliveryCost) }}</span>
                         <span v-else class="text-gray-500 text-xs italic">No aplica</span>
                     </div>
 
@@ -1801,9 +1816,9 @@ const stopResize = () => {
         </div>
 
         <!-- Vista Móvil (POS) -->
-        <div v-if="activeTab === 'sales'" class="lg:hidden fixed inset-0 bg-white flex flex-col" style="margin-top: 0; z-index: 10;">
+        <div v-if="activeTab === 'sales'" class="fixed inset-0 flex flex-col bg-slate-50 lg:hidden" style="margin-top: 0; z-index: 10;">
             <!-- Header móvil -->
-            <div class="bg-blue-500 px-4 py-3 flex-shrink-0">
+            <div class="flex-shrink-0 bg-slate-950 px-4 py-3">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1844,6 +1859,7 @@ const stopResize = () => {
 
                     <!-- Botón Gasto Móvil -->
                     <button 
+                        v-if="canRegisterExpenses"
                         @click="showExpenseModal = true"
                         class="px-3 py-2.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 flex items-center justify-center flex-shrink-0 border border-red-200"
                         title="Registrar Gasto"
@@ -1900,7 +1916,7 @@ const stopResize = () => {
                         <div class="flex-1 min-w-0">
                             <p class="font-medium text-sm text-gray-900 truncate">{{ product.name }}</p>
                             <div>
-                                <template v-if="product.promo_active && product.promo_discount_percent > 0">
+                                <template v-if="hasActivePromotion(product)">
                                     <p class="text-xs line-through text-red-600">
                                         {{ formatCurrency(calculatePriceWithDiscount(product).originalPrice) }}
                                     </p>
@@ -1998,6 +2014,7 @@ const stopResize = () => {
                                 
                                 <!-- Botón descuento -->
                                 <button
+                                    v-if="canOverridePrices"
                                     @click="openProductDiscountModal(index)"
                                     class="w-8 h-8 flex items-center justify-center bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
                                     title="Aplicar descuento"
@@ -2031,15 +2048,18 @@ const stopResize = () => {
                     </div>
                     <div class="flex justify-between text-sm">
                         <span class="text-gray-700">Descuento:</span>
-                        <span 
+                        <button
+                            v-if="canOverridePrices"
+                            type="button"
                             @click="openGeneralDiscountModal"
-                            class="font-medium text-green-600 cursor-pointer hover:text-blue-600 flex items-center gap-1"
+                            class="font-medium text-green-600 hover:text-blue-600 flex items-center gap-1"
                         >
                             {{ discount > 0 ? '-' + formatCurrency(discountAmount) : formatCurrency(0) }}
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
                             </svg>
-                        </span>
+                        </button>
+                        <span v-else class="font-medium text-green-600">{{ formatCurrency(0) }}</span>
                     </div>
 
                     <!-- Costo de envío Móvil -->
@@ -2048,20 +2068,12 @@ const stopResize = () => {
                             <input 
                                 type="checkbox" 
                                 v-model="includeDeliveryCost"
+                                :disabled="!store?.delivery_cost_active"
                                 class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 w-4 h-4"
                             >
                             <span>Incluir Envío:</span>
                         </label>
-                        <div v-if="includeDeliveryCost" class="relative w-32">
-                            <span class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                            <input 
-                                type="number" 
-                                v-model="deliveryCost" 
-                                class="w-full text-right border border-gray-300 rounded text-sm py-1 pl-6 pr-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="0"
-                                min="0"
-                            >
-                        </div>
+                        <span v-if="includeDeliveryCost" class="font-medium">{{ formatCurrency(deliveryCost) }}</span>
                         <span v-else class="text-gray-500 text-xs italic">No aplica</span>
                     </div>
 
@@ -2100,7 +2112,6 @@ const stopResize = () => {
                         <option value="efectivo">Efectivo</option>
                         <option value="tarjeta">Tarjeta</option>
                         <option value="transferencia">Transferencia</option>
-                        <option value="mixto">Mixto</option>
                     </select>
                 </div>
 
@@ -2123,6 +2134,9 @@ const stopResize = () => {
                         <span class="font-medium text-gray-700">Cambio a devolver:</span>
                         <span class="font-bold text-green-700">{{ formatCurrency(changeAmount) }}</span>
                     </div>
+                    <p v-if="amountTendered && amountTendered < total" class="mt-2 text-sm font-medium text-red-700">
+                        Faltan {{ formatCurrency(total - amountTendered) }} para completar el pago.
+                    </p>
                 </div>
 
                 <div class="mb-4">
@@ -2175,7 +2189,12 @@ const stopResize = () => {
 
                 <div class="flex gap-3">
                     <SecondaryButton @click="showPaymentModal = false">Cancelar</SecondaryButton>
-                    <PrimaryButton @click="processSale">Confirmar Venta</PrimaryButton>
+                    <PrimaryButton
+                        @click="processSale"
+                        :disabled="isProcessingSale || (paymentMethod === 'efectivo' && amountTendered < total)"
+                    >
+                        {{ isProcessingSale ? 'Procesando...' : 'Confirmar Venta' }}
+                    </PrimaryButton>
                 </div>
             </div>
         </Modal>
@@ -2390,7 +2409,7 @@ const stopResize = () => {
         </Modal>
 
         <!-- Modal de descuento de producto -->
-        <Modal :show="showProductDiscountModal" @close="showProductDiscountModal = false">
+        <Modal :show="canOverridePrices && showProductDiscountModal" @close="showProductDiscountModal = false">
             <div class="p-6">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-lg font-normal">
@@ -2490,7 +2509,7 @@ const stopResize = () => {
 
         <!-- Modal de Gastos -->
         <ExpenseModal 
-            :show="showExpenseModal" 
+            :show="canRegisterExpenses && showExpenseModal"
             @close="showExpenseModal = false"
             @success="handleExpenseSuccess"
         />
@@ -2582,7 +2601,7 @@ const stopResize = () => {
                             </div>
                             <div class="p-2 flex-1 flex flex-col">
                                 <div class="mb-1">
-                                    <template v-if="product.promo_active && product.promo_discount_percent > 0">
+                                    <template v-if="hasActivePromotion(product)">
                                         <p class="text-xs line-through text-red-600">
                                             {{ formatCurrency(calculatePriceWithDiscount(product).originalPrice) }}
                                         </p>
@@ -2605,7 +2624,7 @@ const stopResize = () => {
         </Modal>
 
         <!-- Modal de descuento general de la factura -->
-        <Modal :show="showGeneralDiscountModal" @close="showGeneralDiscountModal = false">
+        <Modal :show="canOverridePrices && showGeneralDiscountModal" @close="showGeneralDiscountModal = false">
             <div class="p-6">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-lg font-semibold">Descuento general de la factura</h2>
@@ -2670,7 +2689,7 @@ const stopResize = () => {
         <Modal :show="showStockAlertModal" @close="showStockAlertModal = false">
             <div class="p-6">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-semibold text-red-600">⚠️ Stock Insuficiente</h2>
+                    <h2 class="text-lg font-bold text-rose-700">Stock insuficiente</h2>
                     <button @click="showStockAlertModal = false" class="text-gray-400 hover:text-gray-600">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -2695,6 +2714,15 @@ const stopResize = () => {
             primary-text="Entendido"
             @close="showSuccessExpenseModal = false"
             @primary="showSuccessExpenseModal = false"
+        />
+        <AlertModal
+            :show="posNotice.show"
+            :type="posNotice.type"
+            :title="posNotice.title"
+            :message="posNotice.message"
+            primary-text="Entendido"
+            @close="posNotice.show = false"
+            @primary="posNotice.show = false"
         />
     </AuthenticatedLayout>
 </template>

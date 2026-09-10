@@ -3,6 +3,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
 import { downloadPDF, sharePDF } from '@/Utils/pdfUtils';
 
 const showInfo = ref(false);
@@ -43,7 +45,10 @@ const downloadInvoicePDF = async () => {
         }
     } catch (error) {
         console.error(error);
-        alert('Error al generar el PDF');
+        infoType.value = 'error';
+        infoTitle.value = 'No se pudo generar el PDF';
+        infoMessage.value = 'Intenta nuevamente. Si el problema continua, usa la opcion de imprimir.';
+        showInfo.value = true;
     } finally {
         isGeneratingPDF.value = false;
     }
@@ -215,59 +220,46 @@ const notifyCurrentStatus = () => {
     <Head :title="`Orden #${order.sequence_number ?? order.id}`" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center justify-between w-full">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                    Detalle de la Orden #{{ order.sequence_number ?? order.id }}
-                </h2>
-                <div class="flex gap-2">
+        <AdminPage>
+            <PageHeader eyebrow="Ventas online" :title="`Pedido #${order.sequence_number ?? order.id}`" :description="`${order.customer_name} · ${formatDate(order.created_at)}`">
+                <template #actions>
+                    <div class="flex flex-wrap gap-2 no-print">
                     <button
                         @click="downloadInvoicePDF"
-                        class="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm flex items-center gap-1 no-print"
+                        class="ui-secondary-button"
                         :disabled="isGeneratingPDF"
-                        title="Descargar PDF"
                     >
-                        <span v-if="isGeneratingPDF">⏳</span>
-                        <span v-else>⬇️</span>
-                        <span class="hidden sm:inline">Descargar</span>
+                        {{ isGeneratingPDF ? 'Preparando...' : 'Descargar PDF' }}
                     </button>
                     <button
                         @click="shareInvoicePDF"
-                        class="px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm flex items-center gap-1 no-print"
+                        class="ui-secondary-button"
                         :disabled="isGeneratingPDF"
-                        title="Compartir Factura"
                     >
-                        <span v-if="isGeneratingPDF">⏳</span>
-                        <span v-else>🔗</span>
-                        <span class="hidden sm:inline">Compartir</span>
+                        Compartir
                     </button>
                     <button
                         @click="printInvoice"
-                        class="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 no-print flex items-center gap-1"
-                        title="Imprimir"
+                        class="ui-secondary-button"
                     >
-                        <span>🖨️</span>
-                        <span class="hidden sm:inline">Imprimir</span>
+                        Imprimir
                     </button>
                     <Link 
-                        :href="route('admin.reports.index')" 
-                        class="px-3 sm:px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 no-print flex items-center gap-1"
-                        title="Volver"
+                        :href="route('admin.orders.index')"
+                        class="ui-primary-button"
                     >
-                        <span>⬅️</span>
-                        <span class="hidden sm:inline">Volver</span>
+                        Volver a pedidos
                     </Link>
-                </div>
-            </div>
-        </template>
+                    </div>
+                </template>
+            </PageHeader>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 
                 <div class="lg:col-span-2 space-y-8">
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                         <div class="p-6">
-                            <h3 class="text-lg font-semibold border-b pb-4 mb-4">Productos en la Orden</h3>
+                            <h3 class="mb-4 border-b pb-4 text-lg font-bold text-slate-900">Productos del pedido</h3>
                             <div class="divide-y divide-gray-200">
                                 <div v-for="item in itemsList" :key="item.id" class="py-4 flex justify-between items-start">
                                     <div class="flex-grow">
@@ -309,7 +301,7 @@ const notifyCurrentStatus = () => {
 
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                         <div class="p-6">
-                            <h3 class="text-lg font-semibold border-b pb-4 mb-4">Datos del Cliente</h3>
+                            <h3 class="mb-4 border-b pb-4 text-lg font-bold text-slate-900">Datos del cliente</h3>
                             <div class="mt-4 space-y-4 text-gray-700">
                                 <div>
                                     <p class="font-semibold text-sm text-gray-500">Nombre:</p>
@@ -335,7 +327,7 @@ const notifyCurrentStatus = () => {
                 <div class="space-y-8">
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                         <div class="p-6">
-                            <h3 class="text-lg font-semibold mb-4">Estado del Pedido</h3>
+                            <h3 class="text-lg font-bold text-slate-900">Estado del pedido</h3>
                             <div class="text-center mb-4">
                                 <span class="px-4 py-2 inline-flex text-lg leading-5 font-semibold rounded-full" :class="statusInfo.class">
                                     {{ statusInfo.text }}
@@ -347,8 +339,8 @@ const notifyCurrentStatus = () => {
 
                             <form @submit.prevent="updateStatus">
                                 <div class="mt-6 border-t pt-6">
-                                    <label for="status" class="block font-medium text-sm text-gray-700 mb-2">Cambiar Estado</label>
-                                    <select id="status" v-model="statusForm.status" class="block w-full rounded-md shadow-sm border-gray-300">
+                                    <label for="status" class="ui-label">Siguiente estado</label>
+                                    <select id="status" v-model="statusForm.status" class="ui-input">
                                         <option value="recibido">Recibido</option>
                                         <option value="en_preparacion">En Preparación</option>
                                         <option value="despachado">Despachado</option>
@@ -358,14 +350,14 @@ const notifyCurrentStatus = () => {
                                     <button 
                                         type="submit"
                                         :disabled="statusForm.processing"
-                                        class="mt-4 w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50">
-                                        Actualizar Estado
+                                        class="ui-primary-button mt-4 w-full">
+                                        {{ statusForm.processing ? 'Actualizando...' : 'Actualizar estado' }}
                                     </button>
                                     <button
                                         type="button"
                                         @click="notifyCurrentStatus"
-                                        class="mt-3 w-full bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700">
-                                        Notificar estado actual
+                                        class="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700">
+                                        Notificar por WhatsApp
                                     </button>
                                 </div>
                             </form>
@@ -376,7 +368,7 @@ const notifyCurrentStatus = () => {
                 </div>
 
             </div>
-        </div>
+        </AdminPage>
     </AuthenticatedLayout>
 
 

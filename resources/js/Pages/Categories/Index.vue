@@ -1,203 +1,183 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'; // <-- Importamos ref
-// --- 1. IMPORTAMOS LO QUE NECESITAMOS ---
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import CategoryTreeNode from '@/Components/Admin/CategoryTreeNode.vue';
+import SurfaceCard from '@/Components/Admin/SurfaceCard.vue';
+import AlertModal from '@/Components/AlertModal.vue';
+import DangerButton from '@/Components/DangerButton.vue';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
-import DangerButton from '@/Components/DangerButton.vue';
-import AlertModal from '@/Components/AlertModal.vue';
-// ------------------------------------------
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, reactive, ref } from 'vue';
 
-defineProps({
-    categories: Array,
+const props = defineProps({
+    categories: { type: Array, default: () => [] },
 });
 
-const showNotice = ref(false);
-const noticeMessage = ref('');
-
-// --- 2. LÓGICA NUEVA PARA MANEJAR EL MODAL ---
-const confirmingCategoryDeletion = ref(false);
+const query = ref('');
+const expandedIds = reactive(new Set(props.categories.map((category) => category.id)));
 const categoryToDelete = ref(null);
+const deleting = ref(false);
+const notice = ref({ show: false, type: 'error', message: '' });
 
-const confirmCategoryDeletion = (id) => {
-    categoryToDelete.value = id;
-    confirmingCategoryDeletion.value = true;
+const normalize = (value) => value.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+const filterTree = (categories, term) => categories.reduce((results, category) => {
+    const children = filterTree(category.children, term);
+    if (normalize(category.path).includes(term)) {
+        results.push(category);
+    } else if (children.length) {
+        results.push({ ...category, children });
+    }
+    return results;
+}, []);
+
+const filteredCategories = computed(() => {
+    const term = normalize(query.value.trim());
+    return term ? filterTree(props.categories, term) : props.categories;
+});
+
+const totals = computed(() => {
+    const walk = (categories) => categories.reduce((result, category) => ({
+        categories: result.categories + 1 + walk(category.children).categories,
+        products: result.products + category.direct_products_count + walk(category.children).products,
+    }), { categories: 0, products: 0 });
+
+    return walk(props.categories);
+});
+
+const toggle = (id) => {
+    if (expandedIds.has(id)) expandedIds.delete(id);
+    else expandedIds.add(id);
 };
 
-const closeModal = () => {
-    confirmingCategoryDeletion.value = false;
+const closeDeleteModal = () => {
+    if (deleting.value) return;
     categoryToDelete.value = null;
 };
 
-// Renombramos la función 'destroy' a 'deleteCategory'
 const deleteCategory = () => {
-    router.delete(route('admin.categories.destroy', categoryToDelete.value), {
+    deleting.value = true;
+    router.delete(route('admin.categories.destroy', categoryToDelete.value.id), {
         preserveScroll: true,
-        onSuccess: () => { closeModal(); noticeMessage.value = '¡Categoría eliminada con éxito!'; showNotice.value = true; },
+        onSuccess: () => {
+            categoryToDelete.value = null;
+            notice.value = { show: true, type: 'success', message: 'La categoria se elimino correctamente.' };
+        },
         onError: (errors) => {
-            closeModal();
-            // Mensaje específico si hay productos asociados
-            const msg = (errors && (errors.delete || errors.message)) || 'No se pudo eliminar: existen productos asociados.';
-            noticeMessage.value = msg;
-            showNotice.value = true;
-        }
+            categoryToDelete.value = null;
+            notice.value = {
+                show: true,
+                type: 'error',
+                message: errors?.delete || 'No se pudo eliminar la categoria. Revisa si tiene productos asociados.',
+            };
+        },
+        onFinish: () => { deleting.value = false; },
     });
-};
-// ---------------------------------------------
-
-// Scroll lateral + degradados + header sticky + filas cebra
-const scrollBoxRef = ref(null);
-const showLeftFade = ref(false);
-const showRightFade = ref(false);
-const updateFades = () => {
-    const el = scrollBoxRef.value;
-    if (!el) return;
-    const maxScrollLeft = el.scrollWidth - el.clientWidth;
-    const left = el.scrollLeft || 0;
-    showLeftFade.value = left > 0;
-    showRightFade.value = left < (maxScrollLeft - 1);
-};
-onMounted(() => {
-    nextTick(() => updateFades());
-    scrollBoxRef.value?.addEventListener('scroll', updateFades, { passive: true });
-    window.addEventListener('resize', updateFades);
-});
-onBeforeUnmount(() => {
-    scrollBoxRef.value?.removeEventListener('scroll', updateFades);
-    window.removeEventListener('resize', updateFades);
-});
-
-// Redimensionable: primera columna
-const CAT_COL_KEY = 'cat_firstcol_w_px';
-const FIRST_MIN = 50;
-const FIRST_MAX = 200;
-const firstColWidth = ref(Number(localStorage.getItem(CAT_COL_KEY)) || 100);
-const firstColStyle = computed(() => ({
-    width: firstColWidth.value + 'px',
-    minWidth: firstColWidth.value + 'px',
-    maxWidth: firstColWidth.value + 'px',
-}));
-let startX = 0;
-let startW = 0;
-const onResizeMove = (e) => {
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const next = Math.max(FIRST_MIN, Math.min(FIRST_MAX, startW + (clientX - startX)));
-    firstColWidth.value = next;
-};
-const stopResize = () => {
-    document.removeEventListener('mousemove', onResizeMove);
-    document.removeEventListener('mouseup', stopResize);
-    document.removeEventListener('touchmove', onResizeMove);
-    document.removeEventListener('touchend', stopResize);
-    try { localStorage.setItem(CAT_COL_KEY, String(firstColWidth.value)); } catch (_) {}
-};
-const startResize = (e) => {
-    startX = e.touches ? e.touches[0].clientX : e.clientX;
-    startW = firstColWidth.value;
-    document.addEventListener('mousemove', onResizeMove, { passive: false });
-    document.addEventListener('mouseup', stopResize);
-    document.addEventListener('touchmove', onResizeMove, { passive: false });
-    document.addEventListener('touchend', stopResize);
 };
 </script>
 
 <template>
-    <Head title="Gestionar Categorías" />
+    <Head title="Categorias" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Gestionar Categorías</h2>
-        </template>
+        <AdminPage>
+            <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-indigo-600">Catalogo</p>
+                    <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Categorias</h1>
+                    <p class="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">
+                        Organiza tus productos en hasta tres niveles para que tus clientes los encuentren facilmente.
+                    </p>
+                </div>
+                <Link
+                    :href="route('admin.categories.create')"
+                    class="inline-flex min-h-11 items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                >
+                    Nueva categoria
+                </Link>
+            </div>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 text-gray-900">
-
-                        <div class="flex justify-between items-center mb-4">
-                            <p>Aquí podés crear, editar y eliminar las categorías de tus productos.</p>
-
-                            <Link :href="route('admin.categories.create')" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded shadow">
-                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4a2 2 0 0 1 2-2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4zm9-1.5V7h4.5L13 2.5z"/><path d="M8 13h8v2H8zM8 9h5v2H8z"/></svg>
-                                <span>Crear</span>
-                            </Link>
-                        </div>
-
-                        <div ref="scrollBoxRef" class="relative overflow-x-auto">
-                        <div v-show="showLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
-                        <div v-show="showRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>
-                        <table class="min-w-[600px] w-full divide-y divide-gray-200 table-auto">
-                            <thead class="sticky top-0 z-10 bg-gray-50">
-                                <tr>
-                                    <th class="sticky left-0 z-20 bg-gray-50 px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap relative" :style="firstColStyle">
-                                        ID
-                                        <div @mousedown="startResize" @touchstart.prevent="startResize" class="absolute top-0 right-0 h-full w-3 cursor-col-resize group">
-                                            <div class="mx-auto my-auto h-6 w-1.5 bg-gray-300 rounded-full group-hover:bg-indigo-400"></div>
-                                        </div>
-                                    </th>
-                                    <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Nombre</th>
-                                    <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                <tr v-if="categories.length === 0">
-                                    <td colspan="3" class="px-3 py-3 sm:px-6 sm:py-4 text-center text-gray-500">No hay categorías creadas.</td>
-                                </tr>
-                                <tr v-for="(category, idx) in categories" :key="category.id" class="odd:bg-white even:bg-gray-100">
-                                    <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap border-r truncate" :style="firstColStyle" :title="String(category.id)" :class="idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'">{{ category.id }}</td>
-                                    <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap">{{ category.name }}</td>
-                                    <td class="px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium">
-                                        <div class="flex items-center gap-2">
-                                            <Link :href="route('admin.categories.edit', category.id)" class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-indigo-600" title="Editar">
-                                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16.862 3.487a2.25 2.25 0 113.182 3.182L9.428 17.284a3.75 3.75 0 01-1.582.992l-2.685.805a.75.75 0 01-.93-.93l.805-2.685a3.75 3.75 0 01.992-1.582L16.862 3.487z"/><path d="M15.75 4.5l3.75 3.75"/></svg>
-                                            </Link>
-                                            <button @click="confirmCategoryDeletion(category.id)" class="w-8 h-8 inline-flex items-center justify-center rounded hover:bg-gray-100 text-red-600" title="Eliminar">
-                                                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M16.5 4.5V6h3.75a.75.75 0 010 1.5H3.75A.75.75 0 013 6h3.75V4.5A2.25 2.25 0 019 2.25h6A2.25 2.25 0 0117.25 4.5zM5.625 7.5h12.75l-.701 10.518A2.25 2.25 0 0115.43 20.25H8.57a2.25 2.25 0 01-2.244-2.232L5.625 7.5z" clip-rule="evenodd"/></svg>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        </div>
-
-                    </div>
+            <div class="mb-5 grid grid-cols-2 gap-3 sm:max-w-md">
+                <div class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p class="text-2xl font-bold text-slate-950">{{ totals.categories }}</p>
+                    <p class="text-xs font-medium text-slate-500">Categorias creadas</p>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p class="text-2xl font-bold text-slate-950">{{ totals.products }}</p>
+                    <p class="text-xs font-medium text-slate-500">Productos organizados</p>
                 </div>
             </div>
-        </div>
+
+            <SurfaceCard>
+                <div class="mb-5 flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="font-semibold text-slate-900">Organizacion de la tienda</h2>
+                        <p class="mt-1 text-sm text-slate-500">Abre cada grupo para ver sus subcategorias.</p>
+                    </div>
+                    <label class="relative block sm:w-80">
+                        <span class="sr-only">Buscar una categoria</span>
+                        <svg class="pointer-events-none absolute left-3 top-3 h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clip-rule="evenodd" /></svg>
+                        <input v-model="query" type="search" class="w-full rounded-xl border-slate-300 py-2.5 pl-10 pr-3 text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Buscar por nombre o ruta" />
+                    </label>
+                </div>
+
+                <div v-if="!categories.length" class="rounded-xl border-2 border-dashed border-slate-200 px-6 py-12 text-center">
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
+                        <svg class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M2.5 5.75A2.75 2.75 0 0 1 5.25 3h3.086c.73 0 1.43.29 1.945.805l.664.665c.235.234.553.366.884.366h2.921a2.75 2.75 0 0 1 2.75 2.75v6.664A2.75 2.75 0 0 1 14.75 17h-9.5a2.75 2.75 0 0 1-2.75-2.75v-8.5Z" /></svg>
+                    </div>
+                    <h2 class="mt-4 font-semibold text-slate-900">Crea tu primera categoria</h2>
+                    <p class="mx-auto mt-1 max-w-md text-sm text-slate-500">Empieza con un grupo general como Ropa, Hogar o Accesorios. Luego puedes agregar subcategorias.</p>
+                    <Link :href="route('admin.categories.create')" class="mt-5 inline-flex rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Crear categoria</Link>
+                </div>
+
+                <div v-else-if="!filteredCategories.length" class="px-4 py-10 text-center">
+                    <h2 class="font-semibold text-slate-900">No encontramos esa categoria</h2>
+                    <p class="mt-1 text-sm text-slate-500">Prueba con otro nombre o borra la busqueda.</p>
+                    <button type="button" class="mt-4 text-sm font-semibold text-indigo-700 hover:text-indigo-900" @click="query = ''">Limpiar busqueda</button>
+                </div>
+
+                <ul v-else class="space-y-2">
+                    <CategoryTreeNode
+                        v-for="category in filteredCategories"
+                        :key="category.id"
+                        :category="category"
+                        :expanded-ids="expandedIds"
+                        :searching="Boolean(query.trim())"
+                        @toggle="toggle"
+                        @delete="categoryToDelete = $event"
+                    />
+                </ul>
+            </SurfaceCard>
+        </AdminPage>
     </AuthenticatedLayout>
-    
-    <Modal :show="confirmingCategoryDeletion" @close="closeModal">
-        <div class="p-6">
-            <h2 class="text-lg font-medium text-gray-900">
-                ¿Estás seguro de que querés eliminar esta categoría?
-            </h2>
 
-            <p class="mt-1 text-sm text-gray-600">
-                Esta acción es irreversible. Se borrará la categoría y todas sus subcategorías.
+    <Modal :show="Boolean(categoryToDelete)" @close="closeDeleteModal">
+        <div v-if="categoryToDelete" class="p-6">
+            <p class="text-sm font-semibold uppercase tracking-wide text-rose-600">Eliminar categoria</p>
+            <h2 class="mt-2 text-lg font-semibold text-slate-950">¿Eliminar {{ categoryToDelete.name }}?</h2>
+            <p class="mt-2 text-sm text-slate-600">
+                Tambien se eliminaran {{ categoryToDelete.descendants_count }} subcategorias. Esta accion no se puede deshacer.
             </p>
-
-            <div class="mt-6 flex justify-end">
-                <SecondaryButton @click="closeModal"> Cancelar </SecondaryButton>
-
-                <DangerButton
-                    class="ms-3"
-                    @click="deleteCategory"
-                >
-                    Sí, Eliminar Categoría
+            <div v-if="categoryToDelete.subtree_products_count" class="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                No podras eliminarla mientras tenga {{ categoryToDelete.subtree_products_count }} producto(s) asociados. Muevelos primero a otra categoria.
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <SecondaryButton :disabled="deleting" @click="closeDeleteModal">Cancelar</SecondaryButton>
+                <DangerButton :disabled="deleting || categoryToDelete.subtree_products_count > 0" @click="deleteCategory">
+                    {{ deleting ? 'Eliminando...' : 'Eliminar categoria' }}
                 </DangerButton>
             </div>
         </div>
     </Modal>
 
     <AlertModal
-        :show="showNotice"
-        type="error"
-        title="Categorías"
-        :message="noticeMessage"
+        :show="notice.show"
+        :type="notice.type"
+        title="Categorias"
+        :message="notice.message"
         primary-text="Entendido"
-        @primary="showNotice=false"
-        @close="showNotice=false"
+        @primary="notice.show = false"
+        @close="notice.show = false"
     />
 </template>

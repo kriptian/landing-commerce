@@ -38,6 +38,8 @@ class HandleInertiaRequests extends Middleware
         $csrfToken = csrf_token();
         $storeId = $this->storeIdFromRoute($request);
         $customer = $request->user('customer');
+        $user = Auth::guard('web')->user();
+        $capabilities = $this->adminCapabilities($request);
 
         if (! $storeId || (int) $customer?->store_id !== $storeId) {
             $customer = null;
@@ -47,7 +49,8 @@ class HandleInertiaRequests extends Middleware
             'csrf_token' => $csrfToken,
             'auth' => [
                 // IMPORTANTE: Solo usar el guard 'web' explícitamente para evitar mezclar con customers
-                'user' => Auth::guard('web')->user(),
+                'user' => $user,
+                'store' => $user?->store,
                 // Enviamos un arreglo plano de permisos (directos y vía roles)
                 // Solo para usuarios del guard 'web' (admin), no para customers
                 'permissions' => (function () {
@@ -80,6 +83,7 @@ class HandleInertiaRequests extends Middleware
                     return in_array(strtolower($user->email), $allowed, true);
                 })(),
                 'canDeploy' => app(DeploymentAuthorizer::class)->allows(Auth::guard('web')->user(), $request),
+                'capabilities' => $capabilities,
             ],
             'customer' => [
                 'user' => $customer,
@@ -194,14 +198,76 @@ class HandleInertiaRequests extends Middleware
                 })(),
             ],
 
-            // ===== AQUÍ VA LA MAGIA NUEVA =====
             'adminNotifications' => [
-                'newOrdersCount' => Auth::check() && $request->user()->store
-                    ? $request->user()->store->orders()->where('status', 'recibido')->count()
+                'newOrdersCount' => ($capabilities['orders'] ?? 'hidden') === 'enabled' && $user?->store
+                    ? $user->store->orders()->where('status', 'recibido')->count()
                     : 0,
             ],
-            // ===================================
         ]);
+    }
+
+    /** @return array<string, string> */
+    private function adminCapabilities(Request $request): array
+    {
+        $user = Auth::guard('web')->user();
+        if (! $user) {
+            return [];
+        }
+
+        $hidden = [
+            'dashboard', 'physicalSales', 'orders', 'customers', 'coupons', 'products',
+            'categories', 'inventory', 'catalogCustomization', 'gallery', 'pdfCatalogBuilder',
+            'reports', 'users', 'superStores', 'deployments', 'profile',
+        ];
+
+        if ($user->hasRole('physical-sales')) {
+            return array_replace(array_fill_keys($hidden, 'hidden'), ['physicalSales' => 'enabled']);
+        }
+
+        $plan = $user->store?->plan ?? 'emprendedor';
+        $isPdfCreator = $plan === 'creador_pdf';
+        $isSuperAdmin = $this->isSuperAdmin($user->email);
+        $hasPlan = fn (array $plans): bool => $isSuperAdmin || in_array($plan, $plans, true);
+        $state = function (array $plans, ?string $permission = null) use ($user, $hasPlan, $isSuperAdmin): string {
+            if ($permission && ! $isSuperAdmin && ! $user->can($permission)) {
+                return 'hidden';
+            }
+
+            return $hasPlan($plans) ? 'enabled' : 'locked';
+        };
+
+        return [
+            'dashboard' => ! $isPdfCreator && $user->can('ver dashboard') ? 'enabled' : 'hidden',
+            'physicalSales' => $isPdfCreator ? 'hidden' : $state(['emprendedor', 'negociante'], 'ver inventario'),
+            'orders' => $isPdfCreator ? 'hidden' : $state(['negociante'], 'ver ordenes'),
+            'customers' => $isPdfCreator ? 'hidden' : $state(['negociante'], 'ver clientes'),
+            'coupons' => $isPdfCreator ? 'hidden' : $state(['negociante'], 'gestionar cupones'),
+            'products' => $isPdfCreator ? 'hidden' : $state(['emprendedor', 'negociante'], 'ver inventario'),
+            'categories' => $isPdfCreator ? 'hidden' : $state(['emprendedor', 'negociante'], 'gestionar categorias'),
+            'inventory' => $isPdfCreator ? 'hidden' : $state(['negociante'], 'ver inventario'),
+            'catalogCustomization' => $isPdfCreator ? 'hidden' : $state(['negociante'], 'gestionar galeria'),
+            'gallery' => $isPdfCreator ? 'hidden' : $state(['negociante'], 'gestionar galeria'),
+            'pdfCatalogBuilder' => $state(['negociante', 'creador_pdf']),
+            'reports' => $isPdfCreator ? 'hidden' : $state(['negociante'], 'ver reportes'),
+            'users' => $isPdfCreator ? 'hidden' : $state(['negociante'], 'gestionar usuarios'),
+            'superStores' => $isSuperAdmin ? 'enabled' : 'hidden',
+            'deployments' => app(DeploymentAuthorizer::class)->allows($user, $request) ? 'enabled' : 'hidden',
+            'profile' => 'enabled',
+        ];
+    }
+
+    private function isSuperAdmin(string $email): bool
+    {
+        $single = (string) config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
+        $list = (array) config('app.super_admin_emails', []);
+        $allowed = collect([$single])
+            ->filter()
+            ->merge($list)
+            ->map(fn ($value) => strtolower(trim($value)))
+            ->unique()
+            ->all();
+
+        return in_array(strtolower($email), $allowed, true);
     }
 
     private function storeIdFromRoute(Request $request): ?int

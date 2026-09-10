@@ -8,6 +8,8 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import { useForm } from '@inertiajs/vue3';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
 
 const props = defineProps({
     coupons: Object,
@@ -157,17 +159,10 @@ const isProductSelected = (productId) => {
     <Head title="Cupones de Descuento" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center justify-between">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Clientes</h2>
-                <PrimaryButton v-if="activeTab === 'coupons'" @click="openCreateModal">
-                    + Crear Cupón
-                </PrimaryButton>
-            </div>
-        </template>
-
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <AdminPage>
+            <PageHeader eyebrow="Promociones" title="Cupones" description="Crea incentivos con limites claros de fecha, uso, compra minima y productos aplicables.">
+                <template #actions><button type="button" class="ui-primary-button" @click="openCreateModal">+ Crear cupon</button></template>
+            </PageHeader>
                 <!-- Tabs -->
                 <div class="mb-6 border-b border-gray-200">
                     <nav class="-mb-px flex space-x-8">
@@ -198,8 +193,9 @@ const isProductSelected = (productId) => {
 
                 <!-- Contenido de Cupones -->
                 <div v-if="activeTab === 'coupons'">
+                <div class="mb-4 space-y-3 md:hidden"><article v-for="coupon in coupons.data" :key="coupon.id" class="ui-card p-4" :class="{ 'border-rose-200 bg-rose-50/40': isExpired(coupon) }"><div class="flex items-start justify-between gap-3"><div><h2 class="font-mono text-lg font-extrabold text-slate-900">{{ coupon.code }}</h2><p class="mt-1 text-sm text-slate-500">{{ coupon.type === 'percentage' ? 'Porcentaje' : 'Valor fijo' }}</p></div><p class="text-xl font-extrabold text-indigo-700">{{ coupon.type === 'percentage' ? coupon.value + '%' : '$' + coupon.value }}</p></div><dl class="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-white p-3 text-sm"><div><dt class="text-slate-500">Usos</dt><dd class="font-bold">{{ coupon.usages_count || 0 }}{{ coupon.usage_limit ? ' / ' + coupon.usage_limit : '' }}</dd></div><div><dt class="text-slate-500">Vigencia</dt><dd class="font-bold">{{ isExpired(coupon) ? 'Expirado' : formatDate(coupon.valid_until) }}</dd></div></dl><div class="mt-4 flex items-center justify-between"><button type="button" class="rounded-full px-3 py-1.5 text-xs font-bold" :class="coupon.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'" @click="toggleActive(coupon)">{{ coupon.is_active ? 'Activo' : 'Inactivo' }}</button><div class="flex gap-2"><button type="button" class="ui-secondary-button" @click="openEditModal(coupon)">Editar</button><button type="button" class="rounded-xl px-3 text-sm font-bold text-rose-700 hover:bg-rose-50" @click="confirmDelete(coupon)">Eliminar</button></div></div></article><div v-if="!coupons.data.length" class="ui-card p-10 text-center"><h2 class="font-bold text-slate-900">Aun no tienes cupones</h2><p class="mt-2 text-sm text-slate-500">Crea una promocion para incentivar la proxima compra.</p></div></div>
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="overflow-x-auto">
+                    <div class="hidden overflow-x-auto md:block">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -265,8 +261,7 @@ const isProductSelected = (productId) => {
                     </div>
                 </div>
                 </div>
-            </div>
-        </div>
+        </AdminPage>
 
         <!-- Modal Crear/Editar -->
         <Modal :show="showCreateModal || showEditModal" @close="closeModals">

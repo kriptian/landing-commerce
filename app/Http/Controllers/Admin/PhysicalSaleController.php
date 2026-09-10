@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\PhysicalSale;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -81,7 +83,6 @@ class PhysicalSaleController extends Controller
         // Calcular estadísticas
         $statsQuery = clone $salesQuery;
         $totalSales = $statsQuery->sum('total');
-        $totalSales = $statsQuery->sum('total');
         $totalCount = $statsQuery->count();
 
         // Calcular gastos
@@ -105,15 +106,7 @@ class PhysicalSaleController extends Controller
         (clone $statsQuery)->chunk(200, function ($salesChunk) use (&$totalProfit) {
             foreach ($salesChunk as $sale) {
                 foreach ($sale->items as $item) {
-                    $cost = 0;
-                    // Intentar obtener costo de la variante primero
-                    if ($item->variant && $item->variant->purchase_price > 0) {
-                        $cost = $item->variant->purchase_price;
-                    }
-                    // Si no, del producto
-                    elseif ($item->product && $item->product->purchase_price > 0) {
-                        $cost = $item->product->purchase_price;
-                    }
+                    $cost = (float) ($item->purchase_price ?? 0);
 
                     if ($cost > 0) {
                         $profit = ($item->unit_price - $cost) * $item->quantity;
@@ -168,7 +161,6 @@ class PhysicalSaleController extends Controller
                     'images' => $product->images,
                     'category' => $product->category,
                     'variants' => $product->variants,
-                    'variants' => $product->variants,
                     'variant_options' => $product->variantOptions->map(function ($option) {
                         return [
                             'id' => $option->id,
@@ -191,7 +183,6 @@ class PhysicalSaleController extends Controller
         return Inertia::render('Admin/PhysicalSales/Index', [
             'sales' => $sales,
             'stats' => [
-                'totalSales' => $totalSales,
                 'totalSales' => $totalSales,
                 'totalCount' => $totalCount,
                 'totalExpenses' => $totalExpenses,
@@ -337,17 +328,39 @@ class PhysicalSaleController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $canOverridePrices = $request->user()->can('modificar precios y descuentos pos');
+        $rules = [
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|integer',
             'items.*.variant_id' => 'nullable|integer',
             'items.*.quantity' => 'required|integer|min:1',
-            'payment_method' => 'required|string|in:efectivo,tarjeta,transferencia,mixto',
+            'payment_method' => 'required|string|in:efectivo,tarjeta,transferencia',
+            'amount_tendered' => 'nullable|required_if:payment_method,efectivo|numeric|min:0',
             'notes' => 'nullable|string',
-            'delivery_cost' => 'nullable|numeric|min:0',
-        ]);
+            'include_delivery' => 'sometimes|boolean',
+            'idempotency_key' => 'required|uuid',
+        ];
+
+        if ($canOverridePrices) {
+            $rules['items.*.unit_price'] = 'required|numeric|min:0';
+            $rules['discount'] = 'nullable|numeric|min:0';
+        }
+
+        $validated = $request->validate($rules);
 
         $store = $request->user()->store;
+        $existingSale = $store->physicalSales()
+            ->where('idempotency_key', $validated['idempotency_key'])
+            ->with('items.product')
+            ->first();
+
+        if ($existingSale) {
+            return response()->json([
+                'success' => true,
+                'sale' => $existingSale,
+                'message' => 'Venta registrada exitosamente',
+            ]);
+        }
 
         try {
             DB::beginTransaction();
@@ -400,7 +413,6 @@ class PhysicalSaleController extends Controller
 
             $authoritativeItems = [];
             $subtotal = 0;
-            $discount = 0;
 
             foreach ($validated['items'] as $itemData) {
                 $product = $store->products()
@@ -429,17 +441,25 @@ class PhysicalSaleController extends Controller
                 $originalPrice = $variant && $variant->price !== null
                     ? (float) $variant->price
                     : (float) $product->price;
-                $discountPercent = 0;
-                if ($store->promo_active && $store->promo_discount_percent > 0) {
-                    $discountPercent = (float) $store->promo_discount_percent;
-                } elseif ($product->promo_active && $product->promo_discount_percent > 0) {
-                    $discountPercent = (float) $product->promo_discount_percent;
+
+                if ($canOverridePrices) {
+                    $unitPrice = round((float) $itemData['unit_price'], 2);
+                    $discountPercent = $originalPrice > 0 && $unitPrice < $originalPrice
+                        ? round((($originalPrice - $unitPrice) / $originalPrice) * 100, 2)
+                        : 0;
+                } else {
+                    $discountPercent = 0;
+                    if ($store->promo_active && $store->promo_discount_percent > 0) {
+                        $discountPercent = (float) $store->promo_discount_percent;
+                    } elseif ($product->promo_active && $product->promo_discount_percent > 0) {
+                        $discountPercent = (float) $product->promo_discount_percent;
+                    }
+
+                    $unitPrice = round($originalPrice * (100 - $discountPercent) / 100, 2);
                 }
 
-                $unitPrice = round($originalPrice * (100 - $discountPercent) / 100, 2);
                 $lineSubtotal = round($unitPrice * $itemData['quantity'], 2);
                 $subtotal += $lineSubtotal;
-                $discount += round(($originalPrice - $unitPrice) * $itemData['quantity'], 2);
 
                 $authoritativeItems[] = [
                     'product' => $product,
@@ -453,23 +473,44 @@ class PhysicalSaleController extends Controller
             }
 
             $subtotal = round($subtotal, 2);
-            $discount = round($discount, 2);
+            $discount = $canOverridePrices ? round((float) ($validated['discount'] ?? 0), 2) : 0;
+            if ($discount > $subtotal) {
+                throw ValidationException::withMessages([
+                    'discount' => 'El descuento no puede superar el subtotal de la venta.',
+                ]);
+            }
+
             $tax = 0;
-            $deliveryCost = (float) $request->input('delivery_cost', 0) > 0 && $store->delivery_cost_active
+            $deliveryCost = ($validated['include_delivery'] ?? false) && $store->delivery_cost_active
                 ? (float) $store->delivery_cost
                 : 0;
-            $total = round($subtotal + $tax + $deliveryCost, 2);
+            $total = round($subtotal - $discount + $tax + $deliveryCost, 2);
+            $amountTendered = null;
+            $changeDue = null;
+
+            if ($validated['payment_method'] === 'efectivo') {
+                $amountTendered = round((float) $validated['amount_tendered'], 2);
+                if ($amountTendered < $total) {
+                    throw ValidationException::withMessages([
+                        'amount_tendered' => 'El dinero recibido es menor que el total de la venta.',
+                    ]);
+                }
+                $changeDue = round($amountTendered - $total, 2);
+            }
 
             // Crear la venta
             $sale = $store->physicalSales()->create([
                 'user_id' => $request->user()->id,
                 'sale_number' => $saleNumber,
+                'idempotency_key' => $validated['idempotency_key'],
                 'subtotal' => $subtotal,
                 'tax' => $tax,
                 'discount' => $discount,
                 'delivery_cost' => $deliveryCost,
                 'total' => $total,
                 'payment_method' => $validated['payment_method'],
+                'amount_tendered' => $amountTendered,
+                'change_due' => $changeDue,
                 'notes' => $validated['notes'] ?? null,
             ]);
 
@@ -509,6 +550,30 @@ class PhysicalSaleController extends Controller
 
             return $response;
 
+        } catch (ValidationException $e) {
+            DB::rollBack();
+
+            throw $e;
+        } catch (QueryException $e) {
+            DB::rollBack();
+
+            $existingSale = $store->physicalSales()
+                ->where('idempotency_key', $validated['idempotency_key'])
+                ->with('items.product')
+                ->first();
+
+            if ($existingSale) {
+                return response()->json([
+                    'success' => true,
+                    'sale' => $existingSale,
+                    'message' => 'Venta registrada exitosamente',
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo registrar la venta.',
+            ], 422);
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -530,34 +595,12 @@ class PhysicalSaleController extends Controller
 
         $physicalSale->load(['user', 'items.product', 'items.variant', 'store']);
 
-        // Calcular descuentos por producto
+        // Los precios guardados son snapshots y no deben depender del catálogo actual.
         foreach ($physicalSale->items as $item) {
-            $product = $item->product;
-            $variant = $item->variant;
-
-            // Obtener precio original (sin descuento)
-            $originalPrice = null;
-            if ($variant && $variant->price !== null && $variant->price !== '') {
-                $originalPrice = (float) $variant->price;
-            } elseif ($product && $product->price !== null) {
-                $originalPrice = (float) $product->price;
-            }
-
-            // Calcular descuento aplicado
-            if ($originalPrice && $originalPrice > 0) {
-                $finalPrice = (float) $item->unit_price;
-                $discountAmount = $originalPrice - $finalPrice;
-                $discountPercent = $discountAmount > 0 ? round(($discountAmount / $originalPrice) * 100, 2) : 0;
-
-                // Agregar información de descuento al item
-                $item->original_price = $originalPrice;
-                $item->discount_amount = $discountAmount;
-                $item->discount_percent = $discountPercent;
-            } else {
-                $item->original_price = null;
-                $item->discount_amount = 0;
-                $item->discount_percent = 0;
-            }
+            $item->discount_amount = max(
+                0,
+                round(((float) $item->original_price - (float) $item->unit_price) * $item->quantity, 2)
+            );
         }
 
         return Inertia::render('Admin/PhysicalSales/Show', [

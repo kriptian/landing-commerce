@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class Store extends Model
 {
@@ -16,12 +16,12 @@ class Store extends Model
         'user_id',
         'max_users',
         'logo_url',
-        'phone',        
+        'phone',
         'address',
         'address_two',
         'address_three',
-        'address_four',      
-        'facebook_url', 
+        'address_four',
+        'facebook_url',
         'instagram_url',
         'tiktok_url', // <-- ¡AQUÍ ESTÁ EL CAMBIO!
         'slug',
@@ -32,6 +32,7 @@ class Store extends Model
         'plan_cycle',
         'plan_started_at',
         'plan_renews_at',
+        'onboarding_completed_at',
         'catalog_use_default',
         'catalog_button_color',
         'catalog_promo_banner_color',
@@ -50,24 +51,24 @@ class Store extends Model
         'catalog_button_text_color',
         'catalog_body_bg_color',
         'catalog_body_text_color',
-            'catalog_input_bg_color',
-            'catalog_input_text_color',
-            'catalog_promo_banner_text_color',
-            'gallery_type',
-            'gallery_show_buy_button',
-            'delivery_cost',
-            'delivery_cost_active',
-            'cookie_consent_active',
-            'privacy_policy_text',
-            'popup_active',
-            'popup_image_path',
-            'popup_button_text',
-            'popup_button_link',
-            'popup_show_button',
-            'popup_frequency',
-            'whatsapp_floating_button_active',
-            'whatsapp_floating_button_message',
-        ];
+        'catalog_input_bg_color',
+        'catalog_input_text_color',
+        'catalog_promo_banner_text_color',
+        'gallery_type',
+        'gallery_show_buy_button',
+        'delivery_cost',
+        'delivery_cost_active',
+        'cookie_consent_active',
+        'privacy_policy_text',
+        'popup_active',
+        'popup_image_path',
+        'popup_button_text',
+        'popup_button_link',
+        'popup_show_button',
+        'popup_frequency',
+        'whatsapp_floating_button_active',
+        'whatsapp_floating_button_message',
+    ];
 
     protected $casts = [
         'delivery_cost_active' => 'boolean',
@@ -79,13 +80,13 @@ class Store extends Model
         'whatsapp_floating_button_active' => 'boolean',
         'plan_started_at' => 'datetime',
         'plan_renews_at' => 'datetime',
+        'onboarding_completed_at' => 'datetime',
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
     }
-
 
     /**
      * Se ejecuta cuando el modelo "arranca".
@@ -95,7 +96,7 @@ class Store extends Model
         static::saving(function ($store) {
             $store->slug = Str::slug($store->name);
         });
-        
+
         // Crear automáticamente el rol "physical-sales" cuando se crea una nueva tienda
         static::created(function ($store) {
             // Usar firstOrCreate para evitar conflictos de unicidad de Spatie Permission
@@ -108,7 +109,7 @@ class Store extends Model
                         'guard_name' => config('auth.defaults.guard', 'web'),
                     ]
                 );
-                
+
                 // Limpiar caché de permisos
                 app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
             } catch (\Exception $e) {
@@ -118,8 +119,8 @@ class Store extends Model
                     ->where('store_id', $store->id)
                     ->where('guard_name', config('auth.defaults.guard', 'web'))
                     ->first();
-                
-                if (!$existingRole) {
+
+                if (! $existingRole) {
                     \Illuminate\Support\Facades\DB::table('roles')->insert([
                         'name' => 'physical-sales',
                         'store_id' => $store->id,
@@ -127,7 +128,7 @@ class Store extends Model
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
-                    
+
                     // Limpiar caché de permisos
                     app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
                 }

@@ -33,7 +33,7 @@ class AuthenticatedSessionController extends Controller
 
         // Regenerar sesión ANTES de obtener el usuario para asegurar que el token CSRF se actualice
         $request->session()->regenerate();
-        
+
         // Forzar la actualización del token CSRF en la respuesta
         $request->session()->regenerateToken();
 
@@ -43,6 +43,10 @@ class AuthenticatedSessionController extends Controller
         // Nota: El middleware AllowPhysicalSalesWithoutVerification permite el acceso sin verificación
         if ($user->hasRole('physical-sales')) {
             return redirect()->route('admin.physical-sales.index');
+        }
+
+        if ($user->store && ! $user->store->onboarding_completed_at) {
+            return redirect()->route('store.setup');
         }
 
         return redirect()->intended(route('dashboard'));

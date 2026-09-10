@@ -65,6 +65,7 @@ class RegisteredUserController extends Controller
                 'plan_cycle' => 'mensual',
                 'max_users' => 1,
                 'plan_started_at' => now(),
+                'onboarding_completed_at' => null,
             ]);
 
             // 3. Le asignamos el ID de la tienda al usuario y marcamos como verificado

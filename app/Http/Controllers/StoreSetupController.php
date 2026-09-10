@@ -43,6 +43,8 @@ class StoreSetupController extends Controller
             $validated['logo_url'] = '/storage/'.$path;
         }
 
+        $validated['onboarding_completed_at'] = now();
+
         $store->update($validated);
 
         return Redirect::route('dashboard');

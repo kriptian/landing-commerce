@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { nextTick, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
@@ -8,6 +8,8 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import VariantInventoryModal from './VariantInventoryModal.vue';
 import ProductAiAssistant from '@/Components/Admin/ProductAiAssistant.vue';
+import CategoryPicker from '@/Components/Admin/CategoryPicker.vue';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
 
 const props = defineProps({
     categories: Array,
@@ -179,48 +181,6 @@ const onGalleryInput = (event) => {
     }
     form.gallery_files = validFiles;
 };
-
-// --- Selects en cascada multi-nivel ---
-const levels = ref([ { options: props.categories, selected: null } ]);
-
-const addLevel = () => {
-    levels.value.push({ options: [], selected: null });
-};
-const removeDeeperLevels = (levelIndex) => {
-    levels.value.splice(levelIndex + 1);
-};
-
-const onSelectAtLevel = async (levelIndex) => {
-    const selectedId = levels.value[levelIndex].selected;
-    // Reset niveles inferiores
-    removeDeeperLevels(levelIndex);
-    form.category_id = selectedId; // por defecto, si no hay hijos, esto será la categoría elegida
-    if (!selectedId) return;
-    // Cargar hijos
-    try {
-        const response = await window.axios.get(route('admin.categories.children', selectedId));
-        const children = Array.isArray(response.data?.data) ? response.data.data : [];
-        if (children.length > 0) {
-            // Añadir nuevo nivel con los hijos
-            levels.value.push({ options: children, selected: null });
-            // Limpiar category_id para forzar selección de subcategoría
-            form.category_id = null;
-        }
-    } catch (error) {
-        // Error silenciado
-    }
-};
-// --- FIN Selects en cascada ---
-
-// Validar que si hay niveles inferiores disponibles, se debe seleccionar una hoja
-const requiresSubcategory = computed(() => {
-    // Si hay más de un nivel y el último nivel tiene opciones pero no está seleccionado
-    if (levels.value.length > 1) {
-        const lastLevel = levels.value[levels.value.length - 1];
-        return lastLevel.options.length > 0 && !lastLevel.selected;
-    }
-    return false;
-});
 
 const form = useForm({
     name: '',
@@ -774,16 +734,14 @@ watch(totalQuantity, (newTotal) => {
 
 
 const submit = () => {
-    // Validar que se haya seleccionado una categoría hoja si hay subcategorías disponibles
-    if (requiresSubcategory.value) {
-        errorMessages.value = ['Debés seleccionar una subcategoría. La categoría principal tiene subcategorías disponibles y es obligatorio elegir una de ellas.'];
+    if (!form.category_id) {
+        errorMessages.value = ['Selecciona una categoria para organizar el producto en tu tienda.'];
         showErrors.value = true;
-        // Hacer scroll al campo de categorías
         nextTick(() => {
-            const firstCategorySelect = document.querySelector('.space-y-3 select');
-            if (firstCategorySelect) {
-                firstCategorySelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                firstCategorySelect.focus();
+            const categorySelect = document.querySelector('#product-category');
+            if (categorySelect) {
+                categorySelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                categorySelect.focus();
             }
         });
         return;
@@ -910,21 +868,32 @@ const checkEnter = (e) => {
     <Head title="Crear Producto" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Crear producto</h2>
-        </template>
+        <AdminPage width="wide">
+            <div class="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <Link :href="route('admin.products.index')" class="text-sm font-semibold text-indigo-700 hover:text-indigo-900">&larr; Volver a productos</Link>
+                    <p class="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Nuevo producto</p>
+                    <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-950">Prepara tu producto para vender</h1>
+                    <p class="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">Completa primero lo esencial. Las opciones, imagenes y detalles avanzados pueden agregarse despues.</p>
+                </div>
+                <span class="inline-flex w-fit rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">Sin guardar</span>
+            </div>
 
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 text-gray-900">
-                        <form @submit.prevent="submit" @keydown.enter="checkEnter" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
+                <form id="product-form" @submit.prevent="submit" @keydown.enter="checkEnter" class="min-w-0 space-y-6">
                             <ProductAiAssistant :enabled="aiEnabled" @apply="applyAiDraft" />
 
+                    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+                        <div class="mb-6 flex items-start gap-4">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white">1</span>
+                            <div><h2 class="text-lg font-bold text-slate-950">Informacion principal</h2><p class="mt-1 text-sm text-slate-500">Nombre, precio, categoria y datos que necesitas para empezar.</p></div>
+                        </div>
+                        <div class="grid grid-cols-1 gap-7 xl:grid-cols-2">
                             <div>
                                 <div class="mb-4">
                                     <label for="name" class="block font-medium text-sm text-gray-700">Nombre</label>
                                     <input id="name" v-model="form.name" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
+                                    <p v-if="form.errors.name" class="mt-1 text-sm text-red-600">{{ form.errors.name }}</p>
                                 </div>
                                 <div class="mb-4">
                                     <label for="barcode" class="block font-medium text-sm text-gray-700 mb-1">Código de Barras (Opcional)</label>
@@ -955,6 +924,7 @@ const checkEnter = (e) => {
                                 <div class="mb-4">
                                     <label for="price" class="block font-medium text-sm text-gray-700">Precio (Principal)</label>
                                     <input id="price" v-model="form.price" type="number" step="0.01" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" required>
+                                    <p v-if="form.errors.price" class="mt-1 text-sm text-red-600">{{ form.errors.price }}</p>
                                 </div>
 
                                 <div class="p-4 border rounded-md bg-gray-50">
@@ -1015,30 +985,9 @@ const checkEnter = (e) => {
                                     </div>
                                 </div>
 
-                                <div class="mt-4 mb-2">
-                                    <label class="block font-medium text-sm text-gray-700">Categorías</label>
-                                    <p v-if="requiresSubcategory" class="mt-1 text-sm text-amber-600 font-medium">
-                                        ⚠️ Es obligatorio seleccionar una subcategoría
-                                    </p>
+                                <div class="mt-4">
+                                    <CategoryPicker v-model="form.category_id" :categories="categories" :error="form.errors.category_id" />
                                 </div>
-                                <div class="space-y-3">
-                                    <div v-for="(lvl, idx) in levels" :key="idx" class="mb-1">
-                                        <select 
-                                            class="block w-full rounded-md shadow-sm border-gray-300"
-                                            :class="{ 'border-red-500': requiresSubcategory && idx === levels.length - 1 && !lvl.selected }"
-                                            v-model="lvl.selected"
-                                            @change="onSelectAtLevel(idx)"
-                                            :required="idx === levels.length - 1 && lvl.options.length > 0"
-                                        >
-                                            <option :value="null">Seleccione una categoría</option>
-                                            <option v-for="opt in lvl.options" :key="opt.id" :value="opt.id">{{ opt.name }}</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
-                                <p v-if="requiresSubcategory && !form.errors.category_id" class="mt-1 text-sm text-red-600">
-                                    Debés seleccionar una subcategoría. La categoría principal tiene subcategorías disponibles.
-                                </p>
                             </div>
                             
                             <div>
@@ -1050,7 +999,10 @@ const checkEnter = (e) => {
                                     <label for="long_description" class="block font-medium text-sm text-gray-700">Descripción Larga</label>
                                     <textarea id="long_description" v-model="form.long_description" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" rows="5"></textarea>
                                 </div>
-                                <div class="mb-4">
+                                <details class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <summary class="cursor-pointer text-sm font-semibold text-slate-800">Ficha tecnica y SEO (opcional)</summary>
+                                    <p class="mt-1 text-xs text-slate-500">Agrega estos datos si ayudan a explicar o posicionar mejor el producto.</p>
+                                <div class="mb-4 mt-4">
                                     <label for="specifications" class="block font-medium text-sm text-gray-700">Especificaciones (separadas por comas)</label>
                                     <input id="specifications" v-model="form.specifications" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" placeholder="Alto: 2.30m,Ancho: 1.20m,...">
                                 </div>
@@ -1059,14 +1011,19 @@ const checkEnter = (e) => {
                                     <input id="meta_keywords" v-model="form.meta_keywords" type="text" class="block mt-1 w-full rounded-md shadow-sm border-gray-300" placeholder="palabra1, palabra2, palabra3">
                                     <p class="mt-1 text-xs text-gray-500">Estas palabras clave ayudan a mejorar el SEO del producto. No son visibles para los clientes.</p>
                                 </div>
+                                </details>
                             </div>
-                            
-                                <div class="md:col-span-2 mt-6 border-t pt-6">
-                                <!-- Contenedor estilo categorías -->
-                                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                                    <div class="p-6 text-gray-900">
+                        </div>
+                    </section>
+
+                    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                                <div>
+                                    <div class="p-5 sm:p-7">
                                         <div class="flex items-center justify-between">
-                                            <h3 class="text-lg font-medium">Variantes del Producto</h3>
+                                            <div class="flex items-start gap-4">
+                                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-sm font-bold text-violet-700">2</span>
+                                                <div><h2 class="text-lg font-bold text-slate-950">Opciones del producto</h2><p class="mt-1 text-sm text-slate-500">Agrega opciones solo si vendes el mismo producto en colores, tallas u otras versiones.</p></div>
+                                            </div>
                                             <div class="flex items-center gap-2">
                                                 <button 
                                                     type="button" 
@@ -1310,7 +1267,7 @@ const checkEnter = (e) => {
                                         </div>
                                         
                                         <!-- Formulario para agregar nueva variante principal (Restringido si hay códigos de barras configurados) -->
-                                        <form v-if="variantParents.length < 1" @submit.prevent="addVariantParent" class="mt-6 border-t pt-4">
+                                        <div v-if="variantParents.length < 1" class="mt-6 border-t pt-4">
                                             <label class="block font-medium text-sm text-gray-700">Añadir Nueva Variante Principal</label>
                                             <div class="mt-2 flex items-center gap-2">
                                                 <input 
@@ -1321,7 +1278,8 @@ const checkEnter = (e) => {
                                                     @keyup.enter="addVariantParent"
                                                 />
                                                 <button 
-                                                    type="submit" 
+                                                    type="button"
+                                                    @click="addVariantParent"
                                                     class="w-8 h-8 inline-flex items-center justify-center rounded bg-green-500 text-white hover:bg-green-600" 
                                                     title="Añadir"
                                                 >
@@ -1336,13 +1294,12 @@ const checkEnter = (e) => {
                                                     ✖
                                                 </button>
                                             </div>
-                                        </form>
+                                        </div>
                                     </div>
-                                </div>
+                    </div>
 
-                            <!-- Sección de imágenes al final -->
-                            <div class="md:col-span-2 mt-6 border-t pt-6">
-                                <h3 class="text-lg font-medium text-gray-900 mb-2">Imágenes Extra de la Galería</h3>
+                    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+                                <div class="mb-5 flex items-start gap-4"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sm font-bold text-sky-700">3</span><div><h2 class="text-lg font-bold text-slate-950">Fotos del producto</h2><p class="mt-1 text-sm text-slate-500">Muestra el producto desde varios angulos para dar mas confianza al comprador.</p></div></div>
                                 <p class="text-sm text-gray-600 mb-4">
                                     Estas imágenes se agregarán a la galería general del producto. Las imágenes de las variantes se muestran cuando se selecciona esa opción.
                                 </p>
@@ -1351,20 +1308,35 @@ const checkEnter = (e) => {
                                     <input id="gallery_files" @input="onGalleryInput($event)" type="file" multiple class="block mt-1 w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                                     <p class="mt-1 text-xs text-gray-500">Formatos de imagen y hasta 2 MB por archivo.</p>
                                 </div>
-                            </div>
-                            
-                            <div class="md:col-span-2 flex items-center justify-end mt-6 border-t pt-6">
-                                <button type="submit" :disabled="form.processing" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded shadow">
+                    </section>
+
+                            <div class="sticky bottom-3 z-20 flex items-center justify-end rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur xl:hidden">
+                                <button type="submit" :disabled="form.processing" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60">
                                     <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4a2 2 0 0 1 2-2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4zm9-1.5V7h4.5L13 2.5z"/><path d="M8 13h8v2H8zM8 9h5v2H8z"/></svg>
-                                    <span>Crear</span>
+                                    <span>{{ form.processing ? 'Creando...' : 'Crear producto' }}</span>
                                 </button>
                                 <span v-if="Object.keys(form.errors).length" class="ml-3 text-sm text-red-600">Por favor corrige los campos marcados.</span>
                             </div>
-                        </form>
+                </form>
+
+                <aside class="hidden xl:sticky xl:top-24 xl:block">
+                    <div class="rounded-2xl bg-slate-950 p-5 text-white shadow-xl shadow-slate-900/10">
+                        <p class="text-xs font-bold uppercase tracking-[0.16em] text-indigo-300">Antes de publicar</p>
+                        <h2 class="mt-2 text-lg font-bold">Revisa lo esencial</h2>
+                        <ul class="mt-5 space-y-3 text-sm text-slate-300">
+                            <li class="flex gap-2"><span :class="form.name ? 'text-emerald-400' : 'text-slate-500'">●</span> Nombre claro</li>
+                            <li class="flex gap-2"><span :class="form.price !== '' ? 'text-emerald-400' : 'text-slate-500'">●</span> Precio de venta</li>
+                            <li class="flex gap-2"><span :class="form.category_id ? 'text-emerald-400' : 'text-slate-500'">●</span> Categoria final</li>
+                            <li class="flex gap-2"><span :class="form.short_description ? 'text-emerald-400' : 'text-slate-500'">●</span> Descripcion atractiva</li>
+                        </ul>
+                        <button form="product-form" type="submit" :disabled="form.processing" class="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-indigo-500 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-400 disabled:opacity-60">
+                            {{ form.processing ? 'Creando...' : 'Crear producto' }}
+                        </button>
+                        <p class="mt-3 text-center text-xs text-slate-400">Podras editarlo en cualquier momento.</p>
                     </div>
-                </div>
+                </aside>
             </div>
-        </div>
+        </AdminPage>
     </AuthenticatedLayout>
 
     <AlertModal

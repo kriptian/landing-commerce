@@ -1,6 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
 import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import AlertModal from '@/Components/AlertModal.vue';
@@ -214,11 +216,15 @@ const quickSearchResults = ref([]);
 const selectedQuickProduct = ref(null);
 const quickProcessing = ref(false);
 
-const openQuickEntry = () => {
+const openQuickEntry = (product = null) => {
     quickSearch.value = '';
     quickSearchResults.value = [];
     selectedQuickProduct.value = null;
     showQuickEntry.value = true;
+    if (product) {
+        selectQuickProduct(product);
+        return;
+    }
     nextTick(() => document.getElementById('quick-search-input')?.focus());
 };
 
@@ -438,12 +444,10 @@ const startResize = (e) => {
     <Head title="Gestión de Inventario" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Gestión de Inventario</h2>
-        </template>
-
-        <div class="py-12">
-            <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8">
+        <AdminPage wide>
+            <PageHeader eyebrow="Operacion" title="Inventario" description="Detecta faltantes, consulta costos y registra entradas sin salir de esta pantalla.">
+                <template #actions><a :href="route('admin.inventory.export')" class="ui-secondary-button">Exportar Excel</a><button type="button" class="ui-primary-button" @click="openQuickEntry">+ Registrar entrada</button></template>
+            </PageHeader>
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
                         <div v-if="inventoryWarnings.length" class="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
@@ -458,67 +462,23 @@ const startResize = (e) => {
                             </ul>
                         </div>
 
-                        <!-- Barra de acciones: buscador con cortina + filtro -->
-                        <div class="mb-4 flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <!-- Botón lupita -->
-                                <button type="button" @click="toggleSearch" class="p-2 rounded hover:bg-gray-100 transition">
-                                    <!-- Ícono de lupa -->
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                                      <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
-                                    </svg>
-                                </button>
-                                <!-- Cortina del buscador -->
-                                <transition name="fade-slide">
-                                    <div v-if="showSearch" class="relative">
-                                        <input
-                                            ref="searchInputRef"
-                                            v-model="search"
-                                            type="text"
-                                            placeholder="Buscar producto..."
-                                            class="w-64 md:w-80 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                        />
-                                    </div>
-                                </transition>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <a :href="route('admin.inventory.export')"
-                                   class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
-                                        <path d="M7 10a1 1 0 011-1h2V4a1 1 0 112 0v5h2a1 1 0 01.7 1.714l-3 3a1 1 0 01-1.4 0l-3-3A1 1 0 017 10z"/>
-                                        <path d="M5 15a1 1 0 011 1v2a2 2 0 002 2h8a2 2 0 002-2v-2a1 1 0 112 0v2a4 4 0 01-4 4H8a4 4 0 01-4-4v-2a1 1 0 011-1z"/>
-                                    </svg>
-                                    Exportar a Excel
-                                </a>
-                                <!-- Botón Entrada Rápida -->
-                                <button type="button" @click="openQuickEntry"
-                                   class="inline-flex items-center px-3 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-800 transition ease-in-out duration-150"
-                                   title="Entrada Rápida">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
-                                        <path fill-rule="evenodd" d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z" clip-rule="evenodd" />
-                                    </svg>
-                                    <span class="hidden md:inline ml-1">Nueva Entrada</span>
-                                </button>
-                                <!-- Dropdown de estado (estilizado) -->
-                            <div class="relative z-30">
-                                <button type="button" @click="showStatusMenu = !showStatusMenu" class="inline-flex items-center gap-2 px-3 py-2 border rounded-md shadow-sm hover:bg-gray-50">
-                                    <span>{{ statusLabel }}</span>
-                                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
-                                </button>
-                                <transition name="fade-slide">
-                                    <ul v-if="showStatusMenu" class="absolute right-0 mt-2 w-40 bg-white border rounded-md shadow-lg z-50">
-                                        <li v-for="opt in statuses" :key="opt.value">
-                                            <button type="button" @click="selectStatus(opt.value)" class="w-full text-left px-3 py-2 hover:bg-gray-100" :class="{ 'font-semibold text-indigo-600': opt.value === status }">
-                                                {{ opt.label }}
-                                            </button>
-                                        </li>
-                                    </ul>
-                                </transition>
-                            </div>
-                            </div>
+                        <form class="mb-5 grid gap-3 md:grid-cols-[minmax(240px,1fr)_220px_auto]" @submit.prevent="submitFilters">
+                            <div><label for="inventory-search" class="ui-label">Buscar producto</label><input id="inventory-search" v-model="search" type="search" class="ui-input" placeholder="Nombre, SKU o codigo" /></div>
+                            <div><label for="inventory-status" class="ui-label">Estado del stock</label><select id="inventory-status" v-model="status" class="ui-input"><option v-for="option in statuses" :key="option.value" :value="option.value">{{ option.label }}</option></select></div>
+                            <div class="flex items-end"><button type="submit" class="ui-primary-button w-full">Aplicar filtros</button></div>
+                        </form>
+
+                        <div class="space-y-3 md:hidden">
+                            <article v-for="product in products.data" :key="product.id" class="rounded-xl border border-slate-200 p-4">
+                                <div class="flex items-start justify-between gap-3"><div class="min-w-0"><h2 class="truncate font-bold text-slate-900">{{ product.name }}</h2><p class="mt-1 text-xs text-slate-500">{{ hasVariants(product) ? `${product.variants.length} variantes` : 'Producto simple' }}</p></div><span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="getStockStatus({ stock: calculateMainStock(product), alert: product.alert || 0 }).class">{{ getStockStatus({ stock: calculateMainStock(product), alert: product.alert || 0 }).text }}</span></div>
+                                <dl class="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-sm"><div><dt class="text-xs text-slate-500">Stock</dt><dd class="mt-1 font-extrabold">{{ calculateMainStock(product) }}</dd></div><div><dt class="text-xs text-slate-500">Compra</dt><dd class="mt-1 font-bold">{{ calculateMainPurchaseValue(product) }}</dd></div><div><dt class="text-xs text-slate-500">Venta</dt><dd class="mt-1 font-bold">{{ hasVariants(product) ? 'Variable' : fmt(product.price) }}</dd></div></dl>
+                                <div class="mt-3 flex items-center justify-between gap-3"><button v-if="hasVariants(product)" type="button" class="text-sm font-bold text-indigo-700" @click="toggleExpand(product.id)">{{ isExpanded(product.id) ? 'Ocultar variantes' : 'Ver variantes' }}</button><span v-else></span><button type="button" class="ui-secondary-button" @click="openQuickEntry(product)">Actualizar inventario</button></div>
+                                <div v-if="isExpanded(product.id) && hasVariants(product)" class="mt-3 space-y-2 border-l-2 border-indigo-100 pl-3"><div v-for="variant in filteredVariants(product.variants)" :key="variant.id" class="rounded-lg bg-slate-50 p-3 text-sm"><p class="font-semibold text-slate-800">{{ formatVariantName(variant) }}</p><p class="mt-1 text-slate-500">Stock {{ Number(variant.stock) || 0 }} · Venta {{ fmt(effRetail(product, variant)) }}</p></div></div>
+                            </article>
+                            <div v-if="!products.data.length" class="rounded-xl border-2 border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">No hay productos para mostrar.</div>
                         </div>
 
-                        <div ref="scrollBoxRef" class="relative overflow-x-auto w-full z-0">
+                        <div ref="scrollBoxRef" class="relative hidden overflow-x-auto w-full z-0 md:block">
                             <!-- Fades laterales como hint de scroll -->
                             <div v-show="showLeftFade" class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"></div>
                             <div v-show="showRightFade" class="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"></div>
@@ -537,6 +497,7 @@ const startResize = (e) => {
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">% Gan.</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">$ Gan.</th>
                                         <th class="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Estado</th>
+                                        <th class="px-3 py-2 sm:px-6 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Accion</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
@@ -593,6 +554,7 @@ const startResize = (e) => {
                                                     {{ getStockStatus({ stock: calculateMainStock(product), alert: product.alert || 0 }).text }}
                                                 </span>
                                             </td>
+                                            <td class="px-3 py-3 text-right sm:px-6 sm:py-4"><button type="button" class="ui-secondary-button" @click="openQuickEntry(product)">Actualizar</button></td>
                                         </tr>
 
                                         <!-- Filas de Variantes (Expandible) -->
@@ -650,21 +612,20 @@ const startResize = (e) => {
 
                     </div>
                 </div>
-            </div>
-        </div>
+        </AdminPage>
         
 
     
     <!-- MODAL DE ENTRADA RÁPIDA -->
     <Modal :show="showQuickEntry" @close="closeQuickEntry">
         <div class="p-6">
-            <h2 class="text-lg font-medium text-gray-900 mb-4">
-                <span v-if="!selectedQuickProduct">Buscar Producto para Entrada Rápida</span>
+            <h2 class="text-xl font-bold text-slate-900">
+                <span v-if="!selectedQuickProduct">Registrar entrada de inventario</span>
                 <span v-else>
-                    <button @click="backToSearch" class="text-indigo-600 hover:underline mr-2">&larr;</button>
-                    Editando: {{ selectedQuickProduct.name }}
+                    Actualizar {{ selectedQuickProduct.name }}
                 </span>
             </h2>
+            <p class="mb-5 mt-1 text-sm text-slate-500">{{ selectedQuickProduct ? 'Suma las unidades recibidas y ajusta precios solo si cambiaron.' : 'Busca por nombre o escanea el codigo del producto que recibiste.' }}</p>
 
             <!-- BUSCADOR -->
             <div v-if="!selectedQuickProduct">
@@ -699,24 +660,24 @@ const startResize = (e) => {
                 
                 <!-- CASO: PRODUCTO SIMPLE -->
                 <div v-if="!hasVariants(selectedQuickProduct)">
-                    <div class="bg-gray-50 p-4 rounded-md border text-sm grid gap-4">
+                    <div class="grid gap-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-gray-500 text-xs">Stock Actual</label>
                                 <div class="font-bold text-lg">{{ calculateMainStock(selectedQuickProduct) }}</div>
                             </div>
                             <div>
-                                <label class="block text-gray-700 font-bold mb-1">Agregar Stock (+)</label>
+                                <label class="ui-label">Unidades recibidas</label>
                                 <input type="number" min="0" v-model="selectedQuickProduct.qty_add" class="w-full border-gray-300 rounded-md shadow-sm h-8">
                             </div>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-gray-500 text-xs">Precio Compra</label>
+                                <label class="ui-label">Nuevo costo unitario</label>
                                 <input type="number" min="0" v-model="selectedQuickProduct.new_purchase_price" class="w-full border-gray-300 rounded-md shadow-sm h-8" :placeholder="selectedQuickProduct.purchase_price">
                             </div>
                             <div>
-                                <label class="block text-gray-500 text-xs">Precio Venta</label>
+                                <label class="ui-label">Nuevo precio de venta</label>
                                 <input type="number" min="0" v-model="selectedQuickProduct.new_price" class="w-full border-gray-300 rounded-md shadow-sm h-8" :placeholder="selectedQuickProduct.price">
                             </div>
                         </div>
@@ -725,7 +686,7 @@ const startResize = (e) => {
                                 @click="submitQuickUpdate(selectedQuickProduct.id, 'product', selectedQuickProduct.qty_add, selectedQuickProduct.new_purchase_price, selectedQuickProduct.new_price)"
                                 :disabled="quickProcessing"
                                 class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition disabled:opacity-50">
-                                Guardar
+                                 Guardar actualizacion
                             </button>
                         </div>
                     </div>
@@ -779,7 +740,8 @@ const startResize = (e) => {
             </div>
             
             <div class="mt-6 flex justify-end">
-                <button @click="closeQuickEntry" class="text-gray-500 hover:text-gray-700 mr-4">Cerrar</button>
+                <button v-if="selectedQuickProduct" type="button" class="ui-secondary-button mr-2" @click="backToSearch">Elegir otro producto</button>
+                <button type="button" class="ui-secondary-button" @click="closeQuickEntry">Cerrar</button>
             </div>
         </div>
     </Modal>

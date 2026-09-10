@@ -19,7 +19,6 @@ class RestrictPhysicalSalesRole
 
         // Si el usuario tiene el rol "physical-sales", solo puede acceder a physical-sales
         if ($user && $user->hasRole('physical-sales')) {
-            // Permitir acceso a physical-sales y sus rutas relacionadas
             $allowedRoutes = [
                 'admin.physical-sales.index',
                 'admin.physical-sales.search-products',
@@ -27,14 +26,13 @@ class RestrictPhysicalSalesRole
                 'admin.physical-sales.store',
                 'admin.physical-sales.open-drawer',
                 'admin.physical-sales.show',
-                'admin.physical-sales.export',
                 'logout',
             ];
 
             $currentRoute = $request->route()->getName();
 
             // Si no está en una ruta permitida, redirigir a physical-sales
-            if (!in_array($currentRoute, $allowedRoutes)) {
+            if (! in_array($currentRoute, $allowedRoutes, true)) {
                 return redirect()->route('admin.physical-sales.index');
             }
         }
@@ -42,4 +40,3 @@ class RestrictPhysicalSalesRole
         return $next($request);
     }
 }
-

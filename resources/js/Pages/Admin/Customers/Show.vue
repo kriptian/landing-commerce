@@ -1,6 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
 
 const props = defineProps({
     customer: Object,
@@ -42,17 +44,10 @@ const getStatusColor = (status) => {
     <Head :title="`Cliente: ${customer.name}`" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center justify-between">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Cliente: {{ customer.name }}</h2>
-                <Link :href="route('admin.customers.index')" class="text-sm text-gray-600 hover:text-gray-800">
-                    ← Volver a clientes
-                </Link>
-            </div>
-        </template>
-
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <AdminPage>
+            <PageHeader eyebrow="Cliente" :title="customer.name" :description="customer.email">
+                <template #actions><Link :href="route('admin.customers.index')" class="ui-secondary-button">Volver a clientes</Link></template>
+            </PageHeader>
                 <!-- Información del cliente -->
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
                     <div class="p-6">
@@ -157,8 +152,7 @@ const getStatusColor = (status) => {
                         </p>
                     </div>
                 </div>
-            </div>
-        </div>
+        </AdminPage>
     </AuthenticatedLayout>
 </template>
 

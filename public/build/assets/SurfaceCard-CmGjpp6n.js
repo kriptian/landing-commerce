@@ -1,0 +1,1 @@
+import{o as r,a as o,M as s,x as t}from"./app-DBZEKZTJ.js";const l={__name:"SurfaceCard",props:{padded:{type:Boolean,default:!0}},setup(e){return(a,d)=>(r(),o("section",{class:t(["rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03),0_12px_32px_rgba(15,23,42,0.04)]",e.padded?"p-5 sm:p-6":""])},[s(a.$slots,"default")],2))}};export{l as _};

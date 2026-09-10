@@ -12,6 +12,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'add-to-cart']);
 
 const selectedOptions = ref({});
+const selectionError = ref('');
 const availableVariants = computed(() => props.product?.variants || []);
 const variantOptions = computed(() => props.product?.variant_options || []);
 
@@ -19,6 +20,7 @@ const variantOptions = computed(() => props.product?.variant_options || []);
 watch(() => props.show, (newVal) => {
     if (newVal) {
         selectedOptions.value = {};
+        selectionError.value = '';
     }
 });
 
@@ -109,14 +111,13 @@ const formatCurrency = (amount) => {
 };
 
 const handleAddToCart = () => {
+    selectionError.value = '';
     const variant = findMatchingVariant();
     if (variant) {
         emit('add-to-cart', props.product, variant);
         emit('close');
     } else {
-        // Fallback or error if no exact variant found (shouldn't happen if logic is correct)
-        // Maybe the combination doesn't exist
-        alert('Esta combinación de variantes no está disponible.');
+        selectionError.value = 'Esta combinacion no esta disponible. Elige otras opciones para continuar.';
     }
 };
 </script>
@@ -173,6 +174,8 @@ const handleAddToCart = () => {
             <div v-else class="py-4 text-center text-gray-500">
                 No hay opciones disponibles para este producto.
             </div>
+
+            <p v-if="selectionError" class="ui-status-error mt-4" role="alert">{{ selectionError }}</p>
 
             <div class="mt-6 flex justify-end gap-3">
                 <SecondaryButton @click="$emit('close')">

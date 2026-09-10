@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { onMounted, computed, ref } from 'vue';
 import { downloadPDF, sharePDF } from '@/Utils/pdfUtils';
+import AlertModal from '@/Components/AlertModal.vue';
 
 const formatCurrency = (value) => {
     return new Intl.NumberFormat('es-CO', {
@@ -32,6 +33,7 @@ const itemsList = computed(() => {
 
 // PDF Generation
 const isGeneratingPDF = ref(false);
+const pdfError = ref(false);
 
 const downloadInvoicePDF = async () => {
     if (!props.sale) return;
@@ -43,7 +45,7 @@ const downloadInvoicePDF = async () => {
         }
     } catch (error) {
         console.error(error);
-        alert('Error al generar el PDF');
+        pdfError.value = true;
     } finally {
         isGeneratingPDF.value = false;
     }
@@ -126,7 +128,7 @@ onMounted(() => {
                         <span class="hidden sm:inline">Imprimir</span>
                     </button>
                     <button
-                        @click="$inertia.visit(route('admin.reports.index', { type: 'physical' }))"
+                        @click="$inertia.visit(route('admin.physical-sales.index'))"
                         class="px-3 sm:px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 flex items-center gap-1"
                         title="Volver"
                     >
@@ -416,6 +418,16 @@ onMounted(() => {
             </div>
         </div>
     </AuthenticatedLayout>
+
+    <AlertModal
+        :show="pdfError"
+        type="error"
+        title="No se pudo generar el PDF"
+        message="Intenta nuevamente o usa la opcion de imprimir."
+        primary-text="Entendido"
+        @close="pdfError = false"
+        @primary="pdfError = false"
+    />
     
     <!-- Hidden invoice container for PDF generation -->
     <div id="invoice-content-show" class="fixed top-0 left-0 w-[58mm] bg-white z-[-100] opacity-0 pointer-events-none">

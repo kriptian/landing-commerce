@@ -1,354 +1,250 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { Link, usePage } from '@inertiajs/vue3';
 import AlertModal from '@/Components/AlertModal.vue';
+import AdminNavigation from '@/Components/Admin/AdminNavigation.vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
-import Dropdown from '@/Components/Dropdown.vue';
-import DropdownLink from '@/Components/DropdownLink.vue';
-import NavLink from '@/Components/NavLink.vue';
-import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
-import { Link, usePage, router } from '@inertiajs/vue3';
+import { resolveAdminNavigation } from '@/Navigation/adminNavigation';
 
-const showingNavigationDropdown = ref(false);
-
-const store = usePage().props.auth.user.store;
-const plan = ref((store && store.plan) ? store.plan : 'emprendedor');
-const isNegociante = computed(() => plan.value === 'negociante' || (usePage().props.auth?.isSuperAdmin === true));
-const isPdfCreator = computed(() => plan.value === 'creador_pdf' && (usePage().props.auth?.isSuperAdmin !== true));
-const canUsePdfBuilder = computed(() => isNegociante.value || plan.value === 'creador_pdf');
-const canAccessDeployment = computed(() => {
-  const auth = usePage().props.auth;
-  const user = auth?.user;
-  const localHost = typeof window !== 'undefined'
-    && ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-
-  return auth?.canDeploy === true || (
-    localHost
-    && user?.email?.trim().toLowerCase() === 'cristian.ospinagarcia@gmail.com'
-    && user?.store?.slug === 'la-aguacatera'
-    && Number(user.store.user_id) === Number(user.id)
-  );
-});
-
+const page = usePage();
+const drawerOpen = ref(false);
+const drawer = ref(null);
+const drawerTrigger = ref(null);
 const showUpgradeStep1 = ref(false);
 const showUpgradeStep2 = ref(false);
 
-const openUpgrade = () => { showUpgradeStep1.value = true; };
-const toStep2 = () => { showUpgradeStep1.value = false; showUpgradeStep2.value = true; };
-const cancelUpgrade = () => { showUpgradeStep1.value = false; showUpgradeStep2.value = false; };
-const whatsappUpgradeHref = () => {
-  try {
-    const storeName = store?.name || 'Mi tienda';
-    const text = `Hola, soy la tienda ${storeName} y deseo mejorar mi plan.`;
-    const encoded = encodeURIComponent(text);
-    return `https://wa.me/573208204198?text=${encoded}`;
-  } catch (e) { return `https://wa.me/573208204198`; }
+const auth = computed(() => page.props.auth || {});
+const store = computed(() => auth.value.store || auth.value.user?.store || null);
+const plan = computed(() => store.value?.plan || 'emprendedor');
+const isPos = computed(() => route().current('admin.physical-sales.index'));
+const navigationGroups = computed(() => resolveAdminNavigation(auth.value, page.props.adminNotifications));
+const shellHomeHref = computed(() => {
+    if (auth.value.capabilities?.dashboard === 'enabled') return route('dashboard');
+    const firstEnabled = navigationGroups.value
+        .flatMap((group) => group.items)
+        .find((item) => item.state === 'enabled');
+    return firstEnabled ? route(firstEnabled.routeName) : route('profile.edit');
+});
+const catalogUrl = computed(() => store.value?.slug
+    ? route('catalogo.index', { store: store.value.slug })
+    : null);
+const whatsappUpgradeHref = computed(() => {
+    const text = encodeURIComponent(`Hola, soy la tienda ${store.value?.name || 'Mi tienda'} y deseo mejorar mi plan.`);
+    return `https://wa.me/573208204198?text=${text}`;
+});
+
+const openUpgrade = () => {
+    drawerOpen.value = false;
+    showUpgradeStep1.value = true;
+};
+const cancelUpgrade = () => {
+    showUpgradeStep1.value = false;
+    showUpgradeStep2.value = false;
+};
+const toUpgradeContact = () => {
+    showUpgradeStep1.value = false;
+    showUpgradeStep2.value = true;
+};
+const closeDrawer = () => {
+    drawerOpen.value = false;
 };
 
-// Permitir que otras vistas abran el flujo de upgrade (p.ej., cards del Dashboard)
+const handleKeydown = (event) => {
+    if (! drawerOpen.value) return;
+
+    if (event.key === 'Escape') {
+        closeDrawer();
+        return;
+    }
+
+    if (event.key !== 'Tab') return;
+    const focusable = drawer.value?.querySelectorAll('a[href], button:not([disabled])') || [];
+    if (! focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (! event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+};
+
 const handleExternalUpgrade = () => openUpgrade();
+
+watch(drawerOpen, async (open) => {
+    document.body.style.overflow = open ? 'hidden' : '';
+    if (open) {
+        await nextTick();
+        drawer.value?.querySelector('a[href], button:not([disabled])')?.focus();
+    } else {
+        drawerTrigger.value?.focus();
+    }
+});
+
+watch(() => page.url, closeDrawer);
+
 onMounted(() => {
-  try { window.addEventListener('open-upgrade-plan', handleExternalUpgrade); } catch (e) {}
+    window.addEventListener('open-upgrade-plan', handleExternalUpgrade);
+    document.addEventListener('keydown', handleKeydown);
 });
+
 onBeforeUnmount(() => {
-  try { window.removeEventListener('open-upgrade-plan', handleExternalUpgrade); } catch (e) {}
+    window.removeEventListener('open-upgrade-plan', handleExternalUpgrade);
+    document.removeEventListener('keydown', handleKeydown);
+    document.body.style.overflow = '';
 });
-const can = (perm) => {
-  const p = usePage().props.auth?.permissions || [];
-  const roles = usePage().props.auth?.roles || [];
-  const isStoreAdmin = Array.isArray(roles) && roles.includes('Administrador');
-  if (isPdfCreator.value) return false;
-  if (isStoreAdmin) return true; // Rol Administrador ve todo (excepto SuperStores que depende de is_admin)
-  return Array.isArray(p) && p.includes(perm);
-};
-
-// Toast de confirmación
-const showToast = ref(false);
-const toastMessage = ref('');
-const confirmUpgrade = () => {
-  try {
-    router.post(route('store.upgrade'), {}, {
-      preserveScroll: true,
-      onSuccess: () => {
-        plan.value = 'negociante';
-        toastMessage.value = 'Tu plan fue actualizado a Negociante';
-        showToast.value = true;
-        try { setTimeout(() => { showToast.value = false; }, 4000); } catch (e) {}
-        try { router.reload({ only: ['auth'] }); } catch (e) {}
-      },
-    });
-  } finally {
-    cancelUpgrade();
-  }
-};
-
 </script>
 
 <template>
-    <div>
-        <div class="min-h-screen bg-gray-100">
-            <nav class="border-b border-gray-100 bg-white">
-                <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                    <div class="flex h-16 justify-between">
-                        <div class="flex">
-                            <div class="flex shrink-0 items-center space-x-3">
-                                <Link :href="route('dashboard')">
-                                    <img v-if="store && store.logo_url" :src="store.logo_url" class="block h-9 w-9 rounded-full object-cover">
-                                    <ApplicationLogo v-else class="block h-9 w-auto fill-current text-gray-800" />
-                                </Link>
-                                <span v-if="store" class="font-semibold text-gray-800">{{ store.name }}</span>
-                            </div>
+    <main v-if="isPos" id="main-content">
+        <slot />
+    </main>
 
-                            <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                                <NavLink v-if="can('ver dashboard')" :href="route('dashboard')" :active="route().current('dashboard')">
-                                    Dashboard
-                                </NavLink>
-                                
-                                <NavLink v-if="can('ver inventario')" :href="route('admin.physical-sales.index')" :active="route().current('admin.physical-sales.*')">
-                                    VENDER!
-                                </NavLink>
-                                
-                                <NavLink v-if="isNegociante && (can('ver ordenes') || can('gestionar ordenes'))" :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
-                                    <div class="relative flex items-center">
-                                        <span>Órdenes</span>
-                                        <span v-if="$page.props.adminNotifications.newOrdersCount > 0" 
-                                              class="ms-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                                            {{ $page.props.adminNotifications.newOrdersCount }}
-                                        </span>
-                                    </div>
-                                </NavLink>
-                                <button v-else-if="!isPdfCreator" type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500 cursor-pointer">
-                                    Órdenes
-                                </button>
+    <div v-else class="min-h-screen bg-[#f4f6f8] text-slate-900">
+        <a href="#main-content" class="sr-only z-[70] rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
+            Ir al contenido
+        </a>
 
-                                <NavLink v-if="isNegociante" :href="route('admin.customers.index')" :active="route().current('admin.customers.*') || route().current('admin.coupons.*')">
-                                    Clientes
-                                </NavLink>
+        <aside dusk="admin-sidebar" class="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col overflow-hidden bg-slate-950 lg:flex">
+            <div class="flex h-20 items-center gap-3 border-b border-white/10 px-6">
+                <Link :href="shellHomeHref" class="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+                    <img v-if="store?.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-10 w-10 rounded-xl object-cover ring-1 ring-white/10">
+                    <span v-else class="flex h-10 w-10 items-center justify-center rounded-xl bg-white p-2">
+                        <ApplicationLogo class="h-6 w-auto fill-current text-slate-900" />
+                    </span>
+                    <span class="min-w-0">
+                        <span class="block truncate text-sm font-bold text-white">{{ store?.name || 'Mi tienda' }}</span>
+                        <span class="block text-xs capitalize text-slate-500">Plan {{ plan.replace('_', ' ') }}</span>
+                    </span>
+                </Link>
+            </div>
 
-                                <NavLink v-if="isNegociante && can('ver reportes')" :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">Reportes</NavLink>
-                                <button v-else-if="!isPdfCreator" type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500">Reportes</button>
-                                
-                                <NavLink v-if="isNegociante && can('ver inventario')" :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">Inventario</NavLink>
-                                <button v-else-if="!isPdfCreator" type="button" @click="openUpgrade" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-400 hover:text-gray-500">Inventario</button>
-                                
-                                <NavLink v-if="isNegociante" :href="route('admin.catalog-customization.index')" :active="route().current('admin.catalog-customization.*')">Personalizar catálogo</NavLink>
-                                <NavLink v-if="canUsePdfBuilder" :href="route('admin.pdf-catalog-builder.index')" :active="route().current('admin.pdf-catalog-builder.*')">Generador PDF</NavLink>
-                                
-                                <button v-if="!isNegociante && !isPdfCreator" type="button" @click="openUpgrade" class="inline-flex items-center gap-2 text-green-700 hover:text-green-800">
-                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                                    Mejorar plan
-                                </button>
-                                
-                                <NavLink v-if="$page.props.auth?.isSuperAdmin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">
-                                    SuperStores
-                                </NavLink>
-                                </div>
-                        </div>
+            <div class="flex-1 overflow-y-auto px-4 py-6 [scrollbar-width:thin] [scrollbar-color:#334155_transparent]">
+                <AdminNavigation :groups="navigationGroups" @upgrade="openUpgrade" />
+            </div>
 
-                        <div class="hidden sm:ms-6 sm:flex sm:items-center">
-                            <div class="relative ms-3">
-                                <Dropdown align="right" width="48">
-                                    <template #trigger>
-                                        <span class="inline-flex rounded-md">
-                                            <button
-                                                type="button"
-                                                class="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none"
-                                            >
-                                                {{ $page.props.auth.user.name }}
-
-                                                <svg
-                                                    class="-me-0.5 ms-2 h-4 w-4"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    viewBox="0 0 20 20"
-                                                    fill="currentColor"
-                                                >
-                                                    <path
-                                                        fill-rule="evenodd"
-                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                        clip-rule="evenodd"
-                                                    />
-                                                </svg>
-                                            </button>
-                                        </span>
-                                    </template>
-
-                                    <template #content>
-                                        <DropdownLink
-                                            v-if="canAccessDeployment"
-                                            :href="route('admin.deployments.index')"
-                                        >
-                                            Desplegar producción
-                                        </DropdownLink>
-                                        <DropdownLink
-                                            :href="route('profile.edit')"
-                                        >
-                                            Profile
-                                        </DropdownLink>
-                                        <DropdownLink
-                                            :href="route('logout')"
-                                            method="post"
-                                            as="button"
-                                        >
-                                            Log Out
-                                        </DropdownLink>
-                                    </template>
-                                </Dropdown>
-                            </div>
-                        </div>
-
-                        <div class="-me-2 flex items-center sm:hidden">
-                            <button
-                                @click="
-                                    showingNavigationDropdown =
-                                        !showingNavigationDropdown
-                                "
-                                class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition duration-150 ease-in-out hover:bg-gray-100 hover:text-gray-500 focus:bg-gray-100 focus:text-gray-500 focus:outline-none"
-                            >
-                                <svg
-                                    class="h-6 w-6"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        :class="{
-                                            hidden: showingNavigationDropdown,
-                                            'inline-flex':
-                                                !showingNavigationDropdown,
-                                        }"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M4 6h16M4 12h16M4 18h16"
-                                    />
-                                    <path
-                                        :class="{
-                                            hidden: !showingNavigationDropdown,
-                                            'inline-flex':
-                                                showingNavigationDropdown,
-                                        }"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M6 18L18 6M6 6l12 12"
-                                    />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    :class="{
-                        block: showingNavigationDropdown,
-                        hidden: !showingNavigationDropdown,
-                    }"
-                    class="sm:hidden"
+            <div class="border-t border-white/10 p-4">
+                <a
+                    v-if="catalogUrl"
+                    :href="catalogUrl"
+                    target="_blank"
+                    rel="noopener"
+                    class="mb-3 flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
                 >
-                    <div class="space-y-1 pb-3 pt-2">
-                        <ResponsiveNavLink
-                            v-if="!isPdfCreator"
-                            :href="route('dashboard')"
-                            :active="route().current('dashboard')"
-                        >
-                            Dashboard
-                        </ResponsiveNavLink>
-
-                        <ResponsiveNavLink v-if="can('ver inventario')" :href="route('admin.physical-sales.index')" :active="route().current('admin.physical-sales.*')">
-                            VENDER!
-                        </ResponsiveNavLink>
-
-                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.orders.index')" :active="route().current('admin.orders.*')">
-                            <div class="relative flex items-center">
-                                <span>Órdenes</span>
-                                <span v-if="$page.props.adminNotifications.newOrdersCount > 0" 
-                                      class="ms-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                                    {{ $page.props.adminNotifications.newOrdersCount }}
-                                </span>
-                            </div>
-                        </ResponsiveNavLink>
-                        <button v-else-if="!isPdfCreator" type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Órdenes</button>
-
-                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.customers.index')" :active="route().current('admin.customers.*') || route().current('admin.coupons.*')">Clientes</ResponsiveNavLink>
-
-                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.reports.index')" :active="route().current('admin.reports.index')">Reportes</ResponsiveNavLink>
-                        <button v-else-if="!isPdfCreator" type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Reportes</button>
-
-                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.inventory.index')" :active="route().current('admin.inventory.index')">Inventario</ResponsiveNavLink>
-                        <button v-else-if="!isPdfCreator" type="button" class="w-full text-left px-3 py-2 text-gray-400 hover:text-gray-500" @click="openUpgrade">Inventario</button>
-                        
-                        <ResponsiveNavLink v-if="isNegociante" :href="route('admin.catalog-customization.index')" :active="route().current('admin.catalog-customization.*')">Personalizar catálogo</ResponsiveNavLink>
-                        <ResponsiveNavLink v-if="canUsePdfBuilder" :href="route('admin.pdf-catalog-builder.index')" :active="route().current('admin.pdf-catalog-builder.*')">Generador PDF</ResponsiveNavLink>
-                        
-                        <button v-if="!isNegociante && !isPdfCreator" type="button" class="w-full text-left px-3 py-2 text-green-700 hover:text-green-800" @click="openUpgrade">Mejorar plan</button>
-                        <ResponsiveNavLink v-if="$page.props.auth?.isSuperAdmin" :href="route('super.stores.index')" :active="route().current('super.stores.*')">
-                            SuperStores
-                        </ResponsiveNavLink>
-                        </div>
-
-                    <div
-                        class="border-t border-gray-200 pb-1 pt-4"
-                    >
-                        <div class="px-4">
-                            <div
-                                class="text-base font-medium text-gray-800"
-                            >
-                                {{ $page.props.auth.user.name }}
-                            </div>
-                            <div class="text-sm font-medium text-gray-500">
-                                {{ $page.props.auth.user.email }}
-                            </div>
-                        </div>
-
-                        <div class="mt-3 space-y-1">
-                            <ResponsiveNavLink v-if="canAccessDeployment" :href="route('admin.deployments.index')">
-                                Desplegar producción
-                            </ResponsiveNavLink>
-                            <ResponsiveNavLink :href="route('profile.edit')">
-                                Profile
-                            </ResponsiveNavLink>
-                            <ResponsiveNavLink
-                                :href="route('logout')"
-                                method="post"
-                                as="button"
-                            >
-                                Log Out
-                            </ResponsiveNavLink>
-                        </div>
-                    </div>
+                    Ver tienda
+                    <span aria-hidden="true">↗</span>
+                </a>
+                <button
+                    v-if="plan === 'emprendedor'"
+                    type="button"
+                    class="mb-3 w-full rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-400 px-3 py-2.5 text-sm font-bold text-slate-950 transition hover:brightness-105"
+                    @click="openUpgrade"
+                >
+                    Mejorar plan
+                </button>
+                <div class="flex items-center gap-3 rounded-xl bg-white/[0.04] p-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-800 text-sm font-bold text-cyan-300">
+                        {{ auth.user?.name?.charAt(0)?.toUpperCase() }}
+                    </span>
+                    <span class="min-w-0 flex-1">
+                        <span class="block truncate text-sm font-semibold text-white">{{ auth.user?.name }}</span>
+                        <Link :href="route('profile.edit')" class="text-xs text-slate-500 hover:text-cyan-300">Ver perfil</Link>
+                    </span>
+                    <Link :href="route('logout')" method="post" as="button" class="rounded-lg p-2 text-slate-500 hover:bg-white/5 hover:text-white" aria-label="Cerrar sesion">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    </Link>
                 </div>
-            </nav>
+            </div>
+        </aside>
 
-            <header
-                class="bg-white shadow"
-                v-if="$slots.header"
+        <header class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur lg:hidden">
+            <div class="flex min-w-0 items-center gap-3">
+                <img v-if="store?.logo_url" :src="store.logo_url" :alt="`Logo de ${store.name}`" class="h-9 w-9 rounded-xl object-cover">
+                <ApplicationLogo v-else class="h-8 w-auto fill-current text-slate-900" />
+                <span class="truncate text-sm font-bold">{{ store?.name || 'Mi tienda' }}</span>
+            </div>
+            <button
+                ref="drawerTrigger"
+                dusk="admin-mobile-trigger"
+                type="button"
+                class="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                aria-label="Abrir menu"
+                aria-controls="admin-mobile-drawer"
+                :aria-expanded="drawerOpen"
+                @click="drawerOpen = true"
             >
-                <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round" /></svg>
+            </button>
+        </header>
+
+        <Transition enter-active-class="transition duration-200" enter-from-class="opacity-0" leave-active-class="transition duration-150" leave-to-class="opacity-0">
+            <div v-if="drawerOpen" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm lg:hidden" @click.self="closeDrawer">
+                <aside
+                    id="admin-mobile-drawer"
+                    ref="drawer"
+                    dusk="admin-mobile-drawer"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="admin-drawer-title"
+                    class="flex h-full w-[min(88vw,22rem)] flex-col bg-slate-950 shadow-2xl"
+                >
+                    <div class="flex h-20 items-center justify-between border-b border-white/10 px-5">
+                        <div>
+                            <p id="admin-drawer-title" class="font-bold text-white">{{ store?.name || 'Mi tienda' }}</p>
+                            <p class="text-xs capitalize text-slate-500">Plan {{ plan.replace('_', ' ') }}</p>
+                        </div>
+                        <button type="button" class="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Cerrar menu" @click="closeDrawer">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke-linecap="round" /></svg>
+                        </button>
+                    </div>
+                    <div class="flex-1 overflow-y-auto px-4 py-6">
+                        <AdminNavigation :groups="navigationGroups" @navigate="closeDrawer" @upgrade="openUpgrade" />
+                    </div>
+                    <div class="space-y-2 border-t border-white/10 p-4">
+                        <a v-if="catalogUrl" :href="catalogUrl" target="_blank" rel="noopener" class="block rounded-xl bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-300">Ver tienda ↗</a>
+                        <Link :href="route('profile.edit')" class="block rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300" @click="closeDrawer">Perfil</Link>
+                        <Link :href="route('logout')" method="post" as="button" class="w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium text-rose-300">Cerrar sesion</Link>
+                    </div>
+                </aside>
+            </div>
+        </Transition>
+
+        <div class="lg:pl-72">
+            <header v-if="$slots.header" class="border-b border-slate-200/80 bg-white">
+                <div class="mx-auto max-w-[92rem] px-4 py-5 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>
-
-            <main>
+            <main id="main-content" class="admin-content min-w-0">
                 <slot />
             </main>
-            <!-- Modales de mejora de plan (dentro del template principal) -->
-            <AlertModal :show="showUpgradeStep1" type="warning" title="Activar funcionalidades avanzadas" message="Hacer uso de estas funcionalidades puede tener costo extra. ¿Deseas activarlo?" primary-text="Sí, continuar" secondary-text="Cancelar" @primary="toStep2" @secondary="cancelUpgrade" @close="cancelUpgrade" />
-            <AlertModal :show="showUpgradeStep2" type="warning" title="Confirmación final" message="Estás a punto de activar funcionalidades avanzadas. Esto tiene un costo adicional. ¿Deseas continuar?" primary-text="Sí, activar plan" secondary-text="Volver" :primary-href="null" @primary="confirmUpgrade" @secondary="() => { showUpgradeStep2 = false; showUpgradeStep1 = true; }" @close="cancelUpgrade" />
-            
-            <!-- Toast de confirmación -->
-            <transition 
-                enter-active-class="transition ease-out duration-200" 
-                enter-from-class="translate-y-2 opacity-0" 
-                enter-to-class="translate-y-0 opacity-100" 
-                leave-active-class="transition ease-in duration-150" 
-                leave-from-class="opacity-100" 
-                leave-to-class="opacity-0 translate-y-2">
-                <div v-if="showToast" class="fixed top-6 right-6 z-[60]">
-                    <div class="rounded-lg bg-white shadow-lg border border-green-200 text-green-800 px-4 py-3 text-sm">
-                        {{ toastMessage }}
-                    </div>
-                </div>
-            </transition>
-            
         </div>
+
+        <AlertModal
+            :show="showUpgradeStep1"
+            type="info"
+            title="Lleva tu tienda al siguiente nivel"
+            message="Las funciones marcadas como Pro requieren el plan Negociante. Te ayudaremos a elegir la mejor opcion para tu tienda."
+            primary-text="Ver opciones"
+            secondary-text="Ahora no"
+            @primary="toUpgradeContact"
+            @secondary="cancelUpgrade"
+            @close="cancelUpgrade"
+        />
+        <AlertModal
+            :show="showUpgradeStep2"
+            type="warning"
+            title="Habla con nuestro equipo"
+            message="La activacion requiere confirmar el servicio y el pago. Continuaremos por WhatsApp sin cambiar tu plan automaticamente."
+            primary-text="Abrir WhatsApp"
+            secondary-text="Volver"
+            :primary-href="whatsappUpgradeHref"
+            @primary="cancelUpgrade"
+            @secondary="() => { showUpgradeStep2 = false; showUpgradeStep1 = true; }"
+            @close="cancelUpgrade"
+        />
     </div>
 </template>

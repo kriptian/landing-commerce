@@ -24,12 +24,13 @@ class RolesAndPermissionsSeeder extends Seeder
             // Inventario / Productos
             'crear productos', 'editar productos', 'eliminar productos', 'ver inventario',
             // Categorías
-            'gestionar categorias',
+            'gestionar categorias', 'crear categorias',
             // Usuarios
             'gestionar usuarios',
             // Operaciones sensibles
             'editar inventario', 'gestionar cupones', 'gestionar galeria',
             'registrar gastos', 'ver clientes', 'gestionar ventas fisicas',
+            'modificar precios y descuentos pos',
         ];
         foreach ($perms as $p) {
             Permission::firstOrCreate(['name' => $p]);

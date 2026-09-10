@@ -1,7 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import { safeRoute } from '@/utils/safeRoute';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
 import Modal from '@/Components/Modal.vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -225,30 +227,28 @@ const errorText = ref('');
     <Head :title="`Editar: ${category.name}`" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                Editando Categoría: {{ category.name }}
-            </h2>
-        </template>
-
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <AdminPage>
+            <PageHeader eyebrow="Catalogo" :title="`Editar ${category.name}`" description="Actualiza el nombre y organiza sus subcategorias sin perder la estructura del catalogo.">
+                <template #actions><Link :href="route('admin.categories.index')" class="ui-secondary-button">Volver a categorias</Link></template>
+            </PageHeader>
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
-                        <h3 class="text-lg font-medium">Editar Nombre</h3>
-                        <form @submit.prevent="updateCategoryName" class="mt-4 flex items-center gap-4">
-                            <input v-model="form.name" type="text" class="block w-full rounded-md shadow-sm border-gray-300">
-                            <button type="submit" :disabled="form.processing" class="bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
-                                Actualizar
+                        <h3 class="text-lg font-bold text-slate-900">Nombre de la categoria</h3>
+                        <p class="mt-1 text-sm text-slate-500">Este nombre sera visible para tus clientes en el catalogo.</p>
+                        <form @submit.prevent="updateCategoryName" class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                            <div class="flex-1"><label for="category-name" class="ui-label">Nombre</label><input id="category-name" v-model="form.name" type="text" class="ui-input"></div>
+                            <button type="submit" :disabled="form.processing" class="ui-primary-button">
+                                {{ form.processing ? 'Guardando...' : 'Guardar nombre' }}
                             </button>
                         </form>
+                        <p v-if="form.errors.name" class="ui-error mt-2">{{ form.errors.name }}</p>
                     </div>
                 </div>
 
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
                         <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-medium">Gestionar Subcategorías</h3>
+                        <div><h3 class="text-lg font-bold text-slate-900">Estructura de subcategorias</h3><p class="mt-1 text-sm text-slate-500">Administra hasta tres niveles para mantener una navegacion sencilla.</p></div>
                             <div class="flex items-center gap-2">
                                 <button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded border border-gray-300 hover:bg-gray-100 text-gray-700" title="Expandir todo" @click="() => { children.forEach(c => expandedByParent[c.id] = true); children.forEach(c => { if (!Array.isArray(childrenByParent[c.id])) loadChildrenFor(c.id); }); }">+
                                 </button>
@@ -351,8 +351,7 @@ const errorText = ref('');
                         </form>
                     </div>
                 </div>
-            </div>
-        </div>
+        </AdminPage>
     </AuthenticatedLayout>
 
     <Modal :show="confirmingDeletion" @close="closeDeleteModal">

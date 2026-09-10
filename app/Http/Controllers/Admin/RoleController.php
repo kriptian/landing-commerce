@@ -73,6 +73,12 @@ class RoleController extends Controller
     {
         $role = $request->user()->store->roles()->findOrFail($role->id);
 
+        if ($role->name === 'physical-sales' && $request->input('name') !== 'physical-sales') {
+            throw ValidationException::withMessages([
+                'name' => 'El rol "physical-sales" es requerido por el sistema y no puede renombrarse.',
+            ]);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255',
                 Rule::unique('roles')->where(function ($q) use ($role) {

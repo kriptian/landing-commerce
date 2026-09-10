@@ -4,6 +4,8 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
 
 const props = defineProps({
     store: {
@@ -277,14 +279,8 @@ const previewStyles = computed(() => {
     <Head title="Personalizar Catálogo" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                Personalizar Catálogo
-            </h2>
-        </template>
-
-        <div class="py-12">
-            <div class="max-w-6xl mx-auto sm:px-6 lg:px-8">
+        <AdminPage>
+            <PageHeader eyebrow="Tienda online" title="Personalizacion" description="Define la presentacion, promociones, entregas y mensajes que veran tus compradores." />
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
                         <form @submit.prevent="submit">
@@ -846,8 +842,7 @@ const previewStyles = computed(() => {
                         </form>
                     </div>
                 </div>
-            </div>
-        </div>
+        </AdminPage>
     </AuthenticatedLayout>
 
     <!-- Modal de éxito -->

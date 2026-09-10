@@ -1,415 +1,93 @@
 <script setup>
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
 import CookieConsent from '@/Components/CookieConsent.vue';
-import FloatingWhatsAppButton from '@/Components/FloatingWhatsAppButton.vue';
+import { Head, Link } from '@inertiajs/vue3';
 
-const open = ref(false);
-const form = useForm({
-    name: '',
-    store_name: '',
-    email: '',
-    password: '',
-    password_confirmation: '',
-    // Extras opcionales para auto-configuración básica
-    phone: '',
-    plan: 'emprendedor',
-    plan_cycle: 'mensual',
-    max_users: 3,
-});
-
-const submit = () => {
-    form.post(route('register'), {
-        preserveScroll: true,
-        onSuccess: () => {
-            // Cerrar el slide-over; el modal se abrirá si viene el flash de store_created
-            open.value = false;
-            showSuccess.value = true;
-        },
-        onError: (errors) => {
-            console.error('Errores del formulario:', errors);
-            // Si el email ya existe, mostramos un modal amigable
-            if (form.errors?.email && form.errors.email.includes('ya está registrado')) {
-                showEmailExists.value = true;
-            }
-            // Si hay un error general, lo mostramos
-            if (form.errors?.error) {
-                console.error('Error al crear tienda:', form.errors.error);
-            }
-        },
-    });
-};
-
-const planDescription = computed(() => {
-    if (form.plan === 'creador_pdf') {
-        return [
-            'Generador de catálogos PDF temporales.',
-            'Sube fotos propias o selecciona productos existentes.',
-            'Personaliza portada, estilos, colores y cantidad de fotos por página.',
-            'Descarga el catálogo en PDF con el nombre que elijas.',
-        ];
-    }
-
-    if (form.plan === 'negociante') {
-        return [
-            'Todo lo del plan Emprendedor, MÁS:',
-            'Gestión de órdenes avanzada: estados como recibido, despachado, entregado y notificaciones por WhatsApp a tus clientes.',
-            'Gestión de inventario inteligente: alertas por stock mínimo o agotado.',
-            'Control de usuarios y roles: da acceso a tu equipo (ej. vendedor).',
-            'Reportes de ventas y gráficos para analizar tu negocio.',
-            'Exportar órdenes a Excel.',
-        ];
-    }
-    // Emprendedor
-    return [
-        'Catálogo online profesional con tu logo y nombre.',
-        'Productos ilimitados.',
-        'Variantes de productos (tallas, colores, etc.).',
-        'Gestión de categorías.',
-        'Checkout a WhatsApp: pedidos directos a tu celular.',
-        '0% de comisión por venta.',
-    ];
-});
-
-const planLabel = computed(() => {
-    if (form.plan === 'negociante') return 'Negociante';
-    if (form.plan === 'creador_pdf') return 'Creador PDF';
-    return 'Emprendedor';
-});
-
-const showSuccess = ref(false);
-const page = usePage();
-// Mostrar modal si el backend dejó flash en la redirección
-watch(() => page.props.flash?.store_created, (v) => {
-    if (v) showSuccess.value = true;
-}, { immediate: true });
-
-const showEmailExists = ref(false);
+const whatsapp = 'https://wa.me/573208204198?text=Hola%2C%20quiero%20conocer%20los%20planes%20de%20Ondigital%20Solution';
+const features = [
+    { number: '01', title: 'Publica tu catalogo', text: 'Organiza productos, fotos, precios y opciones sin conocimientos tecnicos.' },
+    { number: '02', title: 'Recibe y registra ventas', text: 'Atiende pedidos online y ventas presenciales desde el mismo lugar.' },
+    { number: '03', title: 'Controla tu negocio', text: 'Consulta inventario, clientes y resultados con informacion comprensible.' },
+];
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col bg-white">
-        <Head title="Tu tienda online lista para vender" />
+    <Head title="Tu tienda lista para vender" />
+    <div class="min-h-screen bg-white text-slate-950">
+        <header class="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+            <nav class="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8" aria-label="Navegacion principal">
+                <a href="#inicio" class="flex items-center"><img src="/images/New_Logo_ondgtl.png?v=5" alt="Ondigital Solution" class="h-14 w-auto object-contain" /></a>
+                <div class="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
+                    <a href="#como-funciona" class="hover:text-indigo-700">Como funciona</a>
+                    <a href="#planes" class="hover:text-indigo-700">Planes</a>
+                    <a :href="whatsapp" target="_blank" rel="noopener" class="hover:text-indigo-700">Hablar con nosotros</a>
+                </div>
+                <div class="flex items-center gap-2">
+                    <Link :href="route('login')" class="hidden px-3 py-2 text-sm font-bold text-slate-700 sm:inline-flex">Ingresar</Link>
+                    <Link :href="route('register')" class="ui-primary-button">Crear tienda</Link>
+                </div>
+            </nav>
+        </header>
 
-        <!-- Hero -->
-        <section class="relative overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-700"></div>
-            <div class="relative z-10 max-w-7xl mx-auto px-6 py-16 lg:py-24 text-white">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+        <main>
+            <section id="inicio" class="relative overflow-hidden bg-slate-950">
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(79,70,229,0.5),transparent_34%),radial-gradient(circle_at_85%_80%,rgba(6,182,212,0.25),transparent_35%)]" aria-hidden="true"></div>
+                <div class="relative mx-auto grid max-w-7xl items-center gap-14 px-4 py-20 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-28">
                     <div>
-                        <h1 class="text-4xl sm:text-5xl font-extrabold leading-tight">
-                            Vende más con menos esfuerzo
-                        </h1>
-                        <p class="mt-4 text-cyan-100 text-lg">
-                            Plataforma de ecommerce para negocios que quieren crecer: rápida, segura y fácil de usar.
-                        </p>
-                        <ul class="mt-6 space-y-3 text-cyan-50">
-                            <li class="flex gap-3"><span class="mt-1 h-2 w-2 rounded-full bg-white"></span>Catálogo con dominio propio y SEO listo</li>
-                            <li class="flex gap-3"><span class="mt-1 h-2 w-2 rounded-full bg-white"></span>Inventario con alertas de stock y variantes</li>
-                            <li class="flex gap-3"><span class="mt-1 h-2 w-2 rounded-full bg-white"></span>Promociones, reportes y roles para tu equipo</li>
-                        </ul>
-                        <div class="mt-8 flex flex-col sm:flex-row gap-3">
-                            <button
-                                type="button"
-                                @click="open = true"
-                                class="inline-flex items-center justify-center px-5 py-3 bg-yellow-300 text-blue-900 font-bold rounded-lg shadow hover:bg-yellow-200 border border-white/60"
-                            >
-                                ¡Crear mi tienda gratis!
-                            </button>
-                            <a
-                                href="https://wa.me/573208204198?text=Hola%20quiero%20crear%20mi%20tienda%20online%20con%20Ondigitalsolution"
-                                target="_blank"
-                                rel="noopener"
-                                class="inline-flex items-center justify-center gap-2 px-5 py-3 bg-white text-blue-800 font-semibold rounded-lg shadow hover:bg-blue-50 border border-white/60"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-green-500"><path d="M20.52 3.48A11.94 11.94 0 0012.01 0C5.4 0 .03 5.37.03 12c0 2.11.55 4.09 1.6 5.86L0 24l6.3-1.63a11.9 11.9 0 005.7 1.45h.01c6.61 0 11.98-5.37 11.98-12 0-3.2-1.25-6.2-3.47-8.34zM12 21.5c-1.8 0-3.56-.48-5.1-1.38l-.37-.22-3.74 .97 .99-3.65-.24-.38A9.5 9.5 0 1121.5 12c0 5.24-4.26 9.5-9.5 9.5zm5.28-6.92c-.29-.15-1.7-.84-1.96-.94-.26-.1-.45-.15-.64 .15-.19 .29-.74 .94-.9 1.13-.17 .19-.33 .22-.62 .07-.29-.15-1.24-.46-2.35-1.47-.86-.76-1.44-1.7-1.61-1.99-.17-.29-.02-.45 .13-.6 .13-.13 .29-.33 .43-.5 .15-.17 .19-.29 .29-.48 .1-.19 .05-.36-.03-.51-.08-.15-.64-1.55-.88-2.12-.23-.55-.47-.48-.64-.49l-.55-.01c-.19 0 -.5 .07-.76 .36-.26 .29-1 1-1 2.45s1.02 2.84 1.16 3.03c.15 .19 2 3.06 4.84 4.29 .68 .29 1.21 .46 1.62 .59 .68 .22 1.3 .19 1.79 .12 .55-.08 1.7-.7 1.94-1.38 .24-.68 .24-1.26 .17-1.38-.07-.12-.26-.19-.55-.34z"/></svg>
-                                Habla con un experto!
-                            </a>
-                            <Link :href="route('login')" class="inline-flex items-center justify-center px-5 py-3 bg-white text-blue-800 font-semibold rounded-lg shadow hover:bg-blue-50 border border-white/60">
-                                Ya tengo cuenta
-                            </Link>
+                        <span class="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-cyan-200">Hecho para comerciantes</span>
+                        <h1 class="mt-6 text-4xl font-black leading-[1.05] tracking-tight text-white sm:text-6xl">Vender y organizar tu negocio puede ser sencillo.</h1>
+                        <p class="mt-6 max-w-xl text-lg leading-8 text-slate-300">Crea tu catalogo, controla existencias y atiende ventas sin hojas de calculo ni sistemas complicados.</p>
+                        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+                            <Link :href="route('register')" class="inline-flex min-h-12 items-center justify-center rounded-xl bg-cyan-300 px-6 py-3 text-base font-black text-slate-950 hover:bg-cyan-200">Crear mi tienda gratis</Link>
+                            <a :href="whatsapp" target="_blank" rel="noopener" class="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-6 py-3 text-base font-bold text-white hover:bg-white/15">Quiero una demostracion</a>
                         </div>
+                        <p class="mt-4 text-sm text-slate-400">Sin tarjeta. Sin comision por venta. Configuracion guiada.</p>
+                    </div>
 
-                        <!-- Logo en móvil con tarjeta suave para no saturar -->
-                        <div class="sm:hidden mt-8 flex justify-center">
-                            <div class="rounded-xl border border-gray-200 bg-white shadow-lg p-3 w-56">
-                                <img src="/images/New_Logo_ondgtl.png?v=5" alt="Ondigitalsolution" class="w-full h-auto object-contain opacity-95" />
+                    <div class="relative">
+                        <div class="absolute -inset-5 rotate-2 rounded-[2rem] bg-indigo-500/20 blur-xl"></div>
+                        <div class="relative overflow-hidden rounded-3xl border border-white/15 bg-white p-3 shadow-2xl">
+                            <div class="rounded-2xl bg-slate-100 p-4 sm:p-6">
+                                <div class="flex items-center justify-between"><div><p class="text-xs font-bold uppercase tracking-wide text-indigo-600">Hoy en tu tienda</p><p class="mt-1 text-xl font-black">Todo bajo control</p></div><span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">Tienda activa</span></div>
+                                <div class="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
+                                    <div class="rounded-xl bg-white p-3 shadow-sm"><p class="text-xs text-slate-500">Ventas</p><p class="mt-1 text-lg font-black sm:text-2xl">$860k</p></div>
+                                    <div class="rounded-xl bg-white p-3 shadow-sm"><p class="text-xs text-slate-500">Pedidos</p><p class="mt-1 text-lg font-black sm:text-2xl">18</p></div>
+                                    <div class="rounded-xl bg-white p-3 shadow-sm"><p class="text-xs text-slate-500">Por reponer</p><p class="mt-1 text-lg font-black text-amber-600 sm:text-2xl">4</p></div>
+                                </div>
+                                <div class="mt-3 rounded-xl bg-white p-4 shadow-sm">
+                                    <div class="flex items-center justify-between text-sm"><strong>Pedidos recientes</strong><span class="text-indigo-700">Ver todos</span></div>
+                                    <div class="mt-3 space-y-2"><div v-for="(name, index) in ['Maria G.', 'Carlos R.', 'Tienda Centro']" :key="name" class="flex items-center justify-between rounded-lg bg-slate-50 p-2.5 text-sm"><span>{{ name }}</span><strong>{{ ['$84.000', '$126.500', '$59.900'][index] }}</strong></div></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="relative hidden sm:block">
-                        <!-- Tarjeta blanca translúcida detrás del logo para legibilidad -->
-                        <div class="absolute -inset-8 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl border border-white/80"></div>
-                        <img src="/images/New_Logo_ondgtl.png?v=5" alt="Ondigitalsolution" class="relative w-full max-w-md mx-auto" />
-                    </div>
                 </div>
-            </div>
-        </section>
+            </section>
 
-        <!-- Slide-over de creación de tienda -->
-        <div class="fixed inset-0 z-40" v-show="open">
-            <transition name="backdrop-fade">
-                <div v-show="open" class="absolute inset-0 bg-black/40" @click="open = false"></div>
-            </transition>
-            <transition name="slideover">
-                <div v-show="open" class="absolute inset-y-0 right-0 w-full sm:max-w-md bg-white shadow-xl flex flex-col">
-                <div class="px-4 py-4 border-b flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900">Crear mi tienda</h3>
-                    <button class="text-gray-500 hover:text-gray-700" @click="open = false">✕</button>
-                </div>
-                <div class="p-4 overflow-y-auto">
-                    <form @submit.prevent="submit" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Nombre de tu Tienda</label>
-                            <input 
-                                v-model="form.store_name" 
-                                type="text" 
-                                :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.store_name ? 'border-red-500' : '']" 
-                                required 
-                            />
-                            <p v-if="form.errors.store_name" class="mt-1 text-sm text-red-600">{{ form.errors.store_name }}</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Tu Nombre</label>
-                            <input 
-                                v-model="form.name" 
-                                type="text" 
-                                :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.name ? 'border-red-500' : '']" 
-                                required 
-                            />
-                            <p v-if="form.errors.name" class="mt-1 text-sm text-red-600">{{ form.errors.name }}</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Tu Email</label>
-                            <input 
-                                v-model="form.email" 
-                                type="email" 
-                                :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.email ? 'border-red-500' : '']" 
-                                required 
-                            />
-                            <p v-if="form.errors.email" class="mt-1 text-sm text-red-600">{{ form.errors.email }}</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Teléfono (WhatsApp)</label>
-                            <input 
-                                v-model="form.phone" 
-                                placeholder="57xxxxxxxxxx" 
-                                type="tel" 
-                                :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.phone ? 'border-red-500' : '']" 
-                            />
-                            <p v-if="form.errors.phone" class="mt-1 text-sm text-red-600">{{ form.errors.phone }}</p>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Contraseña</label>
-                                <input 
-                                    v-model="form.password" 
-                                    type="password" 
-                                    :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.password ? 'border-red-500' : '']" 
-                                    required 
-                                />
-                                <p v-if="form.errors.password" class="mt-1 text-sm text-red-600">{{ form.errors.password }}</p>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Confirmar contraseña</label>
-                                <input 
-                                    v-model="form.password_confirmation" 
-                                    type="password" 
-                                    :class="['mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500', form.errors.password_confirmation ? 'border-red-500' : '']" 
-                                    required 
-                                />
-                                <p v-if="form.errors.password_confirmation" class="mt-1 text-sm text-red-600">{{ form.errors.password_confirmation }}</p>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Plan</label>
-                            <select v-model="form.plan" class="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-                                <option value="emprendedor">Emprendedor</option>
-                                <option value="creador_pdf">Creador PDF</option>
-                                <option value="negociante">Negociante (recomendado)</option>
-                            </select>
-                        </div>
+            <section id="como-funciona" class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+                <div class="max-w-2xl"><p class="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Del primer producto a la primera venta</p><h2 class="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Un proceso claro, paso a paso</h2><p class="mt-4 text-lg text-slate-600">Cada pantalla indica que necesitas hacer y que puedes dejar para despues.</p></div>
+                <div class="mt-10 grid gap-5 md:grid-cols-3"><article v-for="feature in features" :key="feature.number" class="ui-card p-6"><span class="text-sm font-black text-indigo-600">{{ feature.number }}</span><h3 class="mt-8 text-xl font-bold">{{ feature.title }}</h3><p class="mt-3 leading-7 text-slate-600">{{ feature.text }}</p></article></div>
+            </section>
 
-                        <button type="submit" class="w-full py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50" :disabled="form.processing">
-                            {{ form.processing ? 'Creando...' : 'Crear tienda' }}
-                        </button>
-                        <transition name="slide-up" mode="out-in">
-                            <div :key="form.plan" class="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-sm text-blue-900">
-                                <p class="font-semibold mb-1">Incluye en tu plan {{ planLabel }}:</p>
-                                <ul class="list-disc ms-5 space-y-1">
-                                    <li v-for="(item, i) in planDescription" :key="i">{{ item }}</li>
-                                </ul>
-                            </div>
-                        </transition>
-                        <!-- Mostrar errores generales -->
-                        <div v-if="form.errors.error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                            <p class="text-sm text-red-600">{{ form.errors.error }}</p>
-                        </div>
-                        <!-- Mostrar mensaje genérico solo si hay errores pero no se muestran específicos -->
-                        <p v-if="form.hasErrors && !form.errors.error && !Object.keys(form.errors).some(k => ['store_name', 'name', 'email', 'phone', 'password', 'password_confirmation'].includes(k))" class="text-sm text-red-600 mt-2">
-                            Por favor corrige los campos marcados.
-                        </p>
-                    </form>
+            <section class="bg-slate-100 py-20">
+                <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                    <div class="grid gap-8 lg:grid-cols-2 lg:items-center"><div><p class="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Pensado para el trabajo real</p><h2 class="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Menos terminos tecnicos. Mas acciones claras.</h2></div><p class="text-lg leading-8 text-slate-600">Desde buscar un producto hasta cobrar una venta, la plataforma utiliza palabras comerciales, ayudas breves y confirmaciones visibles.</p></div>
+                    <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div v-for="item in ['Catalogo online', 'Punto de venta', 'Control de inventario', 'Reportes comprensibles']" :key="item" class="rounded-2xl bg-white p-5 font-bold shadow-sm"><span class="mb-4 block h-2 w-10 rounded-full bg-cyan-400"></span>{{ item }}</div></div>
                 </div>
-                </div>
-            </transition>
-        </div>
+            </section>
 
-        <!-- Modal de éxito -->
-        <transition name="backdrop-fade">
-            <div v-show="showSuccess" class="fixed inset-0 z-50 flex items-center justify-center">
-                <div class="absolute inset-0 bg-black/40" @click="showSuccess = false"></div>
-                <div class="relative z-10 w-[92%] sm:w-full sm:max-w-md rounded-2xl bg-white shadow-2xl p-6">
-                    <div class="flex items-start gap-3">
-                        <div class="shrink-0 rounded-full bg-green-100 text-green-700 w-10 h-10 flex items-center justify-center">✓</div>
-                        <div>
-                            <h4 class="text-lg font-semibold text-gray-900">¡Tienda creada con éxito!</h4>
-                            <p class="mt-1 text-sm text-gray-700">Ingresá con tu correo y la contraseña que acabás de definir.</p>
-                        </div>
-                    </div>
-                    <div class="mt-4 flex items-center justify-end gap-3">
-                        <Link :href="route('login')" class="inline-flex items-center justify-center rounded-md bg-blue-600 text-white px-4 py-2 font-semibold hover:bg-blue-700">Ir a iniciar sesión</Link>
-                    </div>
+            <section id="planes" class="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+                <div class="text-center"><p class="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Planes transparentes</p><h2 class="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Empieza gratis y crece cuando lo necesites</h2></div>
+                <div class="mx-auto mt-10 grid max-w-5xl gap-5 lg:grid-cols-3">
+                    <article class="ui-card p-6"><p class="font-bold text-indigo-700">Emprendedor</p><p class="mt-3 text-3xl font-black">Gratis</p><p class="mt-3 text-sm leading-6 text-slate-600">Catalogo, productos, categorias, opciones y pedidos por WhatsApp.</p><Link :href="route('register')" class="ui-primary-button mt-6 w-full">Empezar ahora</Link></article>
+                    <article class="rounded-2xl border-2 border-indigo-500 bg-slate-950 p-6 text-white shadow-xl"><span class="rounded-full bg-cyan-300 px-2.5 py-1 text-xs font-black text-slate-950">RECOMENDADO</span><p class="mt-4 font-bold text-cyan-300">Negociante</p><p class="mt-3 text-3xl font-black">A tu medida</p><p class="mt-3 text-sm leading-6 text-slate-300">Inventario avanzado, ordenes, reportes, clientes y equipo.</p><a :href="whatsapp" target="_blank" rel="noopener" class="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-cyan-300 px-4 py-2.5 text-sm font-black text-slate-950">Hablar por WhatsApp</a></article>
+                    <article class="ui-card p-6"><p class="font-bold text-indigo-700">Creador PDF</p><p class="mt-3 text-3xl font-black">Especializado</p><p class="mt-3 text-sm leading-6 text-slate-600">Crea catalogos PDF personalizados con productos y fotos propias.</p><a :href="whatsapp" target="_blank" rel="noopener" class="ui-secondary-button mt-6 w-full">Solicitar informacion</a></article>
                 </div>
-            </div>
-        </transition>
+            </section>
 
-        <!-- Modal: email ya existe -->
-        <transition name="backdrop-fade">
-            <div v-show="showEmailExists" class="fixed inset-0 z-50 flex items-center justify-center">
-                <div class="absolute inset-0 bg-black/40" @click="showEmailExists = false"></div>
-                <div class="relative z-10 w-[92%] sm:w-full sm:max-w-md rounded-2xl bg-white shadow-2xl p-6">
-                    <div class="flex items-start gap-3">
-                        <div class="shrink-0 rounded-full bg-red-100 text-red-700 w-10 h-10 flex items-center justify-center">!</div>
-                        <div>
-                            <h4 class="text-lg font-semibold text-gray-900">Este correo ya está registrado</h4>
-                            <p class="mt-1 text-sm text-gray-700">Si ya tenés cuenta, iniciá sesión o recuperá tu contraseña.</p>
-                        </div>
-                    </div>
-                    <div class="mt-4 flex items-center justify-end gap-3">
-                        <Link :href="route('password.request')" class="inline-flex items-center justify-center rounded-md border border-gray-200 text-gray-700 px-4 py-2 font-semibold hover:bg-gray-50">Recuperar contraseña</Link>
-                        <Link :href="route('login')" class="inline-flex items-center justify-center rounded-md bg-blue-600 text-white px-4 py-2 font-semibold hover:bg-blue-700">Iniciar sesión</Link>
-                    </div>
-                </div>
-            </div>
-        </transition>
+            <section class="bg-indigo-600"><div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-4 py-12 text-center text-white sm:px-6 lg:flex-row lg:px-8 lg:text-left"><div><h2 class="text-2xl font-black">Tu tienda puede estar lista hoy.</h2><p class="mt-2 text-indigo-100">Crea la cuenta y te guiaremos en los siguientes pasos.</p></div><Link :href="route('register')" class="inline-flex min-h-12 items-center justify-center rounded-xl bg-white px-6 py-3 font-black text-indigo-700">Crear mi tienda gratis</Link></div></section>
+        </main>
 
-        <!-- Sección informativa estática y legible -->
-        <section class="max-w-7xl mx-auto px-6 py-14">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900">¿Quiénes somos?</h2>
-                    <p class="mt-3 text-gray-600">
-                        Somos un equipo de expertos en ecommerce y tecnología que impulsa a negocios a vender online sin complicaciones. Construimos herramientas simples y efectivas para que te enfoques en crecer.
-                    </p>
-                </div>
-                <div class="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-                    <h3 class="font-semibold text-gray-900">Lo que nos mueve</h3>
-                    <ul class="mt-3 space-y-2 text-gray-700">
-                        <li>• Resultados medibles y crecimiento sostenido</li>
-                        <li>• Experiencia de compra rápida y sin fricción</li>
-                        <li>• Soporte cercano y mejoras continuas</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
-
-        <!-- Secciones informativas inferiores -->
-        <section class="bg-gray-50 border-y border-gray-100">
-            <div class="max-w-7xl mx-auto px-6 py-14">
-                <!-- ¿Qué hacemos? -->
-                <div class="mt-10">
-                    <h2 class="text-2xl font-bold text-gray-900">¿Qué hacemos?</h2>
-                    <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                        <div class="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
-                            <h3 class="font-semibold text-gray-900">Catálogo y dominio</h3>
-                            <p class="mt-2 text-gray-600">Muestra tus productos con fotos y variantes, con tu marca y dominio propio.</p>
-                        </div>
-                        <div class="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
-                            <h3 class="font-semibold text-gray-900">Inventario siempre al día</h3>
-                            <p class="mt-2 text-gray-600">Evita quiebres: control en tiempo real y alertas antes de agotarte.</p>
-                        </div>
-                        <div class="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
-                            <h3 class="font-semibold text-gray-900">Promos y métricas que venden</h3>
-                            <p class="mt-2 text-gray-600">Genera descuentos individuales y globales en segundos para impulsar tus ventas.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ¿Por qué elegirnos? -->
-                <div class="mt-10">
-                    <h2 class="text-2xl font-bold text-gray-900">¿Por qué elegirnos?</h2>
-                    <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                        <div class="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
-                            <h3 class="font-semibold text-gray-900">Empieza a vender hoy</h3>
-                            <p class="mt-2 text-gray-600">Te dejamos operando en horas, no semanas.</p>
-                        </div>
-                        <div class="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
-                            <h3 class="font-semibold text-gray-900">Crece sin complicaciones</h3>
-                            <p class="mt-2 text-gray-600">Rinde con picos de tráfico y catálogos grandes.</p>
-                        </div>
-                        <div class="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
-                            <h3 class="font-semibold text-gray-900">Soporte que sí responde</h3>
-                            <p class="mt-2 text-gray-600">Estamos a un mensaje de distancia para resolver y mejorar.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        
-
-        <!-- Footer breve -->
-        <footer class="bg-gray-50 border-t border-gray-100">
-            <div class="max-w-7xl mx-auto px-6 py-8 text-sm text-gray-600 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div class="flex items-center gap-3">
-                    <img src="/images/New_Logo_ondgtl.png?v=5" class="h-6 w-6" alt="Ondigitalsolution" />
-                    <span>{{ new Date().getFullYear() }} © Ondigitalsolution</span>
-                </div>
-                <div class="flex items-center gap-4"></div>
-            </div>
-        </footer>
+        <footer class="border-t border-slate-200 bg-white"><div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-8 text-sm text-slate-500 sm:flex-row sm:px-6 lg:px-8"><img src="/images/New_Logo_ondgtl.png?v=5" alt="Ondigital Solution" class="h-10 w-auto" /><p>{{ new Date().getFullYear() }} Ondigital Solution. Comercio sin complicaciones.</p></div></footer>
     </div>
     <CookieConsent />
-    
-    <!-- Assuming we want a general default number for landing, but it requires a store prop. Since Landing doesn't have a store prop directly, I will skip adding it to Landing as it is typically for the Ondigitalsolution platform itself, not a specific store. -->
 </template>
-
-<style>
-/* Animación slide-up para el cambio de plan */
-.slide-up-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-.slide-up-enter-active {
-  transition: all .18s ease-out;
-}
-.slide-up-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
-}
-.slide-up-leave-active {
-  transition: all .14s ease-in;
-}
-
-/* Backdrop fade */
-.backdrop-fade-enter-from,
-.backdrop-fade-leave-to {
-  opacity: 0;
-}
-.backdrop-fade-enter-active,
-.backdrop-fade-leave-active {
-  transition: opacity .18s ease;
-}
-
-/* Panel slide from right */
-.slideover-enter-from,
-.slideover-leave-to {
-  transform: translateX(100%);
-  opacity: 0.9;
-}
-.slideover-enter-active,
-.slideover-leave-active {
-  transition: all .22s cubic-bezier(.22,.61,.36,1);
-}
-</style>

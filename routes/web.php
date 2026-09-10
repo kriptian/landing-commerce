@@ -74,8 +74,21 @@ Route::get('/tiendas', function () {
 
 // (Rutas públicas sin "/tienda") se definen más abajo para no interferir con rutas /admin
 
-// Rutas Privadas (que requieren autenticación)
-Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(function () {
+// El rol de caja puede operar el POS sin verificar correo, pero no accede al resto del panel.
+Route::middleware(['auth', 'restrict.physical-sales', 'allow.physical-sales.without-verification', 'plan:emprendedor,negociante'])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        Route::get('physical-sales', [PhysicalSaleController::class, 'index'])->name('physical-sales.index');
+        Route::get('physical-sales/search-products', [PhysicalSaleController::class, 'searchProducts'])->name('physical-sales.search-products');
+        Route::get('physical-sales/get-product-by-barcode', [PhysicalSaleController::class, 'getProductByBarcode'])->name('physical-sales.get-product-by-barcode');
+        Route::post('physical-sales', [PhysicalSaleController::class, 'store'])->name('physical-sales.store');
+        Route::post('physical-sales/open-drawer', [PhysicalSaleController::class, 'openDrawer'])->name('physical-sales.open-drawer');
+        Route::get('physical-sales/{physicalSale}', [PhysicalSaleController::class, 'show'])->name('physical-sales.show');
+    });
+
+// Rutas Privadas (que requieren autenticación y correo verificado)
+Route::middleware(['auth', 'restrict.physical-sales', 'verified'])->group(function () {
     Route::get('/dashboard', function (Request $request) {
         $user = $request->user();
         $store = $user?->store; // Puede ser null
@@ -113,7 +126,7 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
             'store' => $store,
             'metrics' => $metrics,
         ]);
-    })->name('dashboard');
+    })->middleware('can:ver dashboard')->name('dashboard');
 
     // Configuración de la tienda
     Route::get('/store/setup', [StoreSetupController::class, 'create'])->middleware('plan:emprendedor,negociante')->name('store.setup');
@@ -160,30 +173,19 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
             ->middleware('plan:negociante,creador_pdf')
             ->name('pdf-catalog-builder.index');
 
-        // Ventas físicas - Sin middleware 'verified' para permitir usuarios physical-sales sin email verificado
-        Route::middleware(['plan:emprendedor,negociante', 'allow.physical-sales.without-verification'])->group(function () {
-            Route::get('physical-sales', [PhysicalSaleController::class, 'index'])->name('physical-sales.index');
-            Route::get('physical-sales/search-products', [PhysicalSaleController::class, 'searchProducts'])->name('physical-sales.search-products');
-            Route::get('physical-sales/get-product-by-barcode', [PhysicalSaleController::class, 'getProductByBarcode'])->name('physical-sales.get-product-by-barcode');
-            Route::post('physical-sales', [PhysicalSaleController::class, 'store'])->name('physical-sales.store');
-            Route::post('physical-sales/open-drawer', [PhysicalSaleController::class, 'openDrawer'])->name('physical-sales.open-drawer');
-            Route::get('physical-sales/{physicalSale}', [PhysicalSaleController::class, 'show'])->name('physical-sales.show');
+        Route::middleware('plan:emprendedor,negociante')->group(function () {
             Route::get('physical-sales/export/excel', [PhysicalSaleController::class, 'export'])->name('physical-sales.export');
 
-            // Gastos
             Route::post('expenses', [\App\Http\Controllers\Admin\ExpenseController::class, 'store'])->name('expenses.store');
         });
 
         // ===== RUTAS AVANZADAS (solo plan negociantes) =====
         Route::middleware('plan:negociante')->group(function () {
             Route::resource('users', UserController::class)->except('show');
-            Route::resource('roles', RoleController::class)->except('show');
+            Route::resource('roles', RoleController::class)->except(['index', 'show']);
             Route::resource('orders', OrderController::class)->only(['index', 'show', 'update']);
-            // Reportes - Permitir acceso sin verificación de email (el usuario ya está autenticado)
-            Route::middleware('allow.physical-sales.without-verification')->group(function () {
-                Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
-                Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
-            });
+            Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+            Route::get('reports/export', [ReportController::class, 'export'])->name('reports.export');
 
             Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
             Route::get('inventory/search', [InventoryController::class, 'search'])->name('inventory.search'); // AJAX
@@ -205,7 +207,7 @@ Route::middleware(['auth', 'verified', 'restrict.physical-sales'])->group(functi
             Route::get('customers/{customer}', [AdminCustomerController::class, 'show'])->name('customers.show');
 
             // Gestión de cupones
-            Route::resource('coupons', CouponController::class);
+            Route::resource('coupons', CouponController::class)->only(['index', 'store', 'update', 'destroy']);
             Route::put('coupons/{coupon}/toggle-active', [CouponController::class, 'toggleActive'])->name('coupons.toggle-active');
         });
     });

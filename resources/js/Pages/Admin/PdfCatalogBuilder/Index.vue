@@ -20,7 +20,7 @@ const props = defineProps({
 const catalogRef = ref(null);
 const previewFrameRef = ref(null);
 const search = ref('');
-const activeTab = ref('edit');
+const activeTab = ref('design');
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200);
 const isGenerating = ref(false);
 const showNotice = ref(false);
@@ -581,30 +581,36 @@ const generateCatalog = async () => {
             <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
                 <div class="sticky top-2 z-30 mb-4 sm:mb-6 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-sm backdrop-blur">
                     <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div class="grid grid-cols-2 rounded-xl bg-gray-100 p-1">
-                            <button type="button" class="flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition" :class="activeTab === 'edit' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-600 hover:text-gray-900'" @click="activeTab = 'edit'">
-                                Configurar
+                        <div class="grid grid-cols-3 rounded-xl bg-gray-100 p-1">
+                            <button type="button" class="flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition sm:text-sm" :class="activeTab === 'design' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-600 hover:text-gray-900'" @click="activeTab = 'design'">
+                                1. Diseño
                             </button>
-                            <button type="button" class="flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition" :class="activeTab === 'preview' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-600 hover:text-gray-900'" @click="activeTab = 'preview'">
-                                Vista previa
+                            <button type="button" class="flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition sm:text-sm" :class="activeTab === 'products' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-600 hover:text-gray-900'" @click="activeTab = 'products'">
+                                2. Productos
+                            </button>
+                            <button type="button" class="flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition sm:text-sm" :class="activeTab === 'preview' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-600 hover:text-gray-900'" @click="activeTab = 'preview'">
+                                3. Revisar
                             </button>
                         </div>
 
                         <div class="grid grid-cols-2 gap-2 sm:flex sm:items-center">
                             <span class="col-span-2 rounded-lg bg-gray-50 px-3 py-2 text-center text-xs font-medium text-gray-600 sm:col-span-1 sm:bg-transparent sm:p-0 sm:text-left sm:text-sm">{{ catalogItems.length }} fotos seleccionadas</span>
-                            <button type="button" class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 sm:px-4" @click="activeTab = 'preview'">
-                                Ver vista previa
+                            <button v-if="activeTab === 'design'" type="button" class="col-span-2 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 sm:col-span-1" @click="activeTab = 'products'">
+                                Continuar a productos
                             </button>
-                            <button type="button" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:px-5" :disabled="isGenerating" @click="generateCatalog">
+                            <button v-else-if="activeTab === 'products'" type="button" class="col-span-2 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 sm:col-span-1" @click="activeTab = 'preview'">
+                                Revisar catalogo
+                            </button>
+                            <button v-else type="button" class="col-span-2 inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-1 sm:px-5" :disabled="isGenerating" @click="generateCatalog">
                                 {{ isGenerating ? 'Generando...' : 'Descargar PDF' }}
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <div v-show="activeTab === 'edit'" class="grid gap-6 xl:grid-cols-[420px,1fr]">
-                    <section class="max-h-[calc(100vh-150px)] space-y-4 overflow-y-auto pr-1 sm:space-y-6 lg:pr-2">
-                        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
+                <div v-show="activeTab !== 'preview'" class="grid gap-6" :class="activeTab === 'products' ? 'xl:grid-cols-[420px,1fr]' : 'mx-auto max-w-4xl'">
+                    <section class="space-y-4 sm:space-y-6" :class="activeTab === 'products' ? 'max-h-[calc(100vh-150px)] overflow-y-auto pr-1 lg:pr-2' : ''">
+                        <div v-show="activeTab === 'design'" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <h3 class="text-lg font-semibold text-gray-900">Configuración</h3>
                             <p class="mt-1 text-sm text-gray-500">Define portada, archivo y estilo visual.</p>
 
@@ -639,7 +645,7 @@ const generateCatalog = async () => {
                             </div>
                         </div>
 
-                        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
+                        <div v-show="activeTab === 'design'" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <h3 class="text-lg font-semibold text-gray-900">Estilo</h3>
                             <div class="mt-4 grid gap-3">
                                 <button v-for="(preset, key) in stylePresets" :key="key" type="button" class="rounded-xl border p-4 text-left transition hover:border-blue-300" :class="settings.style === key ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'" @click="applyPreset(key)">
@@ -696,7 +702,7 @@ const generateCatalog = async () => {
                             </div>
                         </div>
 
-                        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
+                        <div v-show="activeTab === 'design'" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <h3 class="text-lg font-semibold text-gray-900">Información del negocio en portada</h3>
                             <p class="mt-1 text-sm text-gray-500">Usa los datos configurados en Perfil para mostrar contacto en la portada.</p>
 
@@ -744,7 +750,7 @@ const generateCatalog = async () => {
                             </div>
                         </div>
 
-                        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
+                        <div v-show="activeTab === 'design'" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <h3 class="text-lg font-semibold text-gray-900">Logo del catálogo</h3>
                             <p class="mt-1 text-sm text-gray-500">Muestra el logo en cada página, en cada imagen o en ambas. Usa “Centro” con baja transparencia como marca de agua.</p>
 
@@ -787,7 +793,7 @@ const generateCatalog = async () => {
                             <p v-else class="mt-4 rounded-xl bg-yellow-50 p-3 text-sm text-yellow-800">Carga un logo desde Perfil para usar esta opción.</p>
                         </div>
 
-                        <div v-if="canSelectExistingProducts" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
+                        <div v-if="canSelectExistingProducts && activeTab === 'products'" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <h3 class="text-lg font-semibold text-gray-900">Productos existentes</h3>
                             <input v-model="search" type="search" class="mt-4 w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Buscar por nombre o categoría" />
 
@@ -803,14 +809,14 @@ const generateCatalog = async () => {
                             </div>
                         </div>
 
-                        <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
+                        <div v-show="activeTab === 'products'" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <h3 class="text-lg font-semibold text-gray-900">Fotos nuevas temporales</h3>
                             <p class="mt-1 text-sm text-gray-500">Estas fotos solo se usan para este PDF. No se guardan como productos.</p>
                             <input type="file" accept="image/*" multiple class="mt-4 block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-gray-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-gray-700" @change="handleTemporaryPhotos" />
                         </div>
                     </section>
 
-                    <section class="space-y-4 sm:space-y-6">
+                    <section v-show="activeTab === 'products'" class="space-y-4 sm:space-y-6">
                         <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:p-5">
                             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
@@ -880,8 +886,8 @@ const generateCatalog = async () => {
                             <p class="text-xs text-gray-500">{{ catalogItems.length }} fotos, {{ settings.itemsPerPage }} por página</p>
                             <p class="mt-1 text-xs text-gray-500 sm:hidden">La vista previa se ajusta al ancho de tu pantalla.</p>
                         </div>
-                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50" @click="activeTab = 'edit'">
-                            Volver a configurar
+                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50" @click="activeTab = 'products'">
+                            Volver a productos
                         </button>
                     </div>
 

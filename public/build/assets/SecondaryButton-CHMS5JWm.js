@@ -1,0 +1,1 @@
+import{o,a as n,M as s}from"./app-DBZEKZTJ.js";const a=["type"],p={__name:"SecondaryButton",props:{type:{type:String,default:"button"}},setup(t){return(e,r)=>(o(),n("button",{type:t.type,class:"ui-secondary-button"},[s(e.$slots,"default")],8,a))}};export{p as _};

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\CategoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -12,7 +13,7 @@ use Inertia\Inertia;
 
 class ProductController extends Controller
 {
-    public function __construct()
+    public function __construct(private readonly CategoryService $categories)
     {
         $this->middleware('can:ver inventario')->only(['index']);
         $this->middleware('can:crear productos')->only(['create', 'store']);
@@ -67,7 +68,7 @@ class ProductController extends Controller
     public function create()
     {
         return Inertia::render('Products/Create', [
-            'categories' => auth()->user()->store->categories()->whereNull('parent_id')->orderBy('name')->get(['id', 'name']),
+            'categories' => $this->categories->tree(auth()->user()->store),
             'aiEnabled' => config('ai.enabled') && filled(config('ai.gemini.api_key')),
         ]);
     }
@@ -417,23 +418,9 @@ class ProductController extends Controller
             $productArray['variant_options'] = $variantOptionsArray;
         }
 
-        // Construimos la ruta completa de categorías desde la raíz hasta la seleccionada
-        $selectedCategoryPath = [];
-        $current = $product->category;
-        while ($current) {
-            $selectedCategoryPath[] = [
-                'id' => $current->id,
-                'name' => $current->name,
-                'parent_id' => $current->parent_id,
-            ];
-            $current = $current->parent;
-        }
-        $selectedCategoryPath = array_reverse($selectedCategoryPath);
-
         return Inertia::render('Products/Edit', [
             'product' => $productArray, // Usar el array serializado con variant_options correctamente formateado
-            'categories' => auth()->user()->store->categories()->whereNull('parent_id')->orderBy('name')->get(['id', 'name']),
-            'selectedCategoryPath' => $selectedCategoryPath,
+            'categories' => $this->categories->tree(auth()->user()->store),
         ]);
     }
 

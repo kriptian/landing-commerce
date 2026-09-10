@@ -6,6 +6,8 @@ import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
+import AdminPage from '@/Components/Admin/AdminPage.vue';
+import PageHeader from '@/Components/Admin/PageHeader.vue';
 
 const props = defineProps({
     galleryImages: {
@@ -24,6 +26,12 @@ const showDeleteModal = ref(false);
 const editingImage = ref(null);
 const deletingImage = ref(null);
 const productSearchQuery = ref('');
+const formError = ref('');
+
+const errorMessage = (errors, fallback) => {
+    const value = errors?.media_type || errors?.video || errors?.image || errors?.error;
+    return Array.isArray(value) ? value[0] : (value || fallback);
+};
 
 const imageForm = useForm({
     _method: 'PUT', // Incluir _method para PUT requests
@@ -39,12 +47,14 @@ const imageForm = useForm({
 });
 
 const openAddModal = () => {
+    formError.value = '';
     imageForm.reset();
     imageForm.order = props.galleryImages?.length || 0;
     showAddModal.value = true;
 };
 
 const openEditModal = (image) => {
+    formError.value = '';
     editingImage.value = image;
     // Asegurar que media_type sea un string válido
     imageForm.media_type = String(image.media_type || 'image');
@@ -67,15 +77,16 @@ const openDeleteModal = (image) => {
 };
 
 const submitAdd = () => {
+    formError.value = '';
     // Validar que si es video, tenga archivo
     if (imageForm.media_type === 'video' && !imageForm.video) {
-        alert('Debes seleccionar un archivo de video para continuar.');
+        formError.value = 'Selecciona un archivo de video para continuar.';
         return;
     }
     
     // Validar que si es imagen, tenga archivo
     if (imageForm.media_type === 'image' && !imageForm.image) {
-        alert('Debes seleccionar una imagen para continuar.');
+        formError.value = 'Selecciona una imagen para continuar.';
         return;
     }
 
@@ -112,20 +123,13 @@ const submitAdd = () => {
             productSearchQuery.value = '';
         },
         onError: (errors) => {
-            if (errors.video) {
-                alert('Error con el video: ' + (Array.isArray(errors.video) ? errors.video[0] : errors.video));
-            } else if (errors.image) {
-                alert('Error con la imagen: ' + (Array.isArray(errors.image) ? errors.image[0] : errors.image));
-            } else if (errors.error) {
-                alert('Error: ' + (Array.isArray(errors.error) ? errors.error[0] : errors.error));
-            } else {
-                alert('Error al guardar el elemento. Por favor, verifica los datos e intenta nuevamente.');
-            }
+            formError.value = errorMessage(errors, 'No se pudo guardar el elemento. Verifica los datos e intenta nuevamente.');
         },
     });
 };
 
 const submitEdit = () => {
+    formError.value = '';
     // Asegurar que media_type siempre tenga un valor válido
     const mediaType = String(imageForm.media_type || editingImage.value?.media_type || 'image');
     
@@ -164,15 +168,7 @@ const submitEdit = () => {
             productSearchQuery.value = '';
         },
         onError: (errors) => {
-            if (errors.media_type) {
-                alert('Error: El campo tipo de media es requerido. Por favor, selecciona Imagen o Video.');
-            } else if (errors.video) {
-                alert('Error con el video: ' + (Array.isArray(errors.video) ? errors.video[0] : errors.video));
-            } else if (errors.error) {
-                alert('Error: ' + (Array.isArray(errors.error) ? errors.error[0] : errors.error));
-            } else {
-                alert('Error al actualizar el elemento. Por favor, verifica los datos e intenta nuevamente.');
-            }
+            formError.value = errorMessage(errors, 'No se pudo actualizar el elemento. Verifica los datos e intenta nuevamente.');
         },
     });
 };
@@ -217,22 +213,10 @@ const selectedProductName = computed(() => {
     <Head title="Galería de Imágenes" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center justify-between">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                    Galería de Imágenes
-                </h2>
-                <Link 
-                    :href="route('admin.catalog-customization.index')"
-                    class="text-sm text-gray-600 hover:text-gray-800"
-                >
-                    ← Volver a Personalización
-                </Link>
-            </div>
-        </template>
-
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <AdminPage>
+            <PageHeader eyebrow="Tienda online" title="Galeria principal" description="Combina imagenes y videos para presentar campañas o productos destacados.">
+                <template #actions><Link :href="route('admin.catalog-customization.index')" class="ui-secondary-button">Volver a personalizacion</Link><button type="button" class="ui-primary-button" @click="openAddModal">+ Agregar contenido</button></template>
+            </PageHeader>
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6">
                         <div class="mb-6 flex items-center justify-between">
@@ -242,9 +226,6 @@ const selectedProductName = computed(() => {
                                     Gestiona las imágenes que se mostrarán en la galería principal del catálogo.
                                 </p>
                             </div>
-                            <PrimaryButton @click="openAddModal">
-                                + Agregar Elemento
-                            </PrimaryButton>
                         </div>
 
                         <div v-if="!galleryImages || galleryImages.length === 0" class="text-center py-12">
@@ -330,14 +311,14 @@ const selectedProductName = computed(() => {
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+        </AdminPage>
 
         <!-- Modal Agregar -->
         <Modal :show="showAddModal" @close="showAddModal = false">
             <div class="p-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Agregar Elemento a la Galería</h3>
                 <form @submit.prevent="submitAdd">
+                    <p v-if="formError" class="ui-status-error mb-4" role="alert">{{ formError }}</p>
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -514,6 +495,7 @@ const selectedProductName = computed(() => {
             <div class="p-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Editar Elemento</h3>
                 <form @submit.prevent="submitEdit">
+                    <p v-if="formError" class="ui-status-error mb-4" role="alert">{{ formError }}</p>
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
