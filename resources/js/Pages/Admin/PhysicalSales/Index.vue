@@ -398,6 +398,7 @@ const playBeep = () => {
 const subtotal = computed(() => {
     return cartItems.value.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
 });
+const cartUnits = computed(() => cartItems.value.reduce((sum, item) => sum + item.quantity, 0));
 
 const discountAmount = computed(() => {
     let value;
@@ -1452,37 +1453,6 @@ watch([
     }
 });
 
-// Lógica para redimensionar paneles (Split Pane)
-const leftPanelWidth = ref(50); // Porcentaje inicial
-const isResizing = ref(false);
-
-const startResize = () => {
-    isResizing.value = true;
-    document.addEventListener('mousemove', handleResize);
-    document.addEventListener('mouseup', stopResize);
-    // Evitar selección de texto mientras se arrastra
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
-};
-
-const handleResize = (e) => {
-    if (!isResizing.value) return;
-    const containerWidth = window.innerWidth;
-    // Calcular porcentaje basado en la posición del mouse
-    const newLeftWidth = (e.clientX / containerWidth) * 100;
-    // Limitar entre 20% y 80% para no ocultar ninguno de los dos lados
-    if (newLeftWidth > 20 && newLeftWidth < 80) {
-        leftPanelWidth.value = newLeftWidth;
-    }
-};
-
-const stopResize = () => {
-    isResizing.value = false;
-    document.removeEventListener('mousemove', handleResize);
-    document.removeEventListener('mouseup', stopResize);
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-};
 </script>
 
 <template>
@@ -1495,361 +1465,60 @@ const stopResize = () => {
 
         <!-- Vista de Ventas (POS) -->
         <!-- Vista Desktop -->
-        <div v-if="activeTab === 'sales'" class="fixed inset-0 hidden flex-row bg-slate-50 lg:flex" style="margin-top: 0; z-index: 10;">
-            <!-- Panel Izquierdo: Productos -->
-            <div :style="{ width: leftPanelWidth + '%' }" class="h-full flex flex-col border-r border-gray-300">
-                <!-- Header con búsqueda -->
-                <div class="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-3">
-                    <div class="flex items-center gap-3 mb-3">
-                        <button 
-                            @click="handleExit"
-                            class="px-3 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-100 text-sm font-medium flex items-center gap-2 border border-gray-200"
-                        >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                            </svg>
-                            Salir
-                        </button>
-                        
-                        <!-- Botón Nuevo Gasto -->
-                        <button 
-                            v-if="canRegisterExpenses"
-                            @click="showExpenseModal = true"
-                            class="px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 text-sm font-medium flex items-center gap-2 border border-red-200"
-                            title="Registrar Gasto / Salida"
-                        >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                            </svg>
-                            Gasto
-                        </button>
-
-                        <div class="flex-1 relative">
-                            <input
-                                ref="searchInput"
-                                v-model="searchQuery"
-                                type="text"
-                                placeholder="Buscar producto..."
-                                class="w-full pl-10 pr-12 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
-                                @keyup.enter="searchProducts"
-                            />
-                            <svg class="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                            </svg>
-                            <button
-                                @click="initBarcodeScanner"
-                                class="absolute right-2 top-1.5 p-1 text-blue-600 hover:text-blue-700"
-                                title="Escanear código de barras"
-                            >
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2.01M8 8h.01M12 8h.01M16 8h.01M20 8h.01M5 12h2.01M8 12h.01M12 12h2.01M16 12h.01M20 12h.01M5 16h2.01M8 16h.01M12 16h.01M16 16h.01M20 16h.01"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    <!-- Categorías -->
-                    <div class="flex items-center gap-2 overflow-x-auto">
-                        <button
-                            @click="selectedCategory = null; searchQuery = ''"
-                            :class="[
-                                'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap border',
-                                selectedCategory === null ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                            ]"
-                        >
-                            TODOS
-                        </button>
-                        <button
-                            v-for="category in categories"
-                            :key="category.id"
-                            @click="selectedCategory = category.id; searchQuery = ''"
-                            :class="[
-                                'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap border',
-                                selectedCategory === category.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                            ]"
-                        >
-                            {{ category.name }}
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Grid de productos -->
-                <div class="flex-1 overflow-y-auto p-4">
-                    <div v-if="filteredProducts.length === 0" class="text-center py-12 text-gray-500">
-                        <p>No se encontraron productos</p>
-                    </div>
-                    <div v-else class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                        <div
-                            v-for="product in filteredProducts"
-                            :key="product.id"
-                            class="flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-lg"
-                            @click="handleProductClick(product)"
-                        >
-                            <div class="aspect-square bg-gray-100 flex items-center justify-center" style="min-height: 120px;">
-                                <img 
-                                    v-if="product.main_image_url" 
-                                    :src="product.main_image_url" 
-                                    :alt="product.name"
-                                    class="w-full h-full object-cover"
-                                />
-                                <svg v-else class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                                </svg>
-                            </div>
-                            <div class="p-2 flex-1 flex flex-col">
-                                <div class="mb-1">
-                                    <template v-if="hasActivePromotion(product)">
-                                        <p class="text-xs line-through text-red-600">
-                                            {{ formatCurrency(calculatePriceWithDiscount(product).originalPrice) }}
-                                        </p>
-                                        <p class="text-sm font-bold text-green-600">
-                                            {{ formatCurrency(calculatePriceWithDiscount(product).finalPrice) }}
-                                        </p>
-                                    </template>
-                                    <template v-else>
-                                        <p class="text-sm font-bold text-gray-900">
-                                            {{ formatCurrency(calculatePriceWithDiscount(product).finalPrice) }}
-                                        </p>
-                                    </template>
-                                </div>
-                                <h3 class="font-medium text-xs text-gray-900 line-clamp-2" :title="product.name">{{ product.name }}</h3>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Resizer (Separador deslizable) -->
-            <div 
-                class="w-1 hover:w-2 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex items-center justify-center transition-all z-20 group" 
-                @mousedown="startResize"
-                title="Arrastra para ajustar el tamaño"
-            >
-                <div class="h-8 w-1 bg-gray-400 rounded-full group-hover:bg-white"></div>
-            </div>
-
-            <!-- Panel Derecho: Facturación -->
-            <div class="flex-1 h-full flex flex-col bg-white overflow-hidden" style="min-width: 300px;">
-                <!-- Header -->
-                <div class="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-3">
+        <div v-if="activeTab === 'sales'" class="fixed inset-0 z-10 hidden gap-3 bg-slate-100 p-3 lg:flex">
+            <section class="flex h-full w-[58%] min-w-0 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
+                <header class="shrink-0 border-b border-slate-200 p-4">
                     <div class="flex items-center gap-3">
-                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/>
-                        </svg>
-                        <span class="text-blue-700 font-semibold">{{ page.props.auth?.user?.name || 'Usuario' }}</span>
-                        <span class="text-blue-400">|</span>
-                        <img 
-                            v-if="store && store.logo_url" 
-                            :src="store.logo_url" 
-                            :alt="`Logo de ${store.name}`" 
-                            class="h-6 w-6 rounded-full object-cover"
-                        >
-                        <span v-if="store" class="text-blue-700 font-medium text-sm">{{ store.name }}</span>
+                        <button type="button" class="flex h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 hover:bg-slate-50" @click="handleExit"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>Salir</button>
+                        <div class="relative flex-1"><svg class="absolute left-4 top-3.5 h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg><input ref="searchInput" v-model="searchQuery" type="search" placeholder="Busca por nombre, codigo o variante" class="h-12 w-full rounded-xl border-slate-200 bg-slate-50 pl-11 pr-14 text-sm font-medium focus:border-indigo-500 focus:bg-white focus:ring-indigo-500" @keyup.enter="searchProducts" /><button type="button" class="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg text-indigo-600 hover:bg-indigo-50" title="Escanear codigo de barras" @click="initBarcodeScanner"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5v4m0-4h4m14 0h-4m4 0v4M3 19v-4m0 4h4m14 0h-4m4 0v-4M7 8v8m3-8v8m4-8v8m3-8v8" /></svg></button></div>
+                        <button v-if="canRegisterExpenses" type="button" class="flex h-11 items-center gap-2 rounded-xl bg-rose-50 px-3 text-sm font-bold text-rose-700 hover:bg-rose-100" @click="showExpenseModal = true"><span class="text-lg">+</span> Registrar gasto</button>
                     </div>
+                    <div class="mt-4 flex gap-2 overflow-x-auto pb-1"><button type="button" class="whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition" :class="selectedCategory === null ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'" @click="selectedCategory = null; searchQuery = ''">Todos</button><button v-for="category in categories" :key="category.id" type="button" class="whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition" :class="selectedCategory === category.id ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'" @click="selectedCategory = category.id; searchQuery = ''">{{ category.name }}</button></div>
+                </header>
+                <div class="flex items-center justify-between px-5 pb-1 pt-4"><div><p class="text-xs font-extrabold uppercase tracking-[0.18em] text-indigo-600">Catalogo</p><h1 class="mt-1 text-xl font-black text-slate-950">Elige los productos</h1></div><span class="text-sm font-semibold text-slate-500">{{ filteredProducts.length }} disponibles</span></div>
+                <div class="flex-1 overflow-y-auto p-5">
+                    <div v-if="!filteredProducts.length" class="flex h-full min-h-64 flex-col items-center justify-center text-center"><span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">⌕</span><p class="mt-4 font-bold text-slate-800">No encontramos productos</p><p class="mt-1 text-sm text-slate-500">Prueba otra categoria o termino de busqueda.</p></div>
+                    <div v-else class="grid grid-cols-2 gap-4 xl:grid-cols-3 2xl:grid-cols-4"><button v-for="product in filteredProducts" :key="product.id" type="button" class="group overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-100/60" @click="handleProductClick(product)"><div class="relative aspect-[4/3] overflow-hidden bg-slate-100"><img v-if="product.main_image_url" :src="product.main_image_url" :alt="product.name" class="h-full w-full object-contain p-2 transition duration-300 group-hover:scale-105" /><div v-else class="flex h-full items-center justify-center text-3xl text-slate-300">□</div><span class="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-slate-950 text-xl font-light text-white shadow-lg transition group-hover:bg-indigo-600">+</span></div><div class="p-3"><h2 class="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-slate-800">{{ product.name }}</h2><div class="mt-2 flex items-end justify-between gap-2"><div><span v-if="hasActivePromotion(product)" class="block text-[11px] text-slate-400 line-through">{{ formatCurrency(calculatePriceWithDiscount(product).originalPrice) }}</span><strong class="text-base text-slate-950">{{ formatCurrency(calculatePriceWithDiscount(product).finalPrice) }}</strong></div><span v-if="product.track_inventory" class="text-[11px] font-semibold text-slate-400">Stock {{ product.quantity ?? 0 }}</span></div></div></button></div>
                 </div>
-                
-                <!-- Lista de productos facturados -->
-                <div class="flex-1 overflow-y-auto px-3 py-2">
-                    <div v-if="cartItems.length === 0" class="text-center py-12 text-gray-500">
-                        <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/>
-                        </svg>
-                        <p>El carrito está vacío</p>
-                    </div>
-                    <div v-else class="overflow-x-auto">
-                        <table class="w-full text-sm">
-                            <thead class="bg-gray-50 border-b border-gray-200">
-                                <tr>
-                                    <th class="px-3 py-3 text-left text-xs font-semibold text-gray-700">Producto</th>
-                                    <th class="px-3 py-3 text-center text-xs font-semibold text-gray-700 w-16">Stock</th>
-                                    <th class="px-3 py-3 text-center text-xs font-semibold text-gray-700 w-20">Cant</th>
-                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-40">Valor</th>
-                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-32">Desc</th>
-                                    <th class="px-3 py-3 text-right text-xs font-semibold text-gray-700 w-36">SubTotal</th>
-                                    <th class="px-3 py-3 text-center text-xs font-semibold text-gray-700 w-16"></th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white">
-                                <tr v-for="(item, index) in cartItems" :key="index" :class="['hover:bg-gray-50', getStockStatusClass(item)]">
-                                    <td class="px-3 py-3 text-left align-middle" :title="item.product_name">
-                                        <div class="min-w-0" style="max-width: 140px;">
-                                            <div class="font-medium text-gray-900">
-                                                {{ item.product_name }}
-                                                <span v-if="item.variant_options" class="text-xs text-gray-500 ml-1">
-                                                    ({{ Object.values(item.variant_options).join(' / ') }})
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td class="px-3 py-3 text-center align-middle w-16" :title="`Stock disponible: ${getAvailableStock(item)}`">
-                                        <span :class="getStockTextClass(item)">
-                                            {{ getAvailableStock(item) }}
-                                        </span>
-                                    </td>
-                                    <td class="px-3 py-3 text-center align-middle w-20" :title="`Cantidad: ${item.quantity}`">
-                                        <input
-                                            type="number"
-                                            :value="item.quantity"
-                                            @change="updateQuantityInput(index, $event)"
-                                            class="w-full text-center border border-gray-300 rounded text-sm py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            min="1"
-                                        />
-                                    </td>
-                                    <td class="px-3 py-3 text-right align-middle w-40" :title="`Precio unitario: ${formatCurrency(item.unit_price)}`">
-                                        <input
-                                            v-if="canOverridePrices"
-                                            type="text"
-                                            :value="formatNumberForInput(item.original_price || item.unit_price)"
-                                            @input="handlePriceInput(index, $event)"
-                                            class="w-full text-right border border-gray-300 rounded text-sm py-2 px-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            placeholder="0"
-                                        />
-                                        <span v-else class="font-medium text-gray-900">
-                                            {{ formatCurrency(item.unit_price) }}
-                                        </span>
-                                    </td>
-                                    <td class="px-3 py-3 text-right align-middle w-32" :title="item.discount_type === 'amount' ? `Descuento: $${item.discount_value}` : `Descuento: ${item.discount_percent}%`">
-                                        <template v-if="canOverridePrices">
-                                            <button
-                                                v-if="item.discount_type === 'amount'"
-                                                @click="openProductDiscountModal(index)"
-                                                class="w-full text-right border border-blue-200 bg-blue-50 text-blue-700 font-semibold rounded text-sm py-2 px-2 hover:bg-blue-100 transition-colors"
-                                            >
-                                                $ {{ formatNumberForInput(item.discount_value) }}
-                                            </button>
-                                            <div v-else class="relative">
-                                                <input
-                                                    type="number"
-                                                    :value="item.discount_percent"
-                                                    @change="updateDiscountFromInput(index, $event)"
-                                                    @click.self="openProductDiscountModal(index)"
-                                                    class="w-full text-right border border-gray-300 rounded text-sm py-2 pl-2 pr-6 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                    min="0"
-                                                    max="100"
-                                                    step="0.01"
-                                                />
-                                                <span class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm font-medium pointer-events-none">%</span>
-                                            </div>
-                                        </template>
-                                        <span v-else>{{ formatNumber(item.discount_percent) }}%</span>
-                                    </td>
-                                    <td class="px-3 py-3 text-right align-middle w-36" :title="`Subtotal: ${formatCurrency(item.quantity * item.unit_price)}`">
-                                        <span class="font-semibold text-gray-900 text-sm">
-                                            {{ formatCurrency(item.quantity * item.unit_price) }}
-                                        </span>
-                                    </td>
-                                    <td class="px-3 py-3 text-center align-middle w-16">
-                                        <button
-                                            @click="removeFromCart(index)"
-                                            class="flex items-center justify-center w-8 h-8 bg-red-500 text-white rounded hover:bg-red-600 transition-colors mx-auto"
-                                            title="Eliminar producto"
-                                        >
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                            </svg>
-                                        </button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- Resumen de pago -->
-                <div v-if="cartItems.length > 0" class="border-t border-gray-200 px-4 py-3 bg-gray-50 space-y-3 flex-shrink-0">
-                    <div class="flex justify-between text-sm">
-                        <span class="text-gray-700">Total Bruto:</span>
-                        <span class="font-medium">{{ formatCurrency(subtotal) }}</span>
-                    </div>
-                    <div class="flex justify-between text-sm items-center">
-                        <span class="text-gray-700">Descuento:</span>
-                        <button
-                            v-if="canOverridePrices"
-                            type="button"
-                            @click="openGeneralDiscountModal"
-                            class="font-medium hover:text-blue-600 flex items-center gap-1"
-                        >
-                            {{ discount > 0 ? '-' + formatCurrency(discountAmount) : formatCurrency(0) }}
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-                            </svg>
-                        </button>
-                        <span v-else class="font-medium">{{ formatCurrency(0) }}</span>
-                    </div>
-                    
-                    <!-- Costo de envío -->
-                    <div class="flex justify-between text-sm items-center">
-                        <label class="flex items-center text-gray-700 gap-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    v-model="includeDeliveryCost"
-                                    :disabled="!store?.delivery_cost_active"
-                                class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500 w-4 h-4"
-                            >
-                            <span>Incluir Envío:</span>
-                        </label>
-                        <span v-if="includeDeliveryCost" class="font-medium">{{ formatCurrency(deliveryCost) }}</span>
-                        <span v-else class="text-gray-500 text-xs italic">No aplica</span>
-                    </div>
+            </section>
 
-                    <div class="pt-2 border-t border-gray-300">
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="text-base font-bold text-gray-900">Total Compra:</span>
-                            <span class="text-base font-bold text-green-600">{{ formatCurrency(total) }}</span>
-                        </div>
-                        <div class="flex gap-3">
-                            <button
-                                @click="showPaymentModal = true"
-                                class="flex-1 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold text-base"
-                            >
-                                Procesar Venta
-                            </button>
-                            <button
-                                @click="cancelSale"
-                                class="flex-1 py-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 font-semibold text-base border border-red-300"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
+            <section class="flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
+                <header class="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4"><div><div class="flex items-center gap-2"><h2 class="text-xl font-black text-slate-950">Venta actual</h2><span class="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-extrabold text-indigo-700">{{ cartUnits }} {{ cartUnits === 1 ? 'unidad' : 'unidades' }}</span></div><p class="mt-1 text-sm text-slate-500">{{ page.props.auth?.user?.name || 'Usuario' }} · {{ store?.name }}</p></div><img v-if="store?.logo_url" :src="store.logo_url" :alt="store.name" class="h-11 w-11 rounded-xl border border-slate-200 object-cover" /></header>
+                <div class="flex-1 overflow-y-auto p-4">
+                    <div v-if="!cartItems.length" class="flex h-full min-h-72 flex-col items-center justify-center text-center"><span class="flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-50 text-indigo-500"><svg class="h-9 w-9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-1 5h13M9 21h.01M17 21h.01" /></svg></span><p class="mt-5 text-lg font-extrabold text-slate-800">La venta esta lista para comenzar</p><p class="mt-2 max-w-xs text-sm leading-6 text-slate-500">Selecciona un producto del catalogo o escanea su codigo para agregarlo.</p></div>
+                    <div v-else class="space-y-3"><article v-for="(item, index) in cartItems" :key="`${item.product_id}-${item.variant_id}`" class="rounded-2xl border p-4" :class="hasEnoughStock(item) ? 'border-slate-200' : 'border-rose-300 bg-rose-50'"><div class="flex gap-3"><img v-if="item.product?.main_image_url" :src="item.product.main_image_url" :alt="item.product_name" class="h-16 w-16 shrink-0 rounded-xl bg-slate-100 object-contain p-1" /><div v-else class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-300">□</div><div class="min-w-0 flex-1"><div class="flex items-start justify-between gap-3"><div><h3 class="line-clamp-2 font-extrabold text-slate-900">{{ item.product_name }}</h3><p v-if="item.variant_options" class="mt-0.5 text-xs text-slate-500">{{ Object.values(item.variant_options).join(' / ') }}</p><p class="mt-1 text-xs" :class="getStockTextClass(item)">Disponible: {{ getAvailableStock(item) }}</p></div><button type="button" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Quitar producto" @click="removeFromCart(index)"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div></div></div><div class="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-3"><div><span class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Cantidad</span><div class="mt-1 flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1"><button type="button" class="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-bold text-slate-600 hover:bg-white" @click="updateQuantity(index, -1)">−</button><input type="number" :value="item.quantity" min="1" class="h-8 w-12 border-0 bg-transparent p-0 text-center text-sm font-black focus:ring-0" @change="updateQuantityInput(index, $event)" /><button type="button" class="flex h-8 w-8 items-center justify-center rounded-lg text-lg font-bold text-slate-600 hover:bg-white" @click="updateQuantity(index, 1)">+</button></div></div><div v-if="canOverridePrices" class="w-32"><label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Precio unitario</label><input type="text" :value="formatNumberForInput(item.original_price || item.unit_price)" class="mt-1 h-10 w-full rounded-xl border-slate-200 text-right text-sm font-bold focus:border-indigo-500 focus:ring-indigo-500" @input="handlePriceInput(index, $event)" /></div><button v-if="canOverridePrices" type="button" class="h-10 rounded-xl px-3 text-xs font-bold" :class="item.discount_percent > 0 ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-600'" @click="openProductDiscountModal(index)">{{ item.discount_percent > 0 ? `${formatNumber(item.discount_percent)}% desc.` : 'Descuento' }}</button><div class="ml-auto text-right"><span class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Subtotal</span><strong class="mt-1 block text-lg text-slate-950">{{ formatCurrency(item.quantity * item.unit_price) }}</strong></div></div></article></div>
                 </div>
-            </div>
+                <footer v-if="cartItems.length" class="shrink-0 border-t border-slate-200 bg-slate-50 p-5"><div class="grid grid-cols-2 gap-x-8 gap-y-2 text-sm"><span class="text-slate-500">Subtotal</span><strong class="text-right text-slate-800">{{ formatCurrency(subtotal) }}</strong><button v-if="canOverridePrices" type="button" class="text-left font-semibold text-indigo-700" @click="openGeneralDiscountModal">Descuento general</button><span v-else class="text-slate-500">Descuento</span><strong class="text-right" :class="discountAmount ? 'text-rose-600' : 'text-slate-500'">− {{ formatCurrency(discountAmount) }}</strong><label class="flex cursor-pointer items-center gap-2 text-slate-600"><input v-model="includeDeliveryCost" type="checkbox" :disabled="!store?.delivery_cost_active" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />Agregar envio</label><strong class="text-right text-slate-700">{{ includeDeliveryCost ? formatCurrency(deliveryCost) : 'No incluido' }}</strong></div><div class="my-4 flex items-end justify-between border-t border-slate-200 pt-4"><div><p class="text-xs font-extrabold uppercase tracking-[0.16em] text-slate-500">Total a cobrar</p><p class="mt-1 text-3xl font-black tracking-tight text-slate-950">{{ formatCurrency(total) }}</p></div><button type="button" class="text-sm font-bold text-rose-600 hover:text-rose-700" @click="cancelSale">Vaciar venta</button></div><button type="button" class="flex min-h-14 w-full items-center justify-center rounded-2xl bg-indigo-600 px-5 text-lg font-black text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700" @click="showPaymentModal = true">Continuar al pago <span class="ml-2">→</span></button></footer>
+            </section>
         </div>
 
         <!-- Vista Móvil (POS) -->
         <div v-if="activeTab === 'sales'" class="fixed inset-0 flex flex-col bg-slate-50 lg:hidden" style="margin-top: 0; z-index: 10;">
             <!-- Header móvil -->
-            <div class="flex-shrink-0 bg-slate-950 px-4 py-3">
+            <div class="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-3">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50"><svg class="h-5 w-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/>
-                        </svg>
-                        <span class="text-white font-semibold">{{ page.props.auth?.user?.name || 'Usuario' }}</span>
-                        <span class="text-white">|</span>
-                        <img 
-                            v-if="store && store.logo_url" 
-                            :src="store.logo_url" 
-                            :alt="`Logo de ${store.name}`" 
-                            class="h-5 w-5 rounded-full object-cover"
-                        >
-                        <span v-if="store" class="text-white font-medium text-sm">{{ store.name }}</span>
+                        </svg></span>
+                        <div><strong class="block text-sm text-slate-950">Nueva venta</strong><span class="block max-w-40 truncate text-xs text-slate-500">{{ store?.name }} · {{ page.props.auth?.user?.name || 'Usuario' }}</span></div>
                     </div>
                     <button 
                         @click="handleExit"
-                        class="px-3 py-1.5 bg-teal-500 text-white rounded text-sm font-medium"
+                        class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600"
                     >
-                        « Regresar
+                        Salir
                     </button>
                 </div>
             </div>
 
             <!-- Barra de búsqueda móvil -->
-            <div class="bg-gray-100 px-4 py-3 flex-shrink-0 border-b border-gray-200">
+            <div class="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-3">
                 <div class="flex items-center gap-2">
                     <!-- Botón catálogo -->
                     <button
                         @click="showProductCatalogModal = true"
-                        class="px-3 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center flex-shrink-0"
+                        class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
                         title="Ver catálogo de productos"
                     >
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1861,7 +1530,7 @@ const stopResize = () => {
                     <button 
                         v-if="canRegisterExpenses"
                         @click="showExpenseModal = true"
-                        class="px-3 py-2.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 flex items-center justify-center flex-shrink-0 border border-red-200"
+                        class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"
                         title="Registrar Gasto"
                     >
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1875,7 +1544,7 @@ const stopResize = () => {
                             v-model="searchQuery"
                             type="text"
                             placeholder="Buscar producto..."
-                            class="w-full pl-10 pr-12 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
+                            class="h-11 w-full rounded-xl border-slate-200 bg-slate-50 pl-10 pr-12 text-sm font-medium focus:border-indigo-500 focus:bg-white focus:ring-indigo-500"
                             @keyup.enter="searchProducts"
                             @input="searchProducts"
                         />
@@ -1884,7 +1553,7 @@ const stopResize = () => {
                         </svg>
                         <button
                             @click="initBarcodeScanner"
-                            class="absolute right-2 top-2 p-1.5 text-blue-600 hover:text-blue-700"
+                            class="absolute right-2 top-1.5 flex h-8 w-8 items-center justify-center rounded-lg text-indigo-600 hover:bg-indigo-50"
                             title="Escanear código de barras"
                         >
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1895,12 +1564,12 @@ const stopResize = () => {
                 </div>
                 
                 <!-- Resultados de búsqueda -->
-                <div v-if="searchResults.length > 0 && searchQuery.trim()" class="mt-3 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                <div v-if="searchResults.length > 0 && searchQuery.trim()" class="mt-3 max-h-64 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
                     <div
                         v-for="product in searchResults"
                         :key="product.id"
                         @click="handleProductClick(product); searchQuery = ''; searchResults = []"
-                        class="px-4 py-3 border-b border-gray-100 hover:bg-blue-50 cursor-pointer flex items-center gap-3"
+                        class="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-4 py-3 hover:bg-indigo-50"
                     >
                         <div class="w-12 h-12 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
                             <img 
@@ -1937,19 +1606,13 @@ const stopResize = () => {
             </div>
 
             <!-- Título de información de venta -->
-            <div class="bg-gray-200 px-4 py-2 flex-shrink-0">
-                <div class="flex items-center gap-2">
-                    <div class="w-8 h-8 bg-blue-400 rounded-full flex items-center justify-center">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/>
-                        </svg>
-                    </div>
-                    <h3 class="text-gray-700 font-semibold text-sm">INFORMACION DE LA VENTA</h3>
-                </div>
+            <div class="flex flex-shrink-0 items-center justify-between bg-slate-100 px-4 py-2.5">
+                <h3 class="text-sm font-extrabold text-slate-800">Venta actual</h3>
+                <span class="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-bold text-indigo-700">{{ cartUnits }} {{ cartUnits === 1 ? 'unidad' : 'unidades' }}</span>
             </div>
 
             <!-- Lista de productos facturados móvil -->
-            <div class="flex-1 overflow-y-auto bg-white">
+            <div class="flex-1 overflow-y-auto bg-slate-100">
                 <div v-if="cartItems.length === 0" class="text-center py-12 text-gray-500">
                     <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3.6-7H6.4M7 13L5.4 6M7 13l-2 9m12-9l2 9M9 22a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z"/>
@@ -1958,11 +1621,11 @@ const stopResize = () => {
                     <p class="text-xs text-gray-400 mt-2">Busca o escanea un producto para comenzar</p>
                 </div>
                 
-                <div v-else class="divide-y divide-gray-200">
+                <div v-else class="space-y-3 p-3">
                     <div
                         v-for="(item, index) in cartItems"
                         :key="index"
-                        class="px-4 py-3 bg-white"
+                        class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
                     >
                         <div class="flex items-start justify-between gap-3">
                             <!-- Columna izquierda: Stock, Producto, Precio unitario -->
@@ -1987,16 +1650,16 @@ const stopResize = () => {
                                     <div class="flex items-center gap-1">
                                         <button
                                             @click="updateQuantity(index, -1)"
-                                            class="w-8 h-8 flex items-center justify-center bg-blue-600 text-white rounded-full hover:bg-blue-700 font-medium text-sm"
+                                            class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 font-bold text-slate-700 hover:bg-slate-200"
                                         >
                                             -
                                         </button>
-                                        <span class="w-10 h-8 flex items-center justify-center bg-blue-600 text-white rounded-full font-semibold text-sm">
+                                        <span class="flex h-9 w-10 items-center justify-center font-extrabold text-slate-950">
                                             {{ item.quantity }}
                                         </span>
                                         <button
                                             @click="updateQuantity(index, 1)"
-                                            class="w-8 h-8 flex items-center justify-center bg-blue-600 text-white rounded-full hover:bg-blue-700 font-medium text-sm"
+                                            class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 font-bold text-white hover:bg-indigo-700"
                                         >
                                             +
                                         </button>
@@ -2016,7 +1679,7 @@ const stopResize = () => {
                                 <button
                                     v-if="canOverridePrices"
                                     @click="openProductDiscountModal(index)"
-                                    class="w-8 h-8 flex items-center justify-center bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
+                                    class="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
                                     title="Aplicar descuento"
                                 >
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2027,7 +1690,7 @@ const stopResize = () => {
                                 <!-- Botón eliminar -->
                                 <button
                                     @click="removeFromCart(index)"
-                                    class="w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded hover:bg-red-600"
+                                    class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"
                                 >
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
@@ -2040,7 +1703,7 @@ const stopResize = () => {
             </div>
 
             <!-- Resumen y botones móvil -->
-            <div v-if="cartItems.length > 0" class="border-t border-gray-300 bg-white px-4 py-4 flex-shrink-0">
+            <div v-if="cartItems.length > 0" class="flex-shrink-0 border-t border-slate-200 bg-white px-4 py-4 shadow-[0_-12px_30px_rgba(15,23,42,0.08)]">
                 <div class="space-y-2 mb-4">
                     <div class="flex justify-between text-sm">
                         <span class="text-gray-700">Subtotal:</span>
@@ -2078,23 +1741,23 @@ const stopResize = () => {
                     </div>
 
                     <div class="flex justify-between items-center pt-2 border-t border-gray-300">
-                        <span class="text-base font-bold text-gray-900">Total Compra:</span>
-                        <span class="text-base font-bold text-green-600">{{ formatCurrency(total) }}</span>
+                        <span class="text-sm font-extrabold uppercase tracking-wider text-slate-500">Total a cobrar</span>
+                        <span class="text-2xl font-black text-slate-950">{{ formatCurrency(total) }}</span>
                     </div>
                 </div>
                 
-                <div class="flex gap-3">
+                <div class="flex items-center gap-3">
                     <button
                         @click="showPaymentModal = true"
-                        class="flex-1 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold text-base transition-colors"
+                        class="min-h-12 flex-1 rounded-2xl bg-indigo-600 px-4 py-3 font-black text-white shadow-lg shadow-indigo-100 transition hover:bg-indigo-700"
                     >
-                        PROCESAR VENTA
+                        Continuar al pago
                     </button>
                     <button
                         @click="cartItems = []; discount = 0; discountType = 'amount'"
-                        class="flex-1 py-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 font-semibold text-base transition-colors border border-red-300"
+                        class="rounded-xl px-3 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50"
                     >
-                        CANCELAR
+                        Vaciar
                     </button>
                 </div>
             </div>
@@ -2103,49 +1766,44 @@ const stopResize = () => {
         <!-- Modales -->
         <!-- Modal de pago -->
         <Modal :show="showPaymentModal" @close="showPaymentModal = false">
-            <div class="p-6">
-                <h2 class="text-lg font-semibold mb-4">Confirmar Venta</h2>
+            <div class="p-5 sm:p-7">
+                <div class="mb-6 flex items-start justify-between gap-4"><div><p class="text-xs font-extrabold uppercase tracking-[0.18em] text-indigo-600">Ultimo paso</p><h2 class="mt-2 text-2xl font-black text-slate-950">Registrar el pago</h2><p class="mt-1 text-sm text-slate-500">Confirma como recibiste {{ formatCurrency(total) }}.</p></div><button type="button" class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200" @click="showPaymentModal = false">✕</button></div>
                 
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Método de Pago</label>
-                    <select v-model="paymentMethod" class="w-full rounded-md border-gray-300">
-                        <option value="efectivo">Efectivo</option>
-                        <option value="tarjeta">Tarjeta</option>
-                        <option value="transferencia">Transferencia</option>
-                    </select>
+                <div class="mb-5">
+                    <label class="ui-label">Metodo de pago</label>
+                    <div class="grid grid-cols-3 gap-2"><button v-for="method in [{ value: 'efectivo', label: 'Efectivo' }, { value: 'tarjeta', label: 'Tarjeta' }, { value: 'transferencia', label: 'Transferencia' }]" :key="method.value" type="button" class="min-h-12 rounded-xl border px-2 text-sm font-bold transition" :class="paymentMethod === method.value ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-100' : 'border-slate-200 text-slate-600 hover:border-indigo-200'" @click="paymentMethod = method.value">{{ method.label }}</button></div>
                 </div>
 
-                <!-- New: Cash Payment Fields -->
-                <div v-if="paymentMethod === 'efectivo'" class="mb-4 p-4 bg-green-50 rounded-lg border border-green-100">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Dinero Recibido</label>
+                <div v-if="paymentMethod === 'efectivo'" class="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <label class="ui-label">Efectivo recibido</label>
                     <div class="relative">
-                        <span class="absolute left-3 top-2 text-gray-500">$</span>
+                        <span class="absolute left-4 top-3 text-lg font-bold text-slate-400">$</span>
                         <input 
                             :value="formatNumberForInput(amountTendered)"
                             @input="handleAmountTenderedInput"
                             type="text" 
                             inputmode="numeric"
-                            class="w-full pl-7 rounded-md border-gray-300 focus:ring-green-500 focus:border-green-500 font-bold text-lg"
+                            class="h-12 w-full rounded-xl border-emerald-200 bg-white pl-9 text-xl font-black focus:border-emerald-500 focus:ring-emerald-500"
                             placeholder="0"
                         >
                     </div>
                     
-                    <div v-if="amountTendered" class="mt-3 flex justify-between items-center text-lg">
-                        <span class="font-medium text-gray-700">Cambio a devolver:</span>
-                        <span class="font-bold text-green-700">{{ formatCurrency(changeAmount) }}</span>
+                    <div v-if="amountTendered" class="mt-4 flex items-center justify-between border-t border-emerald-200 pt-3">
+                        <span class="text-sm font-semibold text-emerald-900">Cambio a devolver</span>
+                        <span class="text-xl font-black text-emerald-700">{{ formatCurrency(changeAmount) }}</span>
                     </div>
                     <p v-if="amountTendered && amountTendered < total" class="mt-2 text-sm font-medium text-red-700">
                         Faltan {{ formatCurrency(total - amountTendered) }} para completar el pago.
                     </p>
                 </div>
 
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Notas (Opcional)</label>
+                <div class="mb-5">
+                    <label class="ui-label">Nota para esta venta <span class="font-normal text-slate-400">(opcional)</span></label>
                     <textarea
                         v-model="saleNotes"
-                        class="w-full rounded-md border-gray-300"
-                        rows="3"
-                        placeholder="Notas adicionales sobre la venta..."
+                        class="ui-input"
+                        rows="2"
+                        placeholder="Ej. Pedido para recoger en la tarde"
                     ></textarea>
                 </div>
 
@@ -2164,37 +1822,37 @@ const stopResize = () => {
                         </div>
                     </div>
 
-                    <div class="mb-4 p-3 bg-gray-50 rounded">
-                    <div class="flex justify-between mb-2">
-                        <span>Subtotal:</span>
+                    <div class="mb-5 rounded-2xl bg-slate-950 p-4 text-white">
+                    <div class="flex justify-between mb-2 text-sm text-slate-300">
+                        <span>Subtotal</span>
                         <span>{{ formatCurrency(subtotal) }}</span>
                     </div>
                     
                     <!-- Descuento manual si existe -->
-                    <div v-if="discountAmount > 0" class="flex justify-between mb-2 text-red-600">
+                    <div v-if="discountAmount > 0" class="mb-2 flex justify-between text-sm text-rose-300">
                         <span>Descuento ({{ discountType === 'percentage' ? discount + '%' : 'Monto' }}):</span>
                         <span>-{{ formatCurrency(discountAmount) }}</span>
                     </div>
 
-                    <div v-if="includeDeliveryCost && parseFloat(deliveryCost) > 0" class="flex justify-between mb-2 text-gray-600">
+                    <div v-if="includeDeliveryCost && parseFloat(deliveryCost) > 0" class="mb-2 flex justify-between text-sm text-slate-300">
                         <span>Costo de Envío:</span>
                         <span>{{ formatCurrency(deliveryCost) }}</span>
                     </div>
                     
-                    <div class="flex justify-between font-bold text-lg pt-2 border-t">
-                        <span>Total:</span>
+                    <div class="flex justify-between border-t border-white/20 pt-3 text-xl font-black">
+                        <span>Total</span>
                         <span>{{ formatCurrency(total) }}</span>
                     </div>
                 </div>
 
                 <div class="flex gap-3">
-                    <SecondaryButton @click="showPaymentModal = false">Cancelar</SecondaryButton>
-                    <PrimaryButton
+                    <button type="button" class="ui-secondary-button" @click="showPaymentModal = false">Volver</button>
+                    <button type="button" class="ui-primary-button flex-1"
                         @click="processSale"
                         :disabled="isProcessingSale || (paymentMethod === 'efectivo' && amountTendered < total)"
                     >
-                        {{ isProcessingSale ? 'Procesando...' : 'Confirmar Venta' }}
-                    </PrimaryButton>
+                        {{ isProcessingSale ? 'Registrando venta...' : 'Confirmar y registrar' }}
+                    </button>
                 </div>
             </div>
         </Modal>
@@ -2524,12 +2182,12 @@ const stopResize = () => {
 
         <!-- Modal de catálogo de productos -->
         <Modal :show="showProductCatalogModal" @close="showProductCatalogModal = false" :max-width="'4xl'">
-            <div class="p-6 max-h-[90vh] flex flex-col">
-                <div class="flex items-center justify-between mb-4 flex-shrink-0">
-                    <h2 class="text-lg font-semibold">Catálogo de Productos</h2>
+            <div class="flex max-h-[90vh] flex-col p-4 sm:p-6">
+                <div class="mb-4 flex flex-shrink-0 items-start justify-between">
+                    <div><p class="text-xs font-extrabold uppercase tracking-[0.18em] text-indigo-600">Catalogo</p><h2 class="mt-1 text-xl font-black text-slate-950">Agregar productos</h2><p class="mt-1 text-sm text-slate-500">Toca un producto para sumarlo a la venta.</p></div>
                     <button
                         @click="showProductCatalogModal = false"
-                        class="text-gray-400 hover:text-gray-600"
+                        class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200"
                     >
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -2538,12 +2196,12 @@ const stopResize = () => {
                 </div>
 
                 <!-- Buscador en el modal -->
-                <div class="mb-4 relative flex-shrink-0">
+                <div class="relative mb-4 flex-shrink-0">
                     <input
                         v-model="searchQuery"
                         type="text"
                         placeholder="Buscar producto..."
-                        class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        class="h-12 w-full rounded-xl border-slate-200 bg-slate-50 pl-10 pr-4 text-sm font-medium focus:border-indigo-500 focus:bg-white focus:ring-indigo-500"
                         @keyup.enter="searchProducts"
                         @input="searchProducts"
                     />
@@ -2553,12 +2211,12 @@ const stopResize = () => {
                 </div>
                 
                 <!-- Categorías en el modal -->
-                <div class="mb-4 flex items-center gap-2 overflow-x-auto pb-2 flex-shrink-0">
+                <div class="mb-4 flex flex-shrink-0 items-center gap-2 overflow-x-auto pb-2">
                     <button
                         @click="selectedCategory = null"
                         :class="[
-                            'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap border',
-                            selectedCategory === null ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            'whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold',
+                            selectedCategory === null ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         ]"
                     >
                         TODOS
@@ -2568,8 +2226,8 @@ const stopResize = () => {
                         :key="category.id"
                         @click="selectedCategory = category.id"
                         :class="[
-                            'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap border',
-                            selectedCategory === category.id ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            'whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold',
+                            selectedCategory === category.id ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         ]"
                     >
                         {{ category.name }}
@@ -2581,25 +2239,25 @@ const stopResize = () => {
                     <div v-if="filteredProducts.length === 0" class="text-center py-12 text-gray-500">
                         <p>No se encontraron productos</p>
                     </div>
-                    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                         <div
                             v-for="product in filteredProducts"
                             :key="product.id"
-                            class="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md cursor-pointer flex flex-col"
+                            class="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:border-indigo-300 hover:shadow-lg"
                             @click="handleProductClick(product); showProductCatalogModal = false"
                         >
-                            <div class="aspect-square bg-gray-100 flex items-center justify-center" style="min-height: 120px;">
+                            <div class="relative flex aspect-square items-center justify-center overflow-hidden bg-slate-100">
                                 <img 
                                     v-if="product.main_image_url" 
                                     :src="product.main_image_url" 
                                     :alt="product.name"
-                                    class="w-full h-full object-cover"
+                                    class="h-full w-full object-contain p-2 transition group-hover:scale-105"
                                 />
                                 <svg v-else class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                                 </svg>
                             </div>
-                            <div class="p-2 flex-1 flex flex-col">
+                            <div class="flex flex-1 flex-col p-3">
                                 <div class="mb-1">
                                     <template v-if="hasActivePromotion(product)">
                                         <p class="text-xs line-through text-red-600">
@@ -2610,12 +2268,12 @@ const stopResize = () => {
                                         </p>
                                     </template>
                                     <template v-else>
-                                        <p class="text-sm font-bold text-gray-900">
+                                        <p class="text-sm font-black text-slate-950">
                                             {{ formatCurrency(calculatePriceWithDiscount(product).finalPrice) }}
                                         </p>
                                     </template>
                                 </div>
-                                <h3 class="font-medium text-xs text-gray-900 line-clamp-2">{{ product.name }}</h3>
+                                <h3 class="mt-1 line-clamp-2 text-xs font-bold leading-5 text-slate-700">{{ product.name }}</h3>
                             </div>
                         </div>
                     </div>
