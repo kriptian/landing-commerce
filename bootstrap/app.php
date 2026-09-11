@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'restrict.physical-sales' => \App\Http\Middleware\RestrictPhysicalSalesRole::class,
             'allow.physical-sales.without-verification' => \App\Http\Middleware\AllowPhysicalSalesWithoutVerification::class,
             'customer.store' => \App\Http\Middleware\EnsureCustomerBelongsToStore::class,
+            'catalog.available' => \App\Http\Middleware\EnsureCatalogAvailable::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

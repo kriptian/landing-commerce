@@ -4,6 +4,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import AlertModal from '@/Components/AlertModal.vue';
 import AdminNavigation from '@/Components/Admin/AdminNavigation.vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
+import PaymentReminderModal from '@/Components/Admin/PaymentReminderModal.vue';
 import { resolveAdminNavigation } from '@/Navigation/adminNavigation';
 
 const page = usePage();
@@ -245,6 +246,11 @@ onBeforeUnmount(() => {
             @primary="cancelUpgrade"
             @secondary="() => { showUpgradeStep2 = false; showUpgradeStep1 = true; }"
             @close="cancelUpgrade"
+        />
+        <PaymentReminderModal
+            v-if="page.props.paymentReminder && auth.user?.id"
+            :reminder="page.props.paymentReminder"
+            :user-id="auth.user.id"
         />
     </div>
 </template>

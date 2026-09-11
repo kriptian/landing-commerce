@@ -26,6 +26,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Public\CheckoutController;
 use App\Http\Controllers\Public\ProductController as PublicProductController;
 use App\Http\Controllers\StoreSetupController;
+use App\Http\Controllers\StorePaymentReminderController;
 use App\Http\Middleware\EnsureLocalDeploymentAccess;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Models\Store;
@@ -143,6 +144,9 @@ Route::middleware(['auth', 'restrict.physical-sales', 'verified'])->group(functi
 
     // Panel de Administración (acceso según permisos por tienda)
     Route::prefix('admin')->name('admin.')->group(function () {
+        Route::get('payment-reminder/image', [StorePaymentReminderController::class, 'adminImage'])->name('payment-reminder.image');
+        Route::get('payment-reminder/status', [StorePaymentReminderController::class, 'adminStatus'])->name('payment-reminder.status');
+
         Route::middleware([EnsureLocalDeploymentAccess::class, 'password.confirm'])
             ->prefix('deployments')
             ->name('deployments.')
@@ -215,6 +219,9 @@ Route::middleware(['auth', 'restrict.physical-sales', 'verified'])->group(functi
     // Rutas exclusivas de Súper Admin
     Route::prefix('super')->name('super.')->middleware(EnsureUserIsAdmin::class)->group(function () {
         Route::resource('stores', \App\Http\Controllers\SuperAdmin\StoreController::class)->except('show');
+        Route::post('stores/{store}/payment-reminder', [StorePaymentReminderController::class, 'update'])->name('stores.payment-reminder.update');
+        Route::delete('stores/{store}/payment-reminder', [StorePaymentReminderController::class, 'destroy'])->name('stores.payment-reminder.destroy');
+        Route::get('stores/{store}/payment-reminder/image', [StorePaymentReminderController::class, 'superImage'])->name('stores.payment-reminder.image');
     });
 });
 
@@ -232,13 +239,13 @@ $reservedSlugs = implode('|', [
 Route::pattern('store', "^(?!($reservedSlugs)$)[A-Za-z0-9\-_.]+$");
 
 Route::get('/{store:slug}/privacidad', [PublicProductController::class, 'privacyPolicy'])->name('store.privacy');
-Route::get('/{store:slug}', [PublicProductController::class, 'index'])->name('catalogo.index');
-Route::get('/{store:slug}/categories/{category}/children', [PublicProductController::class, 'children'])->name('catalog.categories.children');
-Route::get('/{store:slug}/producto/{product}', [PublicProductController::class, 'show'])->name('catalogo.show');
+Route::get('/{store:slug}', [PublicProductController::class, 'index'])->middleware('catalog.available')->name('catalogo.index');
+Route::get('/{store:slug}/categories/{category}/children', [PublicProductController::class, 'children'])->middleware('catalog.available')->name('catalog.categories.children');
+Route::get('/{store:slug}/producto/{product}', [PublicProductController::class, 'show'])->middleware('catalog.available')->name('catalogo.show');
 
 // Carrito (público, basado en sesión)
 Route::post('/cart', [CartController::class, 'store'])->middleware('throttle:customer-cart')->name('cart.store');
-Route::get('/{store:slug}/cart', [CartController::class, 'index'])->name('cart.index');
+Route::get('/{store:slug}/cart', [CartController::class, 'index'])->middleware('catalog.available')->name('cart.index');
 Route::delete('/cart/{cart}', [CartController::class, 'destroy'])->name('cart.destroy');
 Route::delete('/guest-cart/{key}', [CartController::class, 'destroyGuest'])->name('cart.guest.destroy');
 
@@ -273,10 +280,10 @@ Route::post('/{store:slug}/customer/logout', [CustomerAuthController::class, 'lo
     ->name('customer.logout');
 
 // Checkout público (no requiere autenticación)
-Route::get('/{store:slug}/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
-Route::post('/{store:slug}/checkout/validate-coupon', [CheckoutController::class, 'validateCoupon'])->middleware('throttle:checkout-coupon')->name('checkout.validate-coupon');
+Route::get('/{store:slug}/checkout', [CheckoutController::class, 'index'])->middleware('catalog.available')->name('checkout.index');
+Route::post('/{store:slug}/checkout/validate-coupon', [CheckoutController::class, 'validateCoupon'])->middleware(['catalog.available', 'throttle:checkout-coupon'])->name('checkout.validate-coupon');
 Route::post('/{store:slug}/checkout', [CheckoutController::class, 'store'])
-    ->middleware('throttle:customer-checkout')
+    ->middleware(['catalog.available', 'throttle:customer-checkout'])
     ->block(10, 10)
     ->name('checkout.store');
 

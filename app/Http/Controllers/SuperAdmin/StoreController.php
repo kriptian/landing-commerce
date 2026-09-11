@@ -17,7 +17,35 @@ class StoreController extends Controller
     public function index()
     {
         return Inertia::render('Super/Stores/Index', [
-            'stores' => Store::withCount('users')->get(),
+            'stores' => Store::query()
+                ->with('paymentReminder')
+                ->withCount('users')
+                ->orderBy('name')
+                ->get()
+                ->map(function (Store $store) {
+                    $reminder = $store->paymentReminder;
+
+                    return [
+                        'id' => $store->id,
+                        'name' => $store->name,
+                        'slug' => $store->slug,
+                        'plan' => $store->plan,
+                        'users_count' => $store->users_count,
+                        'payment_reminder' => $reminder ? [
+                            'id' => $reminder->id,
+                            'message' => $reminder->message,
+                            'mode' => $reminder->mode,
+                            'repeat_interval' => $reminder->repeat_interval,
+                            'repeat_unit' => $reminder->repeat_unit,
+                            'pause_catalog' => $reminder->pause_catalog,
+                            'active' => $reminder->active,
+                            'image_url' => $reminder->image_path
+                                ? route('super.stores.payment-reminder.image', $store)
+                                : null,
+                            'updated_at' => $reminder->updated_at?->toISOString(),
+                        ] : null,
+                    ];
+                }),
         ]);
     }
 

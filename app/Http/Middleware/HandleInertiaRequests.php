@@ -40,6 +40,33 @@ class HandleInertiaRequests extends Middleware
         $customer = $request->user('customer');
         $user = Auth::guard('web')->user();
         $capabilities = $this->adminCapabilities($request);
+        $superAdminEmails = collect([(string) config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'))])
+            ->filter()
+            ->merge((array) config('app.super_admin_emails', []))
+            ->map(fn ($email) => strtolower(trim($email)))
+            ->unique();
+        $isSuperAdmin = $user && $superAdminEmails->contains(strtolower($user->email));
+        $isReminderSurface = $request->routeIs('dashboard', 'admin.*', 'store.setup')
+            && ! $request->routeIs('admin.physical-sales.*');
+        $paymentReminder = null;
+
+        if ($user?->store && ! $isSuperAdmin && $isReminderSurface) {
+            $reminder = $user->store->paymentReminder()
+                ->where('active', true)
+                ->first();
+
+            if ($reminder) {
+                $paymentReminder = [
+                    'id' => $reminder->id,
+                    'message' => $reminder->message,
+                    'mode' => $reminder->mode,
+                    'repeat_interval' => $reminder->repeat_interval,
+                    'repeat_unit' => $reminder->repeat_unit,
+                    'image_url' => $reminder->image_path ? route('admin.payment-reminder.image') : null,
+                    'version' => $reminder->updated_at->getTimestamp(),
+                ];
+            }
+        }
 
         if (! $storeId || (int) $customer?->store_id !== $storeId) {
             $customer = null;
@@ -71,17 +98,7 @@ class HandleInertiaRequests extends Middleware
                     return $user->roles->pluck('name')->values()->toArray();
                 })(),
                 // Flag explícito para súper admin real (por lista de correos)
-                'isSuperAdmin' => (function () {
-                    $user = Auth::guard('web')->user(); // Guard 'web' explícito
-                    if (! $user) {
-                        return false;
-                    }
-                    $single = (string) config('app.super_admin_email', env('SUPER_ADMIN_EMAIL'));
-                    $list = (array) config('app.super_admin_emails', []);
-                    $allowed = collect([$single])->filter()->merge($list)->map(fn ($e) => strtolower(trim($e)))->unique()->all();
-
-                    return in_array(strtolower($user->email), $allowed, true);
-                })(),
+                'isSuperAdmin' => (bool) $isSuperAdmin,
                 'canDeploy' => app(DeploymentAuthorizer::class)->allows(Auth::guard('web')->user(), $request),
                 'capabilities' => $capabilities,
             ],
@@ -203,6 +220,7 @@ class HandleInertiaRequests extends Middleware
                     ? $user->store->orders()->where('status', 'recibido')->count()
                     : 0,
             ],
+            'paymentReminder' => $paymentReminder,
         ]);
     }
 

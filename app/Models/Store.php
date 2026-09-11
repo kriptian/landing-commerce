@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Store extends Model
@@ -134,6 +135,10 @@ class Store extends Model
                 }
             }
         });
+
+        static::deleting(function (Store $store) {
+            $store->paymentReminder?->delete();
+        });
     }
 
     // --- Tus otras funciones (owner, products, etc.) quedan igual ---
@@ -208,6 +213,20 @@ class Store extends Model
     public function expenses()
     {
         return $this->hasMany(\App\Models\Expense::class);
+    }
+
+    public function paymentReminder(): HasOne
+    {
+        return $this->hasOne(StorePaymentReminder::class);
+    }
+
+    public function isCatalogPaused(): bool
+    {
+        $reminder = $this->relationLoaded('paymentReminder')
+            ? $this->paymentReminder
+            : $this->paymentReminder()->first();
+
+        return (bool) ($reminder?->active && $reminder?->pause_catalog);
     }
 
     /**

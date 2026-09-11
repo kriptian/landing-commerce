@@ -212,6 +212,9 @@ class CartController extends Controller
         if (! $product) {
             return back()->withErrors(['product_id' => 'Este producto ya no está disponible.']);
         }
+        if ($product->store?->isCatalogPaused()) {
+            return back()->withErrors(['catalog' => 'El catalogo no esta disponible temporalmente. Intenta nuevamente mas tarde.']);
+        }
 
         $variant = $request->product_variant_id
             ? $product->variants()->whereKey($request->product_variant_id)->first()
