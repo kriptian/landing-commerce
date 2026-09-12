@@ -1,0 +1,1 @@
+import{o as s,a as t,f as o,M as r,x as l}from"./app-U5eE-4f3.js";const m={class:"px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10"},i={__name:"AdminPage",props:{width:{type:String,default:"wide"}},setup(e){return(a,p)=>(s(),t("div",m,[o("div",{class:l(["mx-auto",e.width==="wide"?"max-w-[92rem]":"max-w-7xl"])},[r(a.$slots,"default")],2)]))}};export{i as _};

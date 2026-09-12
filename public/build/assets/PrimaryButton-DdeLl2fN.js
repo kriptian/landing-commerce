@@ -1,1 +1,0 @@
-import{o,a as r,M as s}from"./app-DL-vudXV.js";const a=["type"],u={__name:"PrimaryButton",props:{type:{type:String,default:"submit"}},setup(t){return(e,n)=>(o(),r("button",{type:t.type,class:"ui-primary-button"},[s(e.$slots,"default")],8,a))}};export{u as _};

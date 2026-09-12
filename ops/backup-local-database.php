@@ -14,9 +14,14 @@ $app->make(Kernel::class)->bootstrap();
 
 $connection = config('database.default');
 $database = config("database.connections.{$connection}");
+$host = (string) ($database['host'] ?? '');
+$databaseName = (string) ($database['database'] ?? '');
 
-if (! $app->environment('local') || ($database['driver'] ?? null) !== 'mysql' || ($database['database'] ?? null) !== 'laravel') {
-    fwrite(STDERR, "Local backups are only allowed for the local laravel MySQL database.\n");
+if (! $app->environment('local')
+    || ($database['driver'] ?? null) !== 'mysql'
+    || ! in_array($host, ['mysql', '127.0.0.1', 'localhost'], true)
+    || $databaseName === '') {
+    fwrite(STDERR, "Local backups are only allowed for a configured local MySQL database.\n");
     exit(1);
 }
 
@@ -28,7 +33,8 @@ if (! is_dir($directory) && ! mkdir($directory, 0700, true) && ! is_dir($directo
 }
 
 chmod($directory, 0700);
-$sqlPath = $directory.'/laravel_'.date('Ymd_His').'.sql';
+$backupName = preg_replace('/[^A-Za-z0-9_-]/', '_', $databaseName);
+$sqlPath = $directory.'/'.$backupName.'_'.date('Ymd_His').'.sql';
 $gzipPath = $sqlPath.'.gz';
 
 $dump = new Process([
@@ -37,11 +43,11 @@ $dump = new Process([
     '--quick',
     '--skip-lock-tables',
     '--no-tablespaces',
-    '--host='.(string) $database['host'],
+    '--host='.$host,
     '--port='.(string) $database['port'],
     '--user='.(string) $database['username'],
     '--result-file='.$sqlPath,
-    (string) $database['database'],
+    $databaseName,
 ], $project, ['MYSQL_PWD' => (string) $database['password']]);
 $dump->setTimeout(600);
 $dump->run();
