@@ -315,10 +315,11 @@ const notifyCurrentStatus = () => {
                                     <p class="font-semibold text-sm text-gray-500">Correo:</p>
                                     <p>{{ order.customer_email }}</p>
                                 </div>
-                                <div>
-                                    <p class="font-semibold text-sm text-gray-500">Dirección:</p>
-                                    <p>{{ order.customer_address }}</p>
-                                </div>
+                                 <div>
+                                     <p class="font-semibold text-sm text-gray-500">Dirección:</p>
+                                     <p>{{ order.customer_address }}</p>
+                                     <p v-if="order.municipality_code" class="mt-1 text-xs text-gray-500">{{ order.municipality_name }}, {{ order.department_name }} · DIVIPOLA {{ order.municipality_code }}</p>
+                                 </div>
                             </div>
                         </div>
                     </div>

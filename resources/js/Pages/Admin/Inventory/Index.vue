@@ -1,13 +1,12 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AdminPage from '@/Components/Admin/AdminPage.vue';
 import PageHeader from '@/Components/Admin/PageHeader.vue';
 import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/Modal.vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import { ref, watch, nextTick, computed, onMounted, onBeforeUnmount } from 'vue';
-import { safeRoute } from '@/utils/safeRoute';
 import axios from 'axios';
 
 const props = defineProps({
@@ -15,14 +14,13 @@ const props = defineProps({
     filters: Object,
     inventoryWarnings: Array,
 });
+const page = usePage();
+const canEditInventory = computed(() => page.props.auth?.isSuperAdmin || (page.props.auth?.permissions || []).includes('editar inventario'));
 
 
 // Estado UI del buscador
-const showSearch = ref(Boolean(props.filters?.search));
 const search = ref(props.filters?.search || '');
 const status = ref(props.filters?.status || ''); // '', 'out_of_stock', 'low_stock'
-const searchInputRef = ref(null);
-const showStatusMenu = ref(false);
 const expandedProducts = ref({}); // Map of product ID -> boolean
 
 const statuses = [
@@ -30,23 +28,6 @@ const statuses = [
     { value: 'out_of_stock', label: 'Agotados' },
     { value: 'low_stock', label: '¡Pocas unidades!' },
 ];
-
-const statusLabel = computed(() => {
-    return (statuses.find(s => s.value === status.value) || statuses[0]).label;
-});
-
-// Abrir la cortina de búsqueda y enfocar
-const toggleSearch = async () => {
-    showSearch.value = !showSearch.value;
-    if (showSearch.value) {
-        await nextTick();
-        searchInputRef.value?.focus();
-    } else {
-        // Si se cierra, limpiar búsqueda y enviar
-        search.value = '';
-        submitFilters();
-    }
-};
 
 // Enviar filtros a la URL Conservando scroll y reemplazando historia
 const submitFilters = () => {
@@ -66,13 +47,6 @@ watch(search, () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => submitFilters(), 350);
 });
-
-// Seleccionar estado desde el menú y aplicar filtro
-const selectStatus = (newStatus) => {
-    status.value = newStatus;
-    showStatusMenu.value = false;
-    submitFilters();
-};
 
 // Filtrar variantes en la UI según estado activo (estricto y consistente con backend)
 const filteredVariants = (variants) => {
@@ -120,10 +94,6 @@ const pct = (buy, sell) => {
 };
 
 // Precios efectivos (con herencia producto → variante)
-const effBuy = (product, variant = null) => {
-    const v = variant?.purchase_price;
-    return (v ?? null) !== null ? Number(v) : Number(product.purchase_price ?? 0);
-};
 const effRetail = (product, variant = null) => Number(variant?.price ?? product.price);
 const profit = (buy, sell) => {
     const b = Number(buy || 0);
@@ -213,164 +183,147 @@ const calculateMainPurchaseValue = (product) => {
 const showQuickEntry = ref(false);
 const quickSearch = ref('');
 const quickSearchResults = ref([]);
+const quickSearchState = ref('initial');
 const selectedQuickProduct = ref(null);
+const selectedQuickVariant = ref(null);
 const quickProcessing = ref(false);
+const quickErrors = ref({});
+let quickSearchController;
+let quickSearchRequest = 0;
 
-const openQuickEntry = (product = null) => {
+const openQuickEntry = (product = null, variant = null) => {
     quickSearch.value = '';
     quickSearchResults.value = [];
+    quickSearchState.value = 'initial';
     selectedQuickProduct.value = null;
+    selectedQuickVariant.value = null;
+    quickErrors.value = {};
     showQuickEntry.value = true;
     if (product) {
-        selectQuickProduct(product);
+        selectQuickProduct(product, variant);
         return;
     }
     nextTick(() => document.getElementById('quick-search-input')?.focus());
 };
 
 const closeQuickEntry = () => {
+    quickSearchController?.abort();
     showQuickEntry.value = false;
 };
 
-// Función core de búsqueda
 const fetchSearchResults = async () => {
-    if (quickSearch.value.length < 2) return Promise.resolve();
+    const term = quickSearch.value.trim();
+    if (term.length < 2) return;
+
+    quickSearchController?.abort();
+    quickSearchController = new AbortController();
+    const requestId = ++quickSearchRequest;
+    quickSearchState.value = 'loading';
+    quickErrors.value = {};
+
     try {
-        const res = await axios.get(route('admin.inventory.search', { q: quickSearch.value }));
+        const res = await axios.get(route('admin.inventory.search', { q: term }), {
+            signal: quickSearchController.signal,
+        });
+        if (requestId !== quickSearchRequest) return;
         quickSearchResults.value = res.data;
-        return Promise.resolve();
+        quickSearchState.value = res.data.length ? 'results' : 'empty';
     } catch (err) {
-        console.error(err);
-        return Promise.resolve(); // Resolver incluso en caso de error para no bloquear
+        if (axios.isCancel(err) || requestId !== quickSearchRequest) return;
+        quickSearchResults.value = [];
+        quickSearchState.value = 'error';
     }
 };
 
 let quickSearchTimer;
 const searchProductsForModal = () => {
     clearTimeout(quickSearchTimer);
-    if (quickSearch.value.length < 2) {
+    if (quickSearch.value.trim().length < 2) {
+        quickSearchController?.abort();
+        quickSearchRequest++;
         quickSearchResults.value = [];
+        quickSearchState.value = 'initial';
         return;
     }
     quickSearchTimer = setTimeout(fetchSearchResults, 300);
 };
 
-const selectQuickProduct = (product) => {
+const resetQuickFields = (item) => {
+    item.qty_add = '';
+    item.new_price = '';
+    item.new_purchase_price = '';
+};
+
+const selectQuickProduct = (product, variant = null) => {
     selectedQuickProduct.value = JSON.parse(JSON.stringify(product)); // Copia profunda para editar
-    
-    // CORRECCIÓN: Asegurar que quantity esté correctamente establecido para productos simples
-    // Si es producto simple (sin variantes reales), usar calculateMainStock para obtener el stock correcto
-    const hasRealVariants = selectedQuickProduct.value.variants && 
-                           selectedQuickProduct.value.variants.length > 0 && 
-                           selectedQuickProduct.value.variant_options && 
-                           selectedQuickProduct.value.variant_options.length > 0;
-    
+    selectedQuickVariant.value = null;
+    quickErrors.value = {};
+    const hasRealVariants = hasVariants(selectedQuickProduct.value);
+
     if (!hasRealVariants) {
-        // Para productos simples, asegurar que quantity tenga el valor correcto
         selectedQuickProduct.value.quantity = calculateMainStock(selectedQuickProduct.value);
-    }
-    
-    // Inicializar campos de edición
-    if (hasRealVariants) {
-        selectedQuickProduct.value.variants.forEach(v => {
-            v.qty_add = '';
-            v.new_price = v.price;
-            v.new_purchase_price = v.purchase_price;
-        });
+        resetQuickFields(selectedQuickProduct.value);
     } else {
-        selectedQuickProduct.value.qty_add = '';
-        selectedQuickProduct.value.new_price = selectedQuickProduct.value.price;
-        selectedQuickProduct.value.new_purchase_price = selectedQuickProduct.value.purchase_price;
+        selectedQuickProduct.value.variants.forEach(resetQuickFields);
+        if (variant) {
+            selectQuickVariant(selectedQuickProduct.value.variants.find((item) => item.id === variant.id));
+        }
     }
 };
+
+const selectQuickVariant = (variant) => {
+    selectedQuickVariant.value = variant || null;
+    quickErrors.value = {};
+};
+
+const editingQuickItem = computed(() => selectedQuickVariant.value || selectedQuickProduct.value);
+const editingCurrentStock = computed(() => selectedQuickVariant.value
+    ? Number(selectedQuickVariant.value.stock) || 0
+    : calculateMainStock(selectedQuickProduct.value || {}));
+const editingProjectedStock = computed(() => editingCurrentStock.value + (Number(editingQuickItem.value?.qty_add) || 0));
 
 const backToSearch = () => {
     selectedQuickProduct.value = null;
+    selectedQuickVariant.value = null;
+    quickErrors.value = {};
     nextTick(() => document.getElementById('quick-search-input')?.focus());
-    // Refrescar lista al volver, por si acaso
-    fetchSearchResults();
+    if (quickSearch.value.trim().length >= 2) fetchSearchResults();
 };
 
-const submitQuickUpdate = (id, type, qtyAdd, purchasePrice, price) => {
+const optionalNumber = (value) => value === '' || value === null || value === undefined ? undefined : Number(value);
+
+const submitQuickUpdate = (item, type) => {
     if (quickProcessing.value) return;
-    const qty = Number(qtyAdd) || 0;
-    
-    // Validar al menos un cambio
-    if (!qtyAdd && purchasePrice === undefined && price === undefined) return;
+    const payload = { id: item.id, type };
+    const quantity = optionalNumber(item.qty_add);
+    const purchasePrice = optionalNumber(item.new_purchase_price);
+    const price = optionalNumber(item.new_price);
+    if (quantity !== undefined) payload.quantity_add = quantity;
+    if (purchasePrice !== undefined) payload.purchase_price = purchasePrice;
+    if (price !== undefined) payload.price = price;
+
+    quickErrors.value = {};
+    if (quantity === undefined && purchasePrice === undefined && price === undefined) {
+        quickErrors.value = { quantity_add: 'Ingresa unidades o modifica al menos un precio.' };
+        return;
+    }
 
     quickProcessing.value = true;
-    router.post(route('admin.inventory.quick-update'), {
-        id,
-        type,
-        quantity_add: qty,
-        purchase_price: purchasePrice,
-        price: price
-    }, {
+    router.post(route('admin.inventory.quick-update'), payload, {
         preserveScroll: true,
-        preserveState: false, // FORCE REFRESH: Ensure props are reloaded to show actual server data
-        onSuccess: async () => {
-             // 1. Mostrar Feedback
-             showAlert('success', 'Éxito', 'Inventario actualizado correctamente.');
-             
-             // 2. Refresh inmediato de la lista de búsqueda (Backend Source of Truth)
-             // Esto asegura que el "Total Stock" calculado sea el real de base de datos
-             await fetchSearchResults();
-
-             // 3. Actualizar modelo visual actual (Formulario) con datos frescos del servidor
-            if (type === 'product' && selectedQuickProduct.value && selectedQuickProduct.value.id === id) {
-                 // Buscar el producto actualizado en los resultados de búsqueda
-                 const updatedProduct = quickSearchResults.value.find(p => p.id === id);
-                 if (updatedProduct) {
-                     // Actualizar el producto seleccionado con los datos frescos
-                     selectedQuickProduct.value.quantity = calculateMainStock(updatedProduct);
-                     selectedQuickProduct.value.purchase_price = updatedProduct.purchase_price;
-                     selectedQuickProduct.value.price = updatedProduct.price;
-                 } else {
-                     // Fallback: actualizar manualmente si no se encuentra en los resultados
-                     if (qty > 0) {
-                         selectedQuickProduct.value.quantity = (Number(selectedQuickProduct.value.quantity) || 0) + qty;
-                     }
-                     if (purchasePrice !== undefined) selectedQuickProduct.value.purchase_price = purchasePrice;
-                     if (price !== undefined) selectedQuickProduct.value.price = price;
-                 }
-                 selectedQuickProduct.value.qty_add = '';
-
-            } else if (type === 'variant' && selectedQuickProduct.value) {
-                // Buscar el producto actualizado en los resultados de búsqueda
-                const updatedProduct = quickSearchResults.value.find(p => p.id === selectedQuickProduct.value.id);
-                if (updatedProduct && updatedProduct.variants) {
-                    const updatedVariant = updatedProduct.variants.find(v => v.id === id);
-                    if (updatedVariant) {
-                        const v = selectedQuickProduct.value.variants.find(v => v.id === id);
-                        if (v) {
-                            v.stock = Number(updatedVariant.stock) || 0;
-                            v.purchase_price = updatedVariant.purchase_price;
-                            v.price = updatedVariant.price;
-                        }
-                    }
-                } else {
-                    // Fallback: actualizar manualmente si no se encuentra en los resultados
-                    const v = selectedQuickProduct.value.variants.find(v => v.id === id);
-                    if (v) {
-                        if (qty > 0) {
-                            v.stock = (Number(v.stock) || 0) + qty;
-                        }
-                        if (purchasePrice !== undefined) v.purchase_price = purchasePrice;
-                        if (price !== undefined) v.price = price;
-                    }
-                }
-                const v = selectedQuickProduct.value.variants.find(v => v.id === id);
-                if (v) v.qty_add = '';
+        preserveState: true,
+        onSuccess: () => {
+            if (quantity !== undefined) {
+                if (type === 'variant') item.stock = editingProjectedStock.value;
+                else item.quantity = editingProjectedStock.value;
             }
-            
-
-
-            quickProcessing.value = false;
+            if (purchasePrice !== undefined) item.purchase_price = purchasePrice;
+            if (price !== undefined) item.price = price;
+            resetQuickFields(item);
+            showAlert('success', 'Entrada registrada', 'El inventario se actualizó correctamente.');
         },
-        onError: () => {
-            quickProcessing.value = false;
-            showAlert('error', 'Error', 'No se pudo actualizar el inventario.');
-        }
+        onError: (errors) => { quickErrors.value = errors; },
+        onFinish: () => { quickProcessing.value = false; },
     });
 };
 
@@ -402,6 +355,8 @@ onMounted(() => {
     window.addEventListener('resize', updateFades);
 });
 onBeforeUnmount(() => {
+    clearTimeout(quickSearchTimer);
+    quickSearchController?.abort();
     scrollBoxRef.value?.removeEventListener('scroll', updateFades);
     window.removeEventListener('resize', updateFades);
 });
@@ -428,7 +383,7 @@ const stopResize = () => {
     document.removeEventListener('mouseup', stopResize);
     document.removeEventListener('touchmove', onResizeMove);
     document.removeEventListener('touchend', stopResize);
-    try { localStorage.setItem(INV_COL_KEY, String(firstColWidth.value)); } catch (_) {}
+    try { localStorage.setItem(INV_COL_KEY, String(firstColWidth.value)); } catch (_) { /* Storage may be unavailable in private mode. */ }
 };
 const startResize = (e) => {
     startX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -446,7 +401,7 @@ const startResize = (e) => {
     <AuthenticatedLayout>
         <AdminPage wide>
             <PageHeader eyebrow="Operacion" title="Inventario" description="Detecta faltantes, consulta costos y registra entradas sin salir de esta pantalla.">
-                <template #actions><a :href="route('admin.inventory.export')" class="ui-secondary-button">Exportar Excel</a><button type="button" class="ui-primary-button" @click="openQuickEntry">+ Registrar entrada</button></template>
+                <template #actions><a :href="route('admin.inventory.export')" class="ui-secondary-button">Exportar Excel</a><button v-if="canEditInventory" dusk="inventory-entry" type="button" class="ui-primary-button" @click="openQuickEntry()">+ Registrar entrada</button></template>
             </PageHeader>
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 text-gray-900">
@@ -472,7 +427,7 @@ const startResize = (e) => {
                             <article v-for="product in products.data" :key="product.id" class="rounded-xl border border-slate-200 p-4">
                                 <div class="flex items-start justify-between gap-3"><div class="min-w-0"><h2 class="truncate font-bold text-slate-900">{{ product.name }}</h2><p class="mt-1 text-xs text-slate-500">{{ hasVariants(product) ? `${product.variants.length} variantes` : 'Producto simple' }}</p></div><span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="getStockStatus({ stock: calculateMainStock(product), alert: product.alert || 0 }).class">{{ getStockStatus({ stock: calculateMainStock(product), alert: product.alert || 0 }).text }}</span></div>
                                 <dl class="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-sm"><div><dt class="text-xs text-slate-500">Stock</dt><dd class="mt-1 font-extrabold">{{ calculateMainStock(product) }}</dd></div><div><dt class="text-xs text-slate-500">Compra</dt><dd class="mt-1 font-bold">{{ calculateMainPurchaseValue(product) }}</dd></div><div><dt class="text-xs text-slate-500">Venta</dt><dd class="mt-1 font-bold">{{ hasVariants(product) ? 'Variable' : fmt(product.price) }}</dd></div></dl>
-                                <div class="mt-3 flex items-center justify-between gap-3"><button v-if="hasVariants(product)" type="button" class="text-sm font-bold text-indigo-700" @click="toggleExpand(product.id)">{{ isExpanded(product.id) ? 'Ocultar variantes' : 'Ver variantes' }}</button><span v-else></span><button type="button" class="ui-secondary-button" @click="openQuickEntry(product)">Actualizar inventario</button></div>
+                                <div class="mt-3 flex items-center justify-between gap-3"><button v-if="hasVariants(product)" type="button" class="text-sm font-bold text-indigo-700" @click="toggleExpand(product.id)">{{ isExpanded(product.id) ? 'Ocultar variantes' : 'Ver variantes' }}</button><span v-else></span><button v-if="canEditInventory" type="button" class="ui-secondary-button" @click="openQuickEntry(product)">Registrar entrada</button></div>
                                 <div v-if="isExpanded(product.id) && hasVariants(product)" class="mt-3 space-y-2 border-l-2 border-indigo-100 pl-3"><div v-for="variant in filteredVariants(product.variants)" :key="variant.id" class="rounded-lg bg-slate-50 p-3 text-sm"><p class="font-semibold text-slate-800">{{ formatVariantName(variant) }}</p><p class="mt-1 text-slate-500">Stock {{ Number(variant.stock) || 0 }} · Venta {{ fmt(effRetail(product, variant)) }}</p></div></div>
                             </article>
                             <div v-if="!products.data.length" class="rounded-xl border-2 border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">No hay productos para mostrar.</div>
@@ -501,7 +456,7 @@ const startResize = (e) => {
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <template v-for="(product, idx) in products.data" :key="product.id">
+                                    <template v-for="product in products.data" :key="product.id">
                                         <tr v-if="matchesProductStatus(product)" class="odd:bg-white even:bg-gray-100 group">
                                             <!-- Columna Producto con Chevron -->
                                             <td class="sticky left-0 z-10 px-3 py-3 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r bg-[inherit]" :style="firstColStyle">
@@ -554,7 +509,7 @@ const startResize = (e) => {
                                                     {{ getStockStatus({ stock: calculateMainStock(product), alert: product.alert || 0 }).text }}
                                                 </span>
                                             </td>
-                                            <td class="px-3 py-3 text-right sm:px-6 sm:py-4"><button type="button" class="ui-secondary-button" @click="openQuickEntry(product)">Actualizar</button></td>
+                                             <td class="px-3 py-3 text-right sm:px-6 sm:py-4"><button v-if="canEditInventory" type="button" class="ui-secondary-button" @click="openQuickEntry(product)">Registrar entrada</button></td>
                                         </tr>
 
                                         <!-- Filas de Variantes (Expandible) -->
@@ -595,7 +550,7 @@ const startResize = (e) => {
                                                         {{ getStockStatus({ stock: variant.stock, alert: variant.alert || 0 }).text }}
                                                     </span>
                                                 </td>
-                                                <td class="px-3 py-2 sm:px-6 sm:py-3"></td>
+                                                 <td class="px-3 py-2 text-right sm:px-6 sm:py-3"><button v-if="canEditInventory" type="button" class="text-xs font-bold text-indigo-700 hover:text-indigo-900" @click="openQuickEntry(product, variant)">Registrar</button></td>
                                             </tr>
                                         </template>
                                     </template>
@@ -618,129 +573,76 @@ const startResize = (e) => {
     
     <!-- MODAL DE ENTRADA RÁPIDA -->
     <Modal :show="showQuickEntry" @close="closeQuickEntry">
-        <div class="p-6">
-            <h2 class="text-xl font-bold text-slate-900">
-                <span v-if="!selectedQuickProduct">Registrar entrada de inventario</span>
-                <span v-else>
-                    Actualizar {{ selectedQuickProduct.name }}
-                </span>
-            </h2>
-            <p class="mb-5 mt-1 text-sm text-slate-500">{{ selectedQuickProduct ? 'Suma las unidades recibidas y ajusta precios solo si cambiaron.' : 'Busca por nombre o escanea el codigo del producto que recibiste.' }}</p>
+        <div class="p-5 sm:p-6">
+            <h2 class="text-xl font-bold text-slate-900">Registrar entrada de inventario</h2>
+            <p class="mt-1 text-sm text-slate-500">{{ selectedQuickProduct ? 'Confirma el artículo recibido antes de guardar.' : 'Busca por nombre, código de barras, SKU u opción.' }}</p>
 
-            <!-- BUSCADOR -->
-            <div v-if="!selectedQuickProduct">
-                <input 
-                    id="quick-search-input"
-                    type="text" 
-                    v-model="quickSearch" 
-                    @input="searchProductsForModal"
-                    placeholder="Escribe el nombre o escanea código..."
-                    class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                >
-                <div class="mt-4 max-h-60 overflow-y-auto border rounded-md" v-if="quickSearchResults.length > 0">
-                    <div v-for="p in quickSearchResults" :key="p.id" 
-                         @click="selectQuickProduct(p)"
-                         class="p-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0 flex justify-between items-center group">
-                         <div>
-                            <div class="font-medium">{{ p.name }}</div>
-                            <div class="text-xs text-gray-500">
-                                Stock Total: {{ calculateMainStock(p) }}
-                            </div>
-                         </div>
-                         <div class="text-indigo-600 opacity-0 group-hover:opacity-100 font-bold text-sm">SELECCIONAR</div>
-                    </div>
+            <div v-if="!selectedQuickProduct" class="mt-5">
+                <label for="quick-search-input" class="ui-label">Producto recibido</label>
+                <div class="relative">
+                    <input id="quick-search-input" v-model="quickSearch" type="search" autocomplete="off" class="ui-input pr-10" placeholder="Nombre, barcode, SKU, color, talla..." @input="searchProductsForModal">
+                    <svg v-if="quickSearchState === 'loading'" class="absolute right-3 top-3 h-5 w-5 animate-spin text-indigo-600" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
                 </div>
-                <div v-else-if="quickSearch.length > 2" class="mt-4 text-gray-500 text-center text-sm">
-                    No se encontraron productos.
+
+                <div class="mt-4" aria-live="polite">
+                    <div v-if="quickSearchState === 'initial'" class="rounded-xl border-2 border-dashed border-slate-200 px-5 py-8 text-center text-sm text-slate-500">Escribe al menos 2 caracteres o escanea un código para comenzar.</div>
+                    <div v-else-if="quickSearchState === 'loading'" class="space-y-2" aria-label="Buscando productos"><div v-for="item in 3" :key="item" class="h-20 animate-pulse rounded-xl bg-slate-100"></div></div>
+                    <div v-else-if="quickSearchState === 'empty'" class="rounded-xl bg-slate-50 px-5 py-8 text-center"><p class="font-semibold text-slate-700">No encontramos coincidencias</p><p class="mt-1 text-sm text-slate-500">Revisa el código o intenta con otro nombre u opción.</p></div>
+                    <div v-else-if="quickSearchState === 'error'" class="rounded-xl border border-red-200 bg-red-50 px-5 py-5 text-center"><p class="font-semibold text-red-800">No pudimos completar la búsqueda.</p><button type="button" class="mt-2 text-sm font-bold text-red-700 underline" @click="fetchSearchResults">Intentar de nuevo</button></div>
+                    <div v-else class="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+                        <button v-for="product in quickSearchResults" :key="product.id" type="button" class="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left transition hover:border-indigo-300 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500" @click="selectQuickProduct(product)">
+                            <img :src="product.thumbnail" alt="" class="h-14 w-14 shrink-0 rounded-lg bg-slate-100 object-cover">
+                            <span class="min-w-0 flex-1"><span class="block truncate font-bold text-slate-900">{{ product.name }}</span><span class="mt-1 block text-xs text-slate-500">{{ product.barcode ? `Código ${product.barcode}` : 'Sin código' }} · Stock {{ calculateMainStock(product) }}</span><span v-if="hasVariants(product)" class="mt-1 block truncate text-xs font-medium text-indigo-700">{{ product.variants.length }} variantes · {{ product.variants.map(formatVariantName).join(' · ') }}</span><span v-else class="mt-1 block text-xs text-slate-500">Producto simple</span></span>
+                            <span class="hidden text-xs font-bold text-indigo-700 sm:block">Elegir</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <!-- FORMULARIO DE EDICIÓN RÁPIDA -->
-            <div v-else class="max-h-[60vh] overflow-y-auto pr-2">
-                
-                <!-- CASO: PRODUCTO SIMPLE -->
-                <div v-if="!hasVariants(selectedQuickProduct)">
-                    <div class="grid gap-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-gray-500 text-xs">Stock Actual</label>
-                                <div class="font-bold text-lg">{{ calculateMainStock(selectedQuickProduct) }}</div>
-                            </div>
-                            <div>
-                                <label class="ui-label">Unidades recibidas</label>
-                                <input type="number" min="0" v-model="selectedQuickProduct.qty_add" class="w-full border-gray-300 rounded-md shadow-sm h-8">
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="ui-label">Nuevo costo unitario</label>
-                                <input type="number" min="0" v-model="selectedQuickProduct.new_purchase_price" class="w-full border-gray-300 rounded-md shadow-sm h-8" :placeholder="selectedQuickProduct.purchase_price">
-                            </div>
-                            <div>
-                                <label class="ui-label">Nuevo precio de venta</label>
-                                <input type="number" min="0" v-model="selectedQuickProduct.new_price" class="w-full border-gray-300 rounded-md shadow-sm h-8" :placeholder="selectedQuickProduct.price">
-                            </div>
-                        </div>
-                        <div class="flex justify-end mt-2">
-                            <button 
-                                @click="submitQuickUpdate(selectedQuickProduct.id, 'product', selectedQuickProduct.qty_add, selectedQuickProduct.new_purchase_price, selectedQuickProduct.new_price)"
-                                :disabled="quickProcessing"
-                                class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition disabled:opacity-50">
-                                 Guardar actualizacion
-                            </button>
-                        </div>
+            <div v-else class="mt-5 max-h-[65vh] overflow-y-auto pr-1">
+                <section class="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <img :src="selectedQuickProduct.thumbnail" alt="" class="h-16 w-16 shrink-0 rounded-lg bg-white object-cover">
+                    <div class="min-w-0"><p class="truncate font-bold text-slate-900">{{ selectedQuickProduct.name }}</p><p class="mt-1 text-xs text-slate-500">{{ selectedQuickProduct.barcode ? `Código ${selectedQuickProduct.barcode}` : 'Sin código de barras' }}</p><p class="mt-1 text-xs font-semibold text-slate-700">Stock total: {{ calculateMainStock(selectedQuickProduct) }} · {{ hasVariants(selectedQuickProduct) ? `${selectedQuickProduct.variants.length} variantes` : 'Producto simple' }}</p></div>
+                </section>
+
+                <div v-if="hasVariants(selectedQuickProduct) && !selectedQuickVariant" class="mt-5">
+                    <h3 class="font-bold text-slate-900">¿Qué variante recibiste?</h3>
+                    <p class="mt-1 text-sm text-slate-500">Selecciona una combinación exacta para evitar mover stock incorrecto.</p>
+                    <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                        <button v-for="variant in selectedQuickProduct.variants" :key="variant.id" type="button" class="rounded-xl border border-slate-200 p-3 text-left hover:border-indigo-400 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500" @click="selectQuickVariant(variant)">
+                            <span class="block font-bold text-slate-800">{{ formatVariantOptions(variant.options || {}) || 'Variante' }}</span><span class="mt-1 block text-xs text-slate-500">{{ variant.sku ? `SKU ${variant.sku}` : 'Sin SKU' }} · Stock {{ Number(variant.stock) || 0 }}</span>
+                        </button>
                     </div>
                 </div>
 
-                <!-- CASO: VARIANTES -->
-                <template v-else>
-                    <div v-for="variant in selectedQuickProduct.variants" :key="variant.id" class="mb-4 bg-white border rounded-md p-3 shadow-sm">
-                        <div class="font-bold text-gray-800 border-b pb-2 mb-2 bg-gray-50 -mx-3 -mt-3 px-3 pt-2 text-sm">
-                            {{ formatVariantName(variant) }} 
-                            <span v-if="variant.sku" class="text-gray-400 font-normal text-xs">({{ variant.sku }})</span>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
-                            <div class="md:col-span-1">
-                                <label class="block text-gray-400 text-[10px] uppercase">Actual</label>
-                                <div class="font-bold">{{ variant.stock }}</div>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-gray-700 text-xs font-bold mb-1">Sumar (+)</label>
-                                <input type="number" min="0" v-model="variant.qty_add" class="w-full border-gray-300 rounded shadow-sm text-sm py-1 px-2">
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-gray-500 text-[10px] uppercase">$ Compra</label>
-                                <input type="number" min="0" v-model="variant.new_purchase_price" 
-                                       class="w-full border-gray-300 rounded shadow-sm text-sm py-1 px-2" 
-                                       placeholder="Heredado"
-                                       :title="'Heredado: ' + (selectedQuickProduct.purchase_price || 0)">
-                            </div>
-                            <div class="md:col-span-2 flex gap-2">
-                                <div class="flex-1">
-                                    <label class="block text-gray-500 text-[10px] uppercase">$ Venta</label>
-                                    <input type="number" min="0" v-model="variant.new_price" 
-                                           class="w-full border-gray-300 rounded shadow-sm text-sm py-1 px-2"
-                                           placeholder="Heredado"
-                                           :title="'Heredado: ' + (selectedQuickProduct.price || 0)">
-                                </div>
-                                <button 
-                                    @click="submitQuickUpdate(variant.id, 'variant', variant.qty_add, variant.new_purchase_price, variant.new_price)"
-                                    :disabled="quickProcessing"
-                                    class="mb-[1px] p-2 bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 transition"
-                                    title="Guardar Variantes">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                                        <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
+                <form v-else class="mt-5" @submit.prevent="submitQuickUpdate(editingQuickItem, selectedQuickVariant ? 'variant' : 'product')">
+                    <div v-if="selectedQuickVariant" class="mb-4 flex items-center justify-between gap-3 rounded-lg bg-indigo-50 px-3 py-2"><div><p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Variante elegida</p><p class="font-bold text-indigo-950">{{ formatVariantOptions(selectedQuickVariant.options || {}) }}</p><p v-if="selectedQuickVariant.sku" class="text-xs text-indigo-700">SKU {{ selectedQuickVariant.sku }}</p></div><button type="button" class="text-sm font-bold text-indigo-700 underline" @click="selectQuickVariant(null)">Cambiar</button></div>
+
+                    <div class="grid grid-cols-2 gap-3 rounded-xl bg-slate-900 p-4 text-white">
+                        <div><p class="text-xs text-slate-300">Stock actual</p><p class="mt-1 text-2xl font-extrabold">{{ editingCurrentStock }}</p></div>
+                        <div><p class="text-xs text-slate-300">Quedará en</p><p class="mt-1 text-2xl font-extrabold text-emerald-300">{{ editingProjectedStock }}</p></div>
                     </div>
-                </template>
+
+                    <div class="mt-4">
+                        <label for="quick-quantity" class="ui-label">Unidades recibidas</label>
+                        <input id="quick-quantity" v-model="editingQuickItem.qty_add" type="number" min="1" step="1" inputmode="numeric" class="ui-input" :class="{ 'border-red-400': quickErrors.quantity_add }" placeholder="Ej. 12">
+                        <p v-if="quickErrors.quantity_add" class="mt-1 text-sm text-red-600">{{ quickErrors.quantity_add }}</p>
+                    </div>
+
+                    <details class="mt-4 rounded-xl border border-slate-200 p-3">
+                        <summary class="cursor-pointer text-sm font-bold text-slate-700">También cambiaron los precios</summary>
+                        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                            <div><label for="quick-cost" class="ui-label">Nuevo costo unitario</label><input id="quick-cost" v-model="editingQuickItem.new_purchase_price" type="number" min="0" step="0.01" class="ui-input" :placeholder="String(editingQuickItem.purchase_price ?? selectedQuickProduct.purchase_price ?? 0)"><p v-if="quickErrors.purchase_price" class="mt-1 text-sm text-red-600">{{ quickErrors.purchase_price }}</p></div>
+                            <div><label for="quick-price" class="ui-label">Nuevo precio de venta</label><input id="quick-price" v-model="editingQuickItem.new_price" type="number" min="0" step="0.01" class="ui-input" :placeholder="String(editingQuickItem.price ?? selectedQuickProduct.price ?? 0)"><p v-if="quickErrors.price" class="mt-1 text-sm text-red-600">{{ quickErrors.price }}</p></div>
+                        </div>
+                    </details>
+
+                    <button type="submit" :disabled="quickProcessing" class="ui-primary-button mt-5 w-full justify-center disabled:cursor-wait disabled:opacity-60">{{ quickProcessing ? 'Guardando...' : 'Registrar entrada' }}</button>
+                </form>
             </div>
-            
-            <div class="mt-6 flex justify-end">
-                <button v-if="selectedQuickProduct" type="button" class="ui-secondary-button mr-2" @click="backToSearch">Elegir otro producto</button>
+
+            <div class="mt-6 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+                <button v-if="selectedQuickProduct" type="button" class="ui-secondary-button" @click="backToSearch">Elegir otro producto</button>
                 <button type="button" class="ui-secondary-button" @click="closeQuickEntry">Cerrar</button>
             </div>
         </div>

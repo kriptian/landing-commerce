@@ -4,6 +4,7 @@ import { computed, ref, onMounted } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import AuthRequiredModal from '@/Components/Public/AuthRequiredModal.vue';
 import CookieConsent from '@/Components/CookieConsent.vue';
+import ColombiaLocationSelects from '@/Components/ColombiaLocationSelects.vue';
 
 const props = defineProps({
     cartItems: Array,
@@ -11,6 +12,7 @@ const props = defineProps({
     customer: Object,
     addresses: Array,
     idempotencyKey: String,
+    colombiaLocations: Object,
 });
 
 // Colores personalizados del catálogo
@@ -186,7 +188,6 @@ const removeCoupon = () => {
 // Dirección seleccionada
 const selectedAddressId = ref(null);
 const useCustomAddress = ref(false);
-const customAddress = ref('');
 
 // Prellenar datos si el cliente está logueado
 const customer = computed(() => props.customer || null);
@@ -204,6 +205,8 @@ const initializeForm = () => {
         if (defaultAddress) {
             selectedAddressId.value = defaultAddress.id;
             form.customer_address = defaultAddress.full_address || `${defaultAddress.address_line_1}, ${defaultAddress.city}`;
+            form.department_code = defaultAddress.department_code || '';
+            form.municipality_code = defaultAddress.municipality_code || '';
         }
     }
 };
@@ -219,9 +222,24 @@ const onAddressChange = (addressId) => {
         const address = addresses.value.find(addr => addr.id === addressId);
         if (address) {
             form.customer_address = address.full_address || `${address.address_line_1}, ${address.city}`;
+            form.department_code = address.department_code || '';
+            form.municipality_code = address.municipality_code || '';
             useCustomAddress.value = false;
         }
+    } else {
+        form.customer_address = '';
+        form.department_code = '';
+        form.municipality_code = '';
     }
+};
+
+const toggleCustomAddress = () => {
+    useCustomAddress.value = !useCustomAddress.value;
+    selectedAddressId.value = null;
+    form.address_id = null;
+    form.customer_address = '';
+    form.department_code = '';
+    form.municipality_code = '';
 };
 
 // Creamos el formulario
@@ -231,6 +249,8 @@ const form = useForm({
     customer_email: '',
     customer_address: '',
     address_id: null,
+    department_code: '',
+    municipality_code: '',
     coupon_code: null,
     idempotency_key: props.idempotencyKey,
 });
@@ -241,7 +261,7 @@ const errorMessage = ref('');
 
 const submitOrder = () => {
     // Agregar datos adicionales al formulario
-    form.address_id = selectedAddressId.value;
+    form.address_id = useCustomAddress.value ? null : selectedAddressId.value;
     form.coupon_code = coupon.value ? couponCode.value : null;
     
     // Usamos el 'post' de Inertia para enviar los datos del 'form'
@@ -252,7 +272,7 @@ const submitOrder = () => {
             // y el carrito ya se vació. ¡No hay que hacer nada más aquí!
             // Podríamos mostrar un mensaje de "Redirigiendo a WhatsApp..." si quisiéramos.
         },
-        onError: (errors) => {
+        onError: () => {
             errorMessage.value = 'Hubo un error al procesar tu pedido. Por favor verificá tus datos.';
             showError.value = true;
         },
@@ -320,16 +340,26 @@ const submitOrder = () => {
                         </select>
                         <button 
                             type="button" 
-                            @click="useCustomAddress = !useCustomAddress"
+                            @click="toggleCustomAddress"
                             class="text-sm text-blue-600 hover:text-blue-700 font-medium"
                         >
                             {{ useCustomAddress ? 'Usar dirección guardada' : 'Usar dirección diferente' }}
                         </button>
                     </div>
 
+                    <ColombiaLocationSelects
+                        v-if="!selectedAddressId || useCustomAddress"
+                        v-model:department-code="form.department_code"
+                        v-model:municipality-code="form.municipality_code"
+                        :catalog="colombiaLocations"
+                        :errors="form.errors"
+                        input-class="block w-full rounded-xl border-gray-300 px-4 py-3 shadow-sm transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+                        :input-style="inputStyleObj"
+                    />
+
                     <div>
                         <label for="customer_address" class="block font-medium text-sm text-gray-700 mb-2">
-                            {{ customer && addresses.length > 0 && !useCustomAddress ? 'Dirección (seleccionada arriba)' : 'Dirección Completa (con ciudad y detalles)' }}
+                            {{ selectedAddressId && !useCustomAddress ? 'Dirección guardada' : 'Dirección y detalles de entrega' }}
                         </label>
                         <textarea 
                             id="customer_address" 
@@ -344,6 +374,8 @@ const submitOrder = () => {
                             rows="3" 
                             required
                         ></textarea>
+                        <p v-if="form.errors.customer_address" class="mt-1 text-sm text-red-600">{{ form.errors.customer_address }}</p>
+                        <p v-else-if="!selectedAddressId || useCustomAddress" class="mt-1 text-xs text-gray-500">Escribe calle, número, barrio, apartamento y referencias. El municipio y departamento se agregarán automáticamente.</p>
                     </div>
                     
                     <button dusk="submit-order" type="submit" :disabled="form.processing" class="w-full font-bold py-4 px-6 rounded-xl text-center disabled:opacity-50 transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl" :class="catalogUseDefault ? 'bg-green-600 text-white hover:bg-green-700' : ''" :style="!catalogUseDefault && buttonStyleObj ? buttonStyleObj : {}">

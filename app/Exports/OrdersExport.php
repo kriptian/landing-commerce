@@ -3,9 +3,9 @@
 namespace App\Exports;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
-use Illuminate\Support\Facades\Auth;
 
 class OrdersExport implements FromCollection, WithHeadings
 {
@@ -20,29 +20,29 @@ class OrdersExport implements FromCollection, WithHeadings
     public function collection(): Collection
     {
         $query = Auth::user()->store->orders()->with(['items', 'items.product', 'items.variant', 'coupon']);
-        if (!empty($this->filters['start_date']) && !empty($this->filters['end_date'])) {
+        if (! empty($this->filters['start_date']) && ! empty($this->filters['end_date'])) {
             $appTz = config('app.timezone', 'America/Bogota');
             $startLocal = \Carbon\Carbon::parse($this->filters['start_date'], $appTz)->startOfDay();
             $endLocal = \Carbon\Carbon::parse($this->filters['end_date'], $appTz)->endOfDay();
-            
+
             $startUtc = $startLocal->copy()->timezone('UTC');
             $endExclusiveUtc = $endLocal->copy()->addDay()->startOfDay()->timezone('UTC');
 
-             $query->where(function ($q) use ($startUtc, $endExclusiveUtc, $startLocal, $endLocal, $appTz) {
+            $query->where(function ($q) use ($startUtc, $endExclusiveUtc, $startLocal, $endLocal, $appTz) {
                 // Caso A: BD guarda en UTC (rango exclusivo del final)
                 $q->where(function ($qq) use ($startUtc, $endExclusiveUtc) {
                     $qq->where('created_at', '>=', $startUtc)
-                       ->where('created_at', '<', $endExclusiveUtc);
+                        ->where('created_at', '<', $endExclusiveUtc);
                 })
                 // Caso B: BD guarda en hora local
-                ->orWhereRaw('DATE(created_at) BETWEEN ? AND ?', [
-                    $startLocal->toDateString(), $endLocal->toDateString()
-                ])
+                    ->orWhereRaw('DATE(created_at) BETWEEN ? AND ?', [
+                        $startLocal->toDateString(), $endLocal->toDateString(),
+                    ])
                 // Caso C: MySQL con tablas TZ
-                ->orWhereRaw(
-                    "DATE(CONVERT_TZ(created_at, 'UTC', ?)) BETWEEN ? AND ?",
-                    [$appTz, $startLocal->toDateString(), $endLocal->toDateString()]
-                );
+                    ->orWhereRaw(
+                        "DATE(CONVERT_TZ(created_at, 'UTC', ?)) BETWEEN ? AND ?",
+                        [$appTz, $startLocal->toDateString(), $endLocal->toDateString()]
+                    );
             });
         }
         $orders = $query->orderByDesc('sequence_number')->orderByDesc('id')->get();
@@ -59,7 +59,7 @@ class OrdersExport implements FromCollection, WithHeadings
                 $options = $item->variant_options ?? optional($item->variant)->options;
                 $optionsText = '';
                 if (is_array($options) || $options instanceof \ArrayAccess) {
-                    $optionsText = collect($options)->map(fn($val, $key) => "$key: $val")->implode(', ');
+                    $optionsText = collect($options)->map(fn ($val, $key) => "$key: $val")->implode(', ');
                 }
 
                 $rows->push([
@@ -68,6 +68,10 @@ class OrdersExport implements FromCollection, WithHeadings
                     $order->customer_phone,
                     $order->customer_email,
                     $order->customer_address,
+                    $order->department_code,
+                    $order->department_name,
+                    $order->municipality_code,
+                    $order->municipality_name,
                     $order->created_at->timezone(config('app.timezone', 'UTC'))->format('Y-m-d H:i'),
                     $order->status,
 
@@ -83,13 +87,14 @@ class OrdersExport implements FromCollection, WithHeadings
                 ]);
             }
         }
+
         // Si no hay ítems (p.ej., una sola orden sin ítems o filtro vacío), devolvemos una fila vacía
-        return $rows->isEmpty() ? collect([[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null]]) : $rows;
+        return $rows->isEmpty() ? collect([array_fill(0, 20, null)]) : $rows;
     }
 
     /**
-    * Define los encabezados de las columnas en el Excel
-    */
+     * Define los encabezados de las columnas en el Excel
+     */
     public function headings(): array
     {
         return [
@@ -98,6 +103,10 @@ class OrdersExport implements FromCollection, WithHeadings
             'Teléfono',
             'Email',
             'Dirección',
+            'Código Departamento',
+            'Departamento',
+            'Código Municipio',
+            'Municipio',
             'Fecha',
             'Estado',
             'Subtotal',
@@ -113,8 +122,8 @@ class OrdersExport implements FromCollection, WithHeadings
     }
 
     /**
-    * Mapea los datos de cada orden a las columnas del Excel
-    */
+     * Mapea los datos de cada orden a las columnas del Excel
+     */
     public function map($order): array
     {
         // Not used with FromCollection

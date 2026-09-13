@@ -1,53 +1,11 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed } from 'vue';
-import Pagination from '@/Components/Pagination.vue';
 
 const props = defineProps({
     store: Object,
     customer: Object,
     orders: Object,
 });
-
-// Estados del pedido con iconos y colores
-const orderStatuses = {
-    'recibido': {
-        label: 'Recibido por la tienda',
-        icon: 'check',
-        color: 'blue',
-        step: 1,
-    },
-    'en_proceso': {
-        label: 'En preparación',
-        icon: 'package',
-        color: 'yellow',
-        step: 2,
-    },
-    'despachado': {
-        label: 'Despachado',
-        icon: 'truck',
-        color: 'purple',
-        step: 3,
-    },
-    'en_camino': {
-        label: 'En camino',
-        icon: 'delivery',
-        color: 'orange',
-        step: 4,
-    },
-    'entregado': {
-        label: 'Entregado',
-        icon: 'check-circle',
-        color: 'green',
-        step: 5,
-    },
-    'cancelado': {
-        label: 'Cancelado',
-        icon: 'x-circle',
-        color: 'red',
-        step: 0,
-    },
-};
 
 const formatDate = (date) => {
     return new Date(date).toLocaleDateString('es-CO', {
@@ -68,16 +26,15 @@ const formatPrice = (price) => {
     }).format(price);
 };
 
-const getStatusInfo = (status) => {
-    return orderStatuses[status] || orderStatuses['recibido'];
-};
-
 const contactSeller = (order) => {
     if (!props.store?.phone) return;
     const phone = props.store.phone.replace(/[^0-9]/g, '');
     const message = encodeURIComponent(`Hola, tengo una consulta sobre mi pedido #${order.sequence_number}`);
     window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
 };
+
+const orderAddress = (order) => order.customer_address
+    || (order.address ? [order.address.address_line_1, order.address.address_line_2, order.address.municipality_name || order.address.city, order.address.department_name || order.address.state].filter(Boolean).join(', ') : '');
 </script>
 
 <template>
@@ -267,13 +224,11 @@ const contactSeller = (order) => {
                         </div>
 
                         <!-- Dirección de envío -->
-                        <div v-if="order.address" class="px-6 py-4 border-t border-gray-200">
-                            <h4 class="font-semibold text-gray-900 mb-2">Dirección de Envío</h4>
-                            <p class="text-sm text-gray-600">
-                                {{ order.address.address_line_1 }}{{ order.address.address_line_2 ? ', ' + order.address.address_line_2 : '' }}, 
-                                {{ order.address.city }}{{ order.address.state ? ', ' + order.address.state : '' }}
-                            </p>
-                        </div>
+                        <div v-if="orderAddress(order)" class="px-6 py-4 border-t border-gray-200">
+                             <h4 class="font-semibold text-gray-900 mb-2">Dirección de Envío</h4>
+                             <p class="text-sm text-gray-600">{{ orderAddress(order) }}</p>
+                             <p v-if="order.municipality_code" class="mt-1 text-xs text-gray-500">DIVIPOLA {{ order.municipality_code }} · {{ order.municipality_name }}, {{ order.department_name }}</p>
+                         </div>
                     </div>
                 </div>
 
@@ -294,18 +249,16 @@ const contactSeller = (order) => {
                             v-for="link in orders.links" 
                             :key="link.label"
                             :href="link.url || '#'"
-                            v-html="link.label"
                             class="px-3 py-2 rounded-md text-sm"
                             :class="{
                                 'bg-blue-600 text-white': link.active,
                                 'bg-gray-100 text-gray-700 hover:bg-gray-200': !link.active && link.url,
                                 'bg-gray-50 text-gray-400 cursor-not-allowed': !link.url,
                             }"
-                        />
+                        ><span v-html="link.label"></span></Link>
                     </nav>
                 </div>
             </div>
         </main>
     </div>
 </template>
-

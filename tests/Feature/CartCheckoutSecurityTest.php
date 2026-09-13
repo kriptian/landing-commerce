@@ -121,6 +121,8 @@ test('empty synthetic variants do not block simple product purchases', function 
         'customer_phone' => '3001234567',
         'customer_email' => 'simple@example.com',
         'customer_address' => 'Main Street 1',
+        'department_code' => '11',
+        'municipality_code' => '11001',
         'idempotency_key' => (string) Str::uuid(),
     ])->assertRedirect();
 
@@ -194,6 +196,8 @@ test('checkout validates whatsapp before creating an order and preserves the ses
             'customer_phone' => '3001234567',
             'customer_email' => 'secure@example.com',
             'customer_address' => 'Main Street 1',
+            'department_code' => '11',
+            'municipality_code' => '11001',
             'idempotency_key' => (string) Str::uuid(),
         ])
         ->assertSessionHasErrors('phone');
@@ -259,6 +263,8 @@ test('checkout replays a guest order once and preserves carts from other stores'
         'customer_phone' => '3001234567',
         'customer_email' => 'guest@example.com',
         'customer_address' => 'Main Street 1',
+        'department_code' => '11',
+        'municipality_code' => '11001',
         'idempotency_key' => $idempotencyKey,
     ];
 
@@ -319,6 +325,8 @@ test('checkout idempotency consumes a customer coupon only once', function () {
         'customer_phone' => $customer->phone,
         'customer_email' => $customer->email,
         'customer_address' => 'Main Street 1',
+        'department_code' => '11',
+        'municipality_code' => '11001',
         'coupon_code' => $coupon->code,
         'idempotency_key' => (string) Str::uuid(),
     ];
@@ -362,8 +370,118 @@ test('checkout requires a valid idempotency key', function () {
         'customer_phone' => '3001234567',
         'customer_email' => 'guest@example.com',
         'customer_address' => 'Main Street 1',
+        'department_code' => '11',
+        'municipality_code' => '11001',
         'idempotency_key' => 'not-a-uuid',
     ])->assertSessionHasErrors('idempotency_key');
 
     $this->assertDatabaseCount('orders', 0);
+});
+
+test('checkout rejects a municipality from another department', function () {
+    $owner = User::factory()->create();
+    $store = cartCheckoutSecurityStore($owner, 'Invalid Divipola Store');
+    $product = cartCheckoutSecurityProduct($store, 'Simple');
+
+    $this->withSession(['guest_cart' => [
+        'simple' => [
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'quantity' => 1,
+            'store_id' => $store->id,
+        ],
+    ]])->post(route('checkout.store', $store), [
+        'customer_name' => 'Guest Customer',
+        'customer_phone' => '3001234567',
+        'customer_email' => 'guest@example.com',
+        'customer_address' => 'Calle 1 # 2-3',
+        'department_code' => '05',
+        'municipality_code' => '11001',
+        'idempotency_key' => (string) Str::uuid(),
+    ])->assertSessionHasErrors('municipality_code');
+
+    $this->assertDatabaseCount('orders', 0);
+});
+
+test('checkout resolves divipola names and snapshots a new address', function () {
+    $owner = User::factory()->create();
+    $store = cartCheckoutSecurityStore($owner, 'Divipola Snapshot Store');
+    $product = cartCheckoutSecurityProduct($store, 'Simple');
+
+    $this->withSession(['guest_cart' => [
+        'simple' => [
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'quantity' => 1,
+            'store_id' => $store->id,
+        ],
+    ]])->post(route('checkout.store', $store), [
+        'customer_name' => 'Guest Customer',
+        'customer_phone' => '3001234567',
+        'customer_email' => 'guest@example.com',
+        'customer_address' => 'Calle 1 # 2-3',
+        'department_code' => '11',
+        'municipality_code' => '11001',
+        'department_name' => 'Nombre manipulado',
+        'municipality_name' => 'Nombre manipulado',
+        'idempotency_key' => (string) Str::uuid(),
+    ])->assertRedirect();
+
+    $this->assertDatabaseHas('orders', [
+        'store_id' => $store->id,
+        'address_id' => null,
+        'department_code' => '11',
+        'department_name' => 'BOGOTÁ, D.C.',
+        'municipality_code' => '11001',
+        'municipality_name' => 'BOGOTÁ, D.C.',
+        'customer_address' => 'Calle 1 # 2-3, BOGOTÁ, D.C., BOGOTÁ, D.C., Colombia',
+    ]);
+});
+
+test('checkout uses the selected saved address instead of browser address fields', function () {
+    $owner = User::factory()->create();
+    $store = cartCheckoutSecurityStore($owner, 'Trusted Address Store');
+    $product = cartCheckoutSecurityProduct($store, 'Simple');
+    $customer = Customer::create([
+        'store_id' => $store->id,
+        'name' => 'Saved Customer',
+        'email' => 'saved@example.com',
+        'password' => 'password',
+        'phone' => '3001234567',
+    ]);
+    $address = $customer->addresses()->create([
+        'label' => 'Casa',
+        'address_line_1' => 'Carrera 7 # 10-20',
+        'department_code' => '05',
+        'department_name' => 'ANTIOQUIA',
+        'municipality_code' => '05001',
+        'municipality_name' => 'MEDELLÍN',
+        'city' => 'MEDELLÍN',
+        'state' => 'ANTIOQUIA',
+    ]);
+
+    $this->actingAs($customer, 'customer')->withSession(['guest_cart' => [
+        'simple' => [
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'quantity' => 1,
+            'store_id' => $store->id,
+        ],
+    ]])->post(route('checkout.store', $store), [
+        'customer_name' => $customer->name,
+        'customer_phone' => $customer->phone,
+        'customer_email' => $customer->email,
+        'customer_address' => 'Dirección manipulada',
+        'address_id' => $address->id,
+        'department_code' => '11',
+        'municipality_code' => '11001',
+        'idempotency_key' => (string) Str::uuid(),
+    ])->assertRedirect();
+
+    $this->assertDatabaseHas('orders', [
+        'address_id' => $address->id,
+        'department_code' => '05',
+        'municipality_code' => '05001',
+        'customer_address' => 'Carrera 7 # 10-20, MEDELLÍN, ANTIOQUIA, Colombia',
+    ]);
 });

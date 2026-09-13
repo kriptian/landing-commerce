@@ -11,6 +11,23 @@ use PHPUnit\Framework\Attributes\BeforeClass;
 
 abstract class DuskTestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        if (! $this->app) {
+            $this->refreshApplication();
+        }
+
+        $database = $this->app->make('db')->connection()->getDatabaseName();
+
+        if (! $this->app->environment('testing') || $database !== 'testing') {
+            throw new \RuntimeException(
+                "Refusing to run Dusk outside the testing database. Environment: {$this->app->environment()}, database: {$database}."
+            );
+        }
+
+        parent::setUp();
+    }
+
     /**
      * Prepare for Dusk test execution.
      */

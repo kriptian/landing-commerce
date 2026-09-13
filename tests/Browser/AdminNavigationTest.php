@@ -11,12 +11,13 @@ test('admin navigation adapts between desktop sidebar and mobile drawer', functi
         'name' => 'Dusk Admin Store',
         'slug' => 'dusk-admin-store',
         'user_id' => $owner->id,
-        'plan' => 'emprendedor',
+        'plan' => 'negociante',
     ]);
     $owner->update(['store_id' => $store->id]);
     $owner->givePermissionTo([
         Permission::findOrCreate('ver dashboard'),
         Permission::findOrCreate('ver inventario'),
+        Permission::findOrCreate('editar inventario'),
         Permission::findOrCreate('crear productos'),
         Permission::findOrCreate('gestionar categorias'),
     ]);
@@ -43,6 +44,13 @@ test('admin navigation adapts between desktop sidebar and mobile drawer', functi
         $browser
             ->waitUntilMissing('@admin-mobile-drawer')
             ->resize(1440, 900)
+            ->visitRoute('admin.inventory.index')
+            ->waitFor('@inventory-entry')
+            ->click('@inventory-entry')
+            ->waitFor('#quick-search-input')
+            ->assertFocused('#quick-search-input')
+            ->assertSee('Busca por nombre, código de barras, SKU u opción.')
+            ->assertDontSee('Confirma el artículo recibido antes de guardar.')
             ->visitRoute('admin.products.create')
             ->waitForText('Prepara tu producto para vender')
             ->assertSee('Revisa lo esencial')

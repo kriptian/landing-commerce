@@ -2,20 +2,20 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\OrdersExport;
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Carbon\Carbon;
-use App\Exports\OrdersExport;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Models\PhysicalSale;
 
 class ReportController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('can:ver reportes')->only(['index','export']);
+        $this->middleware('can:ver reportes')->only(['index', 'export']);
     }
+
     public function index(Request $request)
     {
         // Validamos que las fechas que nos lleguen sean correctas
@@ -30,10 +30,10 @@ class ReportController extends Controller
         // y luego convertimos a UTC para consultar la BD (created_at se guarda en UTC)
         $appTz = config('app.timezone', 'America/Bogota');
         $nowLocal = now($appTz);
-        $startLocal = !empty($validated['start_date'])
+        $startLocal = ! empty($validated['start_date'])
             ? Carbon::parse($validated['start_date'], $appTz)->startOfDay()
             : $nowLocal->copy()->subDays(29)->startOfDay();
-        $endLocal = !empty($validated['end_date'])
+        $endLocal = ! empty($validated['end_date'])
             ? Carbon::parse($validated['end_date'], $appTz)->endOfDay()
             : $nowLocal->copy()->endOfDay();
 
@@ -46,30 +46,30 @@ class ReportController extends Controller
                 // Caso A: BD guarda en UTC (rango exclusivo del final)
                 $q->where(function ($qq) use ($startUtc, $endExclusiveUtc) {
                     $qq->where('created_at', '>=', $startUtc)
-                       ->where('created_at', '<', $endExclusiveUtc);
+                        ->where('created_at', '<', $endExclusiveUtc);
                 })
                 // Caso B: BD guarda en hora local (comparación por DATE local)
-                ->orWhereRaw('DATE(created_at) BETWEEN ? AND ?', [
-                    $startLocal->toDateString(), $endLocal->toDateString()
-                ])
+                    ->orWhereRaw('DATE(created_at) BETWEEN ? AND ?', [
+                        $startLocal->toDateString(), $endLocal->toDateString(),
+                    ])
                 // Caso C: MySQL con tablas TZ (UTC -> TZ app)
-                ->orWhereRaw(
-                    "DATE(CONVERT_TZ(created_at, 'UTC', ?)) BETWEEN ? AND ?",
-                    [$appTz, $startLocal->toDateString(), $endLocal->toDateString()]
-                );
+                    ->orWhereRaw(
+                        "DATE(CONVERT_TZ(created_at, 'UTC', ?)) BETWEEN ? AND ?",
+                        [$appTz, $startLocal->toDateString(), $endLocal->toDateString()]
+                    );
             });
 
         // Calculamos las estadísticas SOBRE la consulta ya filtrada
         $totalSales = (clone $ordersQuery)->sum('total_price');
         $totalOrders = (clone $ordersQuery)->count();
-        
+
         // Traemos la lista de órdenes para la tabla
-        $orders = (clone $ordersQuery)->with(['items','items.product','items.variant'])->withCount('items')->orderByDesc('sequence_number')->orderByDesc('id')->paginate(15)->withQueryString();
+        $orders = (clone $ordersQuery)->with(['items', 'items.product', 'items.variant'])->withCount('items')->orderByDesc('sequence_number')->orderByDesc('id')->paginate(15)->withQueryString();
 
         // --- Datos del gráfico: agrupamos por día en zona horaria local ---
         $ordersForChart = (clone $ordersQuery)
             ->whereIn('status', ['entregado', 'cancelado'])
-            ->get(['id','status','created_at']);
+            ->get(['id', 'status', 'created_at']);
 
         $groupedByLocalDate = $ordersForChart->groupBy(function ($order) use ($appTz) {
             return Carbon::parse($order->created_at)->timezone($appTz)->toDateString();
@@ -87,32 +87,32 @@ class ReportController extends Controller
         // Obtener datos de ventas físicas
         $store = $request->user()->store;
         $physicalSalesQuery = $store->physicalSales()->with(['user', 'items.product', 'items.variant']);
-        
+
         // Búsqueda por número de venta o nombre de producto
-        if (!empty($validated['search'])) {
+        if (! empty($validated['search'])) {
             $search = $validated['search'];
             $physicalSalesQuery->where(function ($q) use ($search) {
                 $q->where('sale_number', 'like', "%{$search}%")
-                  ->orWhereHas('items', function ($itemQuery) use ($search) {
-                      $itemQuery->where('product_name', 'like', "%{$search}%")
-                                 ->orWhereHas('product', function ($productQuery) use ($search) {
-                                     $productQuery->where('name', 'like', "%{$search}%");
-                                 });
-                  });
+                    ->orWhereHas('items', function ($itemQuery) use ($search) {
+                        $itemQuery->where('product_name', 'like', "%{$search}%")
+                            ->orWhereHas('product', function ($productQuery) use ($search) {
+                                $productQuery->where('name', 'like', "%{$search}%");
+                            });
+                    });
             });
         }
-        
+
         // Aplicar filtros de fecha si existen
-        if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
+        if (! empty($validated['start_date']) && ! empty($validated['end_date'])) {
             $appTz = config('app.timezone', 'America/Bogota');
             $startLocal = Carbon::parse($validated['start_date'], $appTz)->startOfDay();
             $endLocal = Carbon::parse($validated['end_date'], $appTz)->endOfDay();
             $startUtc = $startLocal->copy()->timezone('UTC');
             $endExclusiveUtc = $endLocal->copy()->addDay()->startOfDay()->timezone('UTC');
-            
+
             $physicalSalesQuery->whereBetween('created_at', [$startUtc, $endExclusiveUtc]);
         }
-        
+
         // Preservar el parámetro 'type' en la paginación para ventas físicas
         // CRÍTICO: Siempre preservar 'type=physical' en los links de paginación de ventas físicas
         // Esto asegura que cuando el usuario hace clic en la paginación, se mantenga en la pestaña correcta
@@ -120,55 +120,11 @@ class ReportController extends Controller
         // SIEMPRE agregar 'type=physical' a los links de paginación de ventas físicas
         $queryParams['type'] = 'physical';
         $physicalSales = $physicalSalesQuery->latest()->paginate(20)->appends($queryParams);
-        
-        // Calcular estadísticas de ventas físicas
-        $physicalSalesStatsQuery = clone $physicalSalesQuery;
-        $physicalTotalSales = $physicalSalesStatsQuery->sum('total');
-        $physicalTotalCount = $physicalSalesStatsQuery->count();
 
-        // Calcular Ganancia Total (Total Profit)
-        // Nota: Se realiza en memoria porque el costo puede estar en variante o producto.
-        // Para rangos de fecha grandes podría ser pesado, pero asumimos rangos razonables.
-        $salesForProfit = (clone $physicalSalesQuery)->with(['items.product', 'items.variant'])->get();
-        $totalProfit = 0;
-        foreach ($salesForProfit as $sale) {
-            foreach ($sale->items as $item) {
-                $purchasePrice = 0;
-                
-                // 1. Prioridad: Costo guardado (Snapshot) en el momento de la venta
-                if (!is_null($item->purchase_price) && $item->purchase_price !== '') {
-                    $purchasePrice = $item->purchase_price;
-                }
-                // 2. Fallback: Costo actual de la variante (si existe)
-                elseif ($item->variant && $item->variant->purchase_price > 0) {
-                    $purchasePrice = $item->variant->purchase_price;
-                } 
-                // 3. Fallback: Costo actual del producto padre
-                elseif ($item->product && $item->product->purchase_price > 0) {
-                    $purchasePrice = $item->product->purchase_price;
-                }
-
-                // FIX: Calcular ganancia incluso si el costo es 0 (margen 100%)
-                // Pero mantenemos la verificación > 0 solo para el costo si queremos ser estrictos, 
-                // OJO: El usuario se quejaba de "profit is 0". Si costo es 0, profit = precio venta.
-                // Cambiamos la condición: Siempre calculamos profit, asumiendo costo 0 si no hay dato.
-                
-                // ¿Deberíamos filtrar ventas con precio 0? Probablemente sí para no ensuciar.
-                if ($item->unit_price > 0) {
-                    $profit = ($item->unit_price - $purchasePrice) * $item->quantity;
-                    $totalProfit += $profit;
-                }
-            }
-        }
-
-        // Calcular gastos
         $expensesQuery = $store->expenses()->with('user');
-        if (!empty($validated['start_date']) && !empty($validated['end_date'])) {
+        if (! empty($validated['start_date']) && ! empty($validated['end_date'])) {
             $expensesQuery->whereBetween('expense_date', [$startUtc, $endExclusiveUtc]);
         }
-        $totalExpenses = $expensesQuery->sum('amount');
-        $netCash = $physicalTotalSales - $totalExpenses;
-
         // Obtener listado de gastos (paginado)
         $expensesList = $expensesQuery->latest('expense_date')->paginate(20)->withQueryString();
 
@@ -186,13 +142,6 @@ class ReportController extends Controller
             ],
             'filters' => $request->only(['start_date', 'end_date']),
             'physicalSales' => $physicalSales,
-            'physicalSalesStats' => [
-                'totalSales' => $physicalTotalSales,
-                'totalCount' => $physicalTotalCount,
-                'totalExpenses' => $totalExpenses,
-                'netCash' => $netCash,
-                'totalProfit' => $totalProfit,
-            ],
             'physicalSalesFilters' => $request->only(['start_date', 'end_date', 'search']),
             'expensesList' => $expensesList,
         ]);
@@ -207,7 +156,7 @@ class ReportController extends Controller
         $filters = $request->only(['start_date', 'end_date']);
 
         // Le ponemos un nombre dinámico al archivo
-        $fileName = 'reporte-de-ordenes-' . now()->format('Y-m-d') . '.xlsx';
+        $fileName = 'reporte-de-ordenes-'.now()->format('Y-m-d').'.xlsx';
 
         // Le pasamos los filtros a nuestra clase OrdersExport y le decimos que descargue el archivo
         return Excel::download(new OrdersExport($filters), $fileName);

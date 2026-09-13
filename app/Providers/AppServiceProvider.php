@@ -25,6 +25,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (app()->isProduction()) {
+            Vite::useHotFile(storage_path('framework/vite.hot'));
+        }
+
         RateLimiter::for('store-registration', function (Request $request) {
             $email = Str::lower((string) $request->input('email', 'unknown'));
 

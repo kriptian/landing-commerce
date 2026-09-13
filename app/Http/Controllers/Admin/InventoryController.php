@@ -4,7 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Exports\InventoryExport;
 use App\Http\Controllers\Controller;
+use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -25,11 +29,11 @@ class InventoryController extends Controller
         $status = $request->string('status')->toString(); // '', 'out_of_stock', 'low_stock'
 
         $productsQuery = $request->user()->store->products()
-            ->with(['variants', 'variantOptions']) // Cargar variantOptions para distinguir simples vs configurables
+            ->with(['store', 'images', 'variants', 'variantOptions.children'])
             ->latest();
 
         if (! empty($search)) {
-            $productsQuery->where('name', 'like', "%{$search}%");
+            $this->applySearch($productsQuery, $search);
         }
 
         if ($status === 'out_of_stock') {
@@ -61,6 +65,7 @@ class InventoryController extends Controller
         }
 
         $products = $productsQuery->paginate(20)->withQueryString();
+        $products->getCollection()->each(fn (Product $product) => $this->addThumbnail($product));
         $inventoryWarnings = $request->user()->store->products()
             ->where('track_inventory', true)
             ->where('quantity', '>', 0)
@@ -109,10 +114,16 @@ class InventoryController extends Controller
             'price' => 'nullable|numeric|min:0',
         ]);
 
+        if (! isset($data['quantity_add']) && ! isset($data['purchase_price']) && ! isset($data['price'])) {
+            throw ValidationException::withMessages([
+                'quantity_add' => 'Ingresa unidades o modifica al menos un precio.',
+            ]);
+        }
+
         $model = null;
 
         if ($data['type'] === 'variant') {
-            $model = \App\Models\ProductVariant::where('id', $data['id'])
+            $model = ProductVariant::where('id', $data['id'])
                 ->whereHas('product', function ($q) use ($request) {
                     $q->where('store_id', $request->user()->store_id);
                 })
@@ -165,7 +176,7 @@ class InventoryController extends Controller
                                 // Match exacto normalizado
                                 if ($dbName === $targetValue) {
                                     // Forzar actualización directa a la DB para evitar cualquier cache de modelo
-                                    \DB::table('variant_options')
+                                    DB::table('variant_options')
                                         ->where('id', $childInfo->id)
                                         ->update(['stock' => $newStock]);
                                 }
@@ -197,20 +208,47 @@ class InventoryController extends Controller
      */
     public function search(Request $request)
     {
-        $term = $request->get('q');
+        $term = trim((string) $request->get('q'));
         if (empty($term)) {
             return response()->json([]);
         }
 
         $products = $request->user()->store->products()
-            ->with(['variants', 'variantOptions.children']) // Cargar variantes y variant_options para distinguir simples vs configurables
-            ->where(function ($q) use ($term) {
-                $q->where('name', 'like', "%{$term}%")
-                    ->orWhere('barcode', 'like', "%{$term}%");
-            })
+            ->with(['store', 'images', 'variants', 'variantOptions.children'])
+            ->where(fn ($query) => $this->applySearch($query, $term))
             ->take(10)
             ->get();
 
+        $products->each(fn (Product $product) => $this->addThumbnail($product));
+
         return response()->json($products);
+    }
+
+    private function applySearch($query, string $term): void
+    {
+        $query->where(function ($query) use ($term) {
+            $query->where('name', 'like', "%{$term}%")
+                ->orWhere('barcode', 'like', "%{$term}%")
+                ->orWhereHas('variants', fn ($variant) => $variant
+                    ->where('sku', 'like', "%{$term}%")
+                    ->orWhere('options', 'like', "%{$term}%"))
+                ->orWhereHas('variantOptions', fn ($option) => $option
+                    ->where('name', 'like', "%{$term}%")
+                    ->orWhere('barcode', 'like', "%{$term}%")
+                    ->orWhereHas('children', fn ($child) => $child
+                        ->where('name', 'like', "%{$term}%")
+                        ->orWhere('barcode', 'like', "%{$term}%")));
+        });
+    }
+
+    private function addThumbnail(Product $product): void
+    {
+        $thumbnail = $product->main_image_url;
+
+        if ($thumbnail && ! str_starts_with($thumbnail, 'http://') && ! str_starts_with($thumbnail, 'https://') && ! str_starts_with($thumbnail, '/')) {
+            $thumbnail = '/storage/'.ltrim($thumbnail, '/');
+        }
+
+        $product->setAttribute('thumbnail', $thumbnail ?: asset('img/product-placeholder.svg'));
     }
 }

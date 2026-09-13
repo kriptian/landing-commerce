@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Store;
+use App\Support\ColombiaDivipola;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -42,6 +43,10 @@ class CheckoutController extends Controller
                 'address_line_2' => $address->address_line_2,
                 'city' => $address->city,
                 'state' => $address->state,
+                'department_code' => $address->department_code,
+                'department_name' => $address->department_name,
+                'municipality_code' => $address->municipality_code,
+                'municipality_name' => $address->municipality_name,
                 'postal_code' => $address->postal_code,
                 'country' => $address->country,
                 'is_default' => $address->is_default,
@@ -76,6 +81,7 @@ class CheckoutController extends Controller
                 'phone' => $customer->phone,
             ] : null,
             'addresses' => $addresses,
+            'colombiaLocations' => ColombiaDivipola::catalog(),
         ]);
     }
 
@@ -153,6 +159,8 @@ class CheckoutController extends Controller
             'customer_email' => 'required|email|max:255',
             'customer_address' => 'required|string|max:1000',
             'address_id' => 'nullable|integer',
+            'department_code' => ['nullable', 'string', 'regex:/^\d{2}$/'],
+            'municipality_code' => ['nullable', 'string', 'regex:/^\d{5}$/'],
             'coupon_code' => 'nullable|string|max:50',
             'idempotency_key' => 'required|uuid',
         ]);
@@ -185,8 +193,38 @@ class CheckoutController extends Controller
             }
         }
 
+        if ($address) {
+            $location = [
+                'department_code' => $address->department_code,
+                'department_name' => $address->department_name,
+                'municipality_code' => $address->municipality_code,
+                'municipality_name' => $address->municipality_name,
+            ];
+            $customerAddress = $address->full_address;
+        } else {
+            if (empty($validated['department_code'])) {
+                throw ValidationException::withMessages(['department_code' => 'Selecciona un departamento.']);
+            }
+            if (empty($validated['municipality_code'])) {
+                throw ValidationException::withMessages(['municipality_code' => 'Selecciona un municipio.']);
+            }
+
+            $location = ColombiaDivipola::resolve($validated['department_code'], $validated['municipality_code']);
+            if (! $location) {
+                throw ValidationException::withMessages([
+                    'municipality_code' => 'El municipio no pertenece al departamento seleccionado.',
+                ]);
+            }
+            $customerAddress = implode(', ', [
+                trim($validated['customer_address']),
+                $location['municipality_name'],
+                $location['department_name'],
+                'Colombia',
+            ]);
+        }
+
         try {
-            $result = DB::transaction(function () use ($request, $store, $validated, $customer, $address) {
+            $result = DB::transaction(function () use ($request, $store, $validated, $customer, $address, $location, $customerAddress) {
                 $lockedStore = Store::query()->whereKey($store->id)->lockForUpdate()->firstOrFail();
                 $storePhoneNumber = $this->validatedWhatsappPhone($lockedStore);
                 $existingOrder = $lockedStore->orders()
@@ -247,7 +285,11 @@ class CheckoutController extends Controller
                     'customer_name' => $validated['customer_name'],
                     'customer_phone' => $validated['customer_phone'],
                     'customer_email' => $validated['customer_email'],
-                    'customer_address' => $validated['customer_address'],
+                    'customer_address' => $customerAddress,
+                    'department_code' => $location['department_code'],
+                    'department_name' => $location['department_name'],
+                    'municipality_code' => $location['municipality_code'],
+                    'municipality_name' => $location['municipality_name'],
                     'total_price' => max(0, $subtotal - $discountAmount) + $deliveryCost,
                     'discount_amount' => $discountAmount,
                     'delivery_cost' => $deliveryCost,

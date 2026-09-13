@@ -10,6 +10,27 @@ import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 
 // --- 1. IMPORTAMOS NUESTRO COMPONENTE DE GALERÍA ---
 import ProductGallery from './Components/Product/ProductGallery.vue';
+
+const reloadAfterStaleAsset = () => {
+    const key = 'vite-stale-asset-reload';
+    if (sessionStorage.getItem(key)) return;
+
+    sessionStorage.setItem(key, '1');
+    window.location.reload();
+};
+
+window.addEventListener('vite:preloadError', (event) => {
+    event.preventDefault();
+    reloadAfterStaleAsset();
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    if (/Failed to fetch dynamically imported module|Importing a module script failed/i.test(String(event.reason))) {
+        event.preventDefault();
+        reloadAfterStaleAsset();
+    }
+});
+
 // Helper global: usa Ziggy si existe; si no, usa un path literal de respaldo
 export function safeRoute(name, params = {}, fallbackPath = '/') {
     try {
@@ -23,8 +44,6 @@ export function safeRoute(name, params = {}, fallbackPath = '/') {
     });
     return url;
 }
-
-const appName = import.meta.env.VITE_APP_NAME || 'Ondigitalsolution';
 
 // Función para obtener el token CSRF del meta tag
 const getCsrfTokenFromMeta = () => {
@@ -269,5 +288,6 @@ createInertiaApp({
         }
 
         app.mount(el);
+        sessionStorage.removeItem('vite-stale-asset-reload');
     },
 });

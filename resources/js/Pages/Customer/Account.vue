@@ -1,11 +1,12 @@
 <script setup>
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import AlertModal from '@/Components/AlertModal.vue';
 import Modal from '@/Components/Modal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
+import ColombiaLocationSelects from '@/Components/ColombiaLocationSelects.vue';
 
 const props = defineProps({
     store: Object,
@@ -13,6 +14,7 @@ const props = defineProps({
     orders: Object,
     addresses: Array,
     stats: Object,
+    colombiaLocations: Object,
 });
 
 const page = usePage();
@@ -36,6 +38,8 @@ const addressForm = useForm({
     address_line_2: '',
     city: '',
     state: '',
+    department_code: '',
+    municipality_code: '',
     postal_code: '',
     country: 'Colombia',
     is_default: false,
@@ -75,6 +79,9 @@ const openAddAddressModal = () => {
     addressForm.reset();
     addressForm.label = 'Casa';
     addressForm.city = '';
+    addressForm.state = '';
+    addressForm.department_code = '';
+    addressForm.municipality_code = '';
     addressForm.country = 'Colombia';
     addressForm.is_default = props.addresses.length === 0;
     showAddAddressModal.value = true;
@@ -97,6 +104,8 @@ const openEditAddressModal = (address) => {
     addressForm.address_line_2 = address.address_line_2 || '';
     addressForm.city = address.city;
     addressForm.state = address.state || '';
+    addressForm.department_code = address.department_code || '';
+    addressForm.municipality_code = address.municipality_code || '';
     addressForm.postal_code = address.postal_code || '';
     addressForm.country = address.country || 'Colombia';
     addressForm.is_default = address.is_default;
@@ -133,17 +142,6 @@ const deleteAddress = () => {
 const setDefaultAddress = (address) => {
     router.post(route('customer.addresses.set-default', { store: props.store.slug, address: address.id }), {
         preserveScroll: true,
-    });
-};
-
-// Formatear fecha
-const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('es-CO', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
     });
 };
 
@@ -270,7 +268,7 @@ const formatPrice = (price) => {
                                             </div>
                                             <p class="text-sm text-gray-600">{{ address.address_line_1 }}</p>
                                             <p v-if="address.address_line_2" class="text-sm text-gray-600">{{ address.address_line_2 }}</p>
-                                            <p class="text-sm text-gray-600">{{ address.city }}{{ address.state ? ', ' + address.state : '' }}</p>
+                                             <p class="text-sm text-gray-600">{{ address.municipality_name || address.city }}{{ (address.department_name || address.state) ? ', ' + (address.department_name || address.state) : '' }}</p>
                                         </div>
                                         <div class="flex gap-2">
                                             <button @click="openEditAddressModal(address)" class="text-blue-600 hover:text-blue-700 text-sm">Editar</button>
@@ -307,24 +305,17 @@ const formatPrice = (price) => {
                     <label class="block text-sm font-medium text-gray-700 mb-1">Dirección Línea 2 (Opcional)</label>
                     <input v-model="addressForm.address_line_2" type="text" class="block w-full rounded-md border-gray-300 shadow-sm">
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
-                        <input v-model="addressForm.city" type="text" class="block w-full rounded-md border-gray-300 shadow-sm" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Departamento/Estado</label>
-                        <input v-model="addressForm.state" type="text" class="block w-full rounded-md border-gray-300 shadow-sm">
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
+                <ColombiaLocationSelects
+                    v-model:department-code="addressForm.department_code"
+                    v-model:municipality-code="addressForm.municipality_code"
+                    :catalog="colombiaLocations"
+                    :errors="addressForm.errors"
+                    input-class="block w-full rounded-md border-gray-300 shadow-sm disabled:cursor-not-allowed disabled:bg-gray-100"
+                />
+                <div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
                         <input v-model="addressForm.postal_code" type="text" class="block w-full rounded-md border-gray-300 shadow-sm">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">País</label>
-                        <input v-model="addressForm.country" type="text" class="block w-full rounded-md border-gray-300 shadow-sm" required>
                     </div>
                 </div>
                 <div>
@@ -360,24 +351,17 @@ const formatPrice = (price) => {
                     <label class="block text-sm font-medium text-gray-700 mb-1">Dirección Línea 2 (Opcional)</label>
                     <input v-model="addressForm.address_line_2" type="text" class="block w-full rounded-md border-gray-300 shadow-sm">
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
-                        <input v-model="addressForm.city" type="text" class="block w-full rounded-md border-gray-300 shadow-sm" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Departamento/Estado</label>
-                        <input v-model="addressForm.state" type="text" class="block w-full rounded-md border-gray-300 shadow-sm">
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
+                <ColombiaLocationSelects
+                    v-model:department-code="addressForm.department_code"
+                    v-model:municipality-code="addressForm.municipality_code"
+                    :catalog="colombiaLocations"
+                    :errors="addressForm.errors"
+                    input-class="block w-full rounded-md border-gray-300 shadow-sm disabled:cursor-not-allowed disabled:bg-gray-100"
+                />
+                <div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
                         <input v-model="addressForm.postal_code" type="text" class="block w-full rounded-md border-gray-300 shadow-sm">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">País</label>
-                        <input v-model="addressForm.country" type="text" class="block w-full rounded-md border-gray-300 shadow-sm" required>
                     </div>
                 </div>
                 <div>
@@ -421,4 +405,3 @@ const formatPrice = (price) => {
         @close="showSuccess=false"
     />
 </template>
-

@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Customer;
 use App\Http\Controllers\Controller;
 use App\Models\Address;
 use App\Models\Store;
+use App\Support\ColombiaDivipola;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class AddressController extends Controller
 {
@@ -25,12 +27,17 @@ class AddressController extends Controller
             'label' => ['required', 'string', 'max:255'],
             'address_line_1' => ['required', 'string', 'max:500'],
             'address_line_2' => ['nullable', 'string', 'max:500'],
-            'city' => ['required', 'string', 'max:255'],
-            'state' => ['nullable', 'string', 'max:255'],
+            'department_code' => ['required', 'string', 'regex:/^\d{2}$/'],
+            'municipality_code' => ['required', 'string', 'regex:/^\d{5}$/'],
             'postal_code' => ['nullable', 'string', 'max:20'],
-            'country' => ['nullable', 'string', 'max:255'],
             'is_default' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $location = $this->resolvedLocation($validated);
+        $validated = array_merge($validated, $location, [
+            'city' => $location['municipality_name'],
+            'state' => $location['department_name'],
+            'country' => 'Colombia',
         ]);
 
         $customer = Auth::guard('customer')->user();
@@ -67,12 +74,17 @@ class AddressController extends Controller
             'label' => ['required', 'string', 'max:255'],
             'address_line_1' => ['required', 'string', 'max:500'],
             'address_line_2' => ['nullable', 'string', 'max:500'],
-            'city' => ['required', 'string', 'max:255'],
-            'state' => ['nullable', 'string', 'max:255'],
+            'department_code' => ['required', 'string', 'regex:/^\d{2}$/'],
+            'municipality_code' => ['required', 'string', 'regex:/^\d{5}$/'],
             'postal_code' => ['nullable', 'string', 'max:20'],
-            'country' => ['nullable', 'string', 'max:255'],
             'is_default' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $location = $this->resolvedLocation($validated);
+        $validated = array_merge($validated, $location, [
+            'city' => $location['municipality_name'],
+            'state' => $location['department_name'],
+            'country' => 'Colombia',
         ]);
 
         DB::transaction(function () use ($customer, $address, $validated) {
@@ -130,5 +142,20 @@ class AddressController extends Controller
 
         return back()->with('success', 'Dirección predeterminada actualizada');
     }
-}
 
+    private function resolvedLocation(array $validated): array
+    {
+        $location = ColombiaDivipola::resolve(
+            $validated['department_code'],
+            $validated['municipality_code'],
+        );
+
+        if (! $location) {
+            throw ValidationException::withMessages([
+                'municipality_code' => 'El municipio no pertenece al departamento seleccionado.',
+            ]);
+        }
+
+        return $location;
+    }
+}

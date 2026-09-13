@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
 use App\Models\Store;
+use App\Support\ColombiaDivipola;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -24,7 +24,7 @@ class CustomerController extends Controller
     public function index(Store $store): Response
     {
         $customer = Auth::guard('customer')->user();
-        
+
         // Cargar órdenes con items y productos
         $orders = $customer->orders()
             ->with(['items.product', 'items.variant', 'address', 'coupon'])
@@ -46,6 +46,7 @@ class CustomerController extends Controller
             'customer' => $customer,
             'orders' => $orders,
             'addresses' => $addresses,
+            'colombiaLocations' => ColombiaDivipola::catalog(),
             'stats' => $stats,
         ]);
     }
@@ -79,7 +80,7 @@ class CustomerController extends Controller
 
         $customer = Auth::guard('customer')->user();
 
-        if (!Hash::check($validated['current_password'], $customer->password)) {
+        if (! Hash::check($validated['current_password'], $customer->password)) {
             return back()->withErrors(['current_password' => 'La contraseña actual es incorrecta']);
         }
 
@@ -96,7 +97,7 @@ class CustomerController extends Controller
     public function orders(Store $store): Response
     {
         $customer = Auth::guard('customer')->user();
-        
+
         // Cargar órdenes con items y productos
         $orders = $customer->orders()
             ->with(['items.product', 'items.variant', 'address', 'coupon'])
@@ -110,4 +111,3 @@ class CustomerController extends Controller
         ]);
     }
 }
-

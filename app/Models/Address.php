@@ -16,6 +16,10 @@ class Address extends Model
         'address_line_2',
         'city',
         'state',
+        'department_code',
+        'department_name',
+        'municipality_code',
+        'municipality_name',
         'postal_code',
         'country',
         'is_default',
@@ -42,8 +46,8 @@ class Address extends Model
         $parts = array_filter([
             $this->address_line_1,
             $this->address_line_2,
-            $this->city,
-            $this->state,
+            $this->municipality_name ?: $this->city,
+            $this->department_name ?: $this->state,
             $this->postal_code,
             $this->country,
         ]);
@@ -51,4 +55,3 @@ class Address extends Model
         return implode(', ', $parts);
     }
 }
-

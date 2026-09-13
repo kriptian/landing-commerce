@@ -25,7 +25,6 @@ export default defineConfig({
         },
     },
     optimizeDeps: {
-        include: ['html2canvas', 'jspdf'],
-        force: true,
+        include: ['html2canvas', 'jspdf', 'vue-toastification'],
     },
 });
